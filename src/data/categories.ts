@@ -1,0 +1,98 @@
+import { Category } from '../types';
+
+export const CATEGORIES: Category[] = [
+  {
+    id: 'automotivo',
+    name: 'Automotivo',
+    iconName: 'Car',
+    description: 'Oficinas, pneus, autoelétrica, troca de óleo e estética',
+    subcategories: [
+      'Mecânica',
+      'Pneus',
+      'Troca de óleo',
+      'Autoelétrica',
+      'Funilaria',
+      'Estética automotiva',
+      'Peças e acessórios',
+    ],
+  },
+  {
+    id: 'casa',
+    name: 'Casa & Reformas',
+    iconName: 'Home',
+    description: 'Eletricistas, pintores, encanadores, montagem e limpeza',
+    subcategories: [
+      'Eletricista',
+      'Encanador',
+      'Pintor',
+      'Pedreiro',
+      'Jardinagem',
+      'Limpeza',
+      'Manutenção',
+      'Montagem de móveis',
+    ],
+  },
+  {
+    id: 'tecnologia',
+    name: 'Tecnologia',
+    iconName: 'Smartphone',
+    description: 'Assistência técnica para celulares, notebooks e impressoras',
+    subcategories: [
+      'Conserto de celular',
+      'Computadores',
+      'Notebooks',
+      'Impressoras',
+      'Assistência técnica',
+    ],
+  },
+  {
+    id: 'beleza',
+    name: 'Beleza & Estética',
+    iconName: 'Sparkles',
+    description: 'Barbearias, salões de beleza, manicure e cuidados pessoais',
+    subcategories: [
+      'Barbearia',
+      'Salão',
+      'Manicure',
+      'Estética',
+    ],
+  },
+  {
+    id: 'alimentacao',
+    name: 'Alimentação',
+    iconName: 'Utensils',
+    description: 'Pizzarias, lancherias, restaurantes e combos locais',
+    subcategories: [
+      'Restaurantes',
+      'Lancherias',
+      'Pizzarias',
+      'Delivery',
+      'Ofertas locais',
+    ],
+  },
+  {
+    id: 'servicos-digitais',
+    name: 'Serviços Digitais',
+    iconName: 'Laptop',
+    description: 'Design gráfico, marketing, fotografia, vídeo e sites',
+    subcategories: [
+      'Design',
+      'Marketing',
+      'Fotografia',
+      'Edição de vídeo',
+      'Desenvolvimento',
+    ],
+  },
+  {
+    id: 'produtos',
+    name: 'Produtos',
+    iconName: 'ShoppingBag',
+    description: 'Produtos a pronta-entrega cadastrados por comércios locais',
+    subcategories: [
+      'Pneus e Autopeças',
+      'Ferramentas e Construção',
+      'Acessórios para Celular',
+      'Utilidades Domésticas',
+    ],
+  },
+];

@@ -1,0 +1,10 @@
+{
+  "name": "EconomizaJá",
+  "description": "Aplicativo para comparar preços, encontrar ofertas locais e solicitar orçamentos de produtos e serviços.",
+  "requestFramePermissions": [
+    "geolocation"
+  ],
+  "majorCapabilities": [
+    "MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"
+  ]
+}

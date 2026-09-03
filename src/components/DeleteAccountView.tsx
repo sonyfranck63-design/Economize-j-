@@ -1,0 +1,167 @@
+import React, { useState } from 'react';
+import { Trash2, AlertTriangle, ArrowLeft, CheckCircle2, ShieldAlert } from 'lucide-react';
+import { useApp } from '../context/AppContext';
+import { authService } from '../services/authService';
+
+interface Props {
+  onBack?: () => void;
+}
+
+export const DeleteAccountView: React.FC<Props> = ({ onBack }) => {
+  const { currentUser, deleteAccountAndData } = useApp();
+  const [emailInput, setEmailInput] = useState(currentUser?.email || '');
+  const [confirmPhrase, setConfirmPhrase] = useState('');
+  const [reason, setReason] = useState('');
+  const [isDeleting, setIsDeleting] = useState(false);
+  const [deletedSuccess, setDeletedSuccess] = useState(false);
+  const [errorMessage, setErrorMessage] = useState('');
+
+  const handleDelete = async (e: React.FormEvent) => {
+    e.preventDefault();
+    setErrorMessage('');
+
+    if (confirmPhrase.trim().toUpperCase() !== 'EXCLUIR') {
+      setErrorMessage('Por favor, digite exatamente a palavra EXCLUIR para confirmar a ação.');
+      return;
+    }
+
+    if (!emailInput || !emailInput.includes('@')) {
+      setErrorMessage('Por favor, informe um endereço de e-mail válido.');
+      return;
+    }
+
+    setIsDeleting(true);
+    try {
+      if (currentUser?.id) {
+        await authService.deleteAccount(currentUser.id);
+      }
+      deleteAccountAndData();
+      setDeletedSuccess(true);
+    } catch (err: any) {
+      setErrorMessage(err.message || 'Erro ao processar exclusão de dados.');
+    } finally {
+      setIsDeleting(false);
+    }
+  };
+
+  return (
+    <div className="max-w-2xl mx-auto py-8 px-4 sm:px-6 text-slate-800 space-y-6 animate-in fade-in">
+      {onBack && (
+        <button
+          onClick={onBack}
+          className="inline-flex items-center gap-2 text-sm font-semibold text-emerald-700 hover:text-emerald-800 transition"
+        >
+          <ArrowLeft className="w-4 h-4" />
+          Voltar ao EconomizaJá
+        </button>
+      )}
+
+      <div className="border-b border-slate-200 pb-4">
+        <div className="flex items-center gap-2 text-rose-600 font-bold text-xs uppercase tracking-wider">
+          <Trash2 className="w-4 h-4" />
+          Diretrizes Google Play & LGPD Art. 18
+        </div>
+        <h1 className="text-2xl sm:text-3xl font-extrabold text-slate-900 mt-1 font-display">
+          Exclusão de Conta e Dados Pessoais
+        </h1>
+        <p className="text-xs text-slate-500 mt-1">
+          Solicitação formal de eliminação definitiva de cadastro no EconomizaJá
+        </p>
+      </div>
+
+      {deletedSuccess ? (
+        <div className="p-6 bg-emerald-50 border border-emerald-200 rounded-2xl space-y-3 text-emerald-950">
+          <div className="flex items-center gap-2 text-emerald-700 font-bold">
+            <CheckCircle2 className="w-6 h-6" />
+            <h2 className="text-lg">Sua solicitação foi concluída com sucesso</h2>
+          </div>
+          <p className="text-sm leading-relaxed text-emerald-900">
+            Sua conta, histórico de favoritos, alertas de preço, mensagens e registros de perfil foram desvinculados e apagados dos nossos servidores.
+          </p>
+          <p className="text-xs text-emerald-800">
+            Agradecemos pelo tempo que esteve conosco. Você pode voltar a usar o EconomizaJá criando um novo cadastro a qualquer momento.
+          </p>
+        </div>
+      ) : (
+        <>
+          {/* Informações de Transparência exigidas pela Google Play */}
+          <div className="bg-slate-50 border border-slate-200 rounded-2xl p-5 space-y-3 text-xs leading-relaxed text-slate-700">
+            <h3 className="font-bold text-slate-900 text-sm flex items-center gap-1.5 text-rose-700">
+              <AlertTriangle className="w-4 h-4" />
+              O que acontece ao excluir sua conta?
+            </h3>
+            <ul className="list-disc pl-5 space-y-1">
+              <li><strong>Dados excluídos permanentemente:</strong> Nome, telefone, e-mail de acesso, avatar, orçamentos cadastrados, cotações recebidas, favoritos e alertas de preço.</li>
+              <li><strong>Dados de empresas vinculadas:</strong> Caso sua conta seja titular de uma empresa parceira, a empresa será desativada do guia público.</li>
+              <li><strong>Retenção legal obrigatória:</strong> Em estrito cumprimento ao Artigo 15 da Lei Federal nº 12.965/2014 (Marco Civil da Internet), registros de data, hora e endereço IP de conexão serão armazenados em ambiente seguro e sigiloso pelo prazo de 6 (seis) meses, sendo excluídos automaticamente após esse período.</li>
+            </ul>
+          </div>
+
+          <form onSubmit={handleDelete} className="bg-white border border-slate-200 rounded-2xl p-6 shadow-sm space-y-4">
+            {errorMessage && (
+              <div className="p-3 bg-rose-50 border border-rose-200 text-rose-800 text-xs rounded-xl flex items-center gap-2">
+                <ShieldAlert className="w-4 h-4 shrink-0" />
+                <span>{errorMessage}</span>
+              </div>
+            )}
+
+            <div>
+              <label className="block text-xs font-bold text-slate-700 uppercase tracking-wider mb-1">
+                E-mail cadastrado
+              </label>
+              <input
+                type="email"
+                required
+                value={emailInput}
+                onChange={(e) => setEmailInput(e.target.value)}
+                placeholder="seuemail@exemplo.com"
+                className="w-full px-3.5 py-2.5 rounded-xl border border-slate-300 text-sm focus:outline-hidden focus:ring-2 focus:ring-rose-500 focus:border-rose-500"
+              />
+            </div>
+
+            <div>
+              <label className="block text-xs font-bold text-slate-700 uppercase tracking-wider mb-1">
+                Motivo da exclusão (opcional)
+              </label>
+              <select
+                value={reason}
+                onChange={(e) => setReason(e.target.value)}
+                className="w-full px-3.5 py-2.5 rounded-xl border border-slate-300 text-sm bg-white"
+              >
+                <option value="">Selecione uma opção...</option>
+                <option value="not_using">Não estou mais utilizando o aplicativo</option>
+                <option value="privacy">Preocupações com privacidade de dados</option>
+                <option value="found_alternative">Encontrei outra solução de economia</option>
+                <option value="technical">Problemas técnicos ou dificuldades de uso</option>
+                <option value="other">Outro motivo</option>
+              </select>
+            </div>
+
+            <div className="pt-2">
+              <label className="block text-xs font-bold text-slate-700 uppercase tracking-wider mb-1 text-rose-700">
+                Digite "EXCLUIR" em maiúsculas para confirmar:
+              </label>
+              <input
+                type="text"
+                required
+                value={confirmPhrase}
+                onChange={(e) => setConfirmPhrase(e.target.value)}
+                placeholder="EXCLUIR"
+                className="w-full px-3.5 py-2.5 rounded-xl border border-rose-300 text-sm focus:outline-hidden focus:ring-2 focus:ring-rose-500"
+              />
+            </div>
+
+            <button
+              type="submit"
+              disabled={isDeleting || confirmPhrase.trim().toUpperCase() !== 'EXCLUIR'}
+              className="w-full mt-4 py-3 rounded-xl bg-rose-600 hover:bg-rose-700 disabled:opacity-50 disabled:cursor-not-allowed text-white font-bold text-sm shadow-md transition flex items-center justify-center gap-2"
+            >
+              <Trash2 className="w-4 h-4" />
+              {isDeleting ? 'Processando exclusão...' : 'Excluir Definitivamente Minha Conta'}
+            </button>
+          </form>
+        </>
+      )}
+    </div>
+  );
+};

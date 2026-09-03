@@ -1,0 +1,43 @@
+{
+  "id": "/",
+  "name": "EconomizaJá — Compare e Economize",
+  "short_name": "EconomizaJá",
+  "description": "Encontre ofertas locais, compare orçamentos de serviços e produtos e economize perto de você.",
+  "start_url": "/",
+  "scope": "/",
+  "display": "standalone",
+  "orientation": "portrait",
+  "background_color": "#0f766e",
+  "theme_color": "#0f766e",
+  "categories": ["shopping", "business", "finance", "lifestyle"],
+  "icons": [
+    {
+      "src": "/icon.svg",
+      "sizes": "192x192 512x512",
+      "type": "image/svg+xml",
+      "purpose": "any"
+    },
+    {
+      "src": "/icon.svg",
+      "sizes": "512x512",
+      "type": "image/svg+xml",
+      "purpose": "maskable"
+    }
+  ],
+  "shortcuts": [
+    {
+      "name": "Pedir Orçamento",
+      "short_name": "Orçamento",
+      "description": "Peça cotações gratuitas de serviços e produtos",
+      "url": "/?action=quote",
+      "icons": [{ "src": "/icon.svg", "sizes": "192x192" }]
+    },
+    {
+      "name": "Ofertas Próximas",
+      "short_name": "Ofertas",
+      "description": "Veja descontos perto de você",
+      "url": "/?tab=offers",
+      "icons": [{ "src": "/icon.svg", "sizes": "192x192" }]
+    }
+  ]
+}

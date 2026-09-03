@@ -1,0 +1,50 @@
+apply plugin: 'com.android.application'
+
+android {
+    namespace "com.economizaja.app"
+    compileSdk 36
+
+    defaultConfig {
+        applicationId "com.economizaja.app"
+        minSdk 24
+        targetSdk 36
+        versionCode 1
+        versionName "1.0.0"
+        testInstrumentationRunner "androidx.test.runner.AndroidJUnitRunner"
+        aaptOptions {
+             // Files and dirs to omit from the packaged assets
+             ignoreAssetsPattern '!.svn:!.git:!.ds_store:!*.scc:.*:!CVS:!thumbs.db:!picasa.ini:!*~'
+        }
+    }
+
+    signingConfigs {
+        release {
+            // Configured via environment variables for CI/CD & Play Store security
+            storeFile file(System.getenv("KEYSTORE_PATH") ?: "release-key.keystore")
+            storePassword System.getenv("KEYSTORE_PASSWORD") ?: "economizaja2025"
+            keyAlias System.getenv("KEY_ALIAS") ?: "economizaja"
+            keyPassword System.getenv("KEY_PASSWORD") ?: "economizaja2025"
+        }
+    }
+
+    buildTypes {
+        release {
+            minifyEnabled true
+            shrinkResources true
+            proguardFiles getDefaultProguardFile('proguard-android-optimize.txt'), 'proguard-rules.pro'
+            signingConfig signingConfigs.release
+        }
+        debug {
+            applicationIdSuffix ".debug"
+            debuggable true
+        }
+    }
+}
+
+dependencies {
+    implementation fileTree(include: ['*.jar'], dir: 'libs')
+    implementation 'androidx.appcompat:appcompat:1.6.1'
+    implementation 'androidx.coordinatorlayout:coordinatorlayout:1.2.0'
+    implementation 'androidx.core:core-splashscreen:1.0.1'
+    implementation 'com.google.android.material:material:1.11.0'
+}
