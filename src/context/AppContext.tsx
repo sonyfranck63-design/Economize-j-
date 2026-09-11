@@ -22,6 +22,8 @@ import {
 import { supabase, isSupabaseConfigured } from '../lib/supabase';
 import { authService, AuthUserProfile } from '../services/authService';
 import { dataService } from '../services/dataService';
+import { getSmartImage, isInvalidOrDeadImageUrl } from '../utils/imageUtils';
+import { getDeletedQuoteIds, markQuoteAsDeletedLocally } from '../utils/quoteStorage';
 
 export type PublicPageRoute = 'app' | 'privacy' | 'terms' | 'delete_account';
 
@@ -62,21 +64,31 @@ interface AppContextType {
   isDatabaseConnected: boolean;
   
   // Actions
-  toggleFavoriteBusiness: (id: string) => void;
-  toggleFavoriteOffer: (id: string) => void;
+  toggleFavoriteBusiness: (id: string) => Promise<void>;
+  toggleFavoriteOffer: (id: string) => Promise<void>;
   createQuoteRequest: (data: Omit<QuoteRequest, 'id' | 'createdAt' | 'status' | 'proposals'>) => Promise<string>;
   submitProposal: (quoteRequestId: string, proposal: Omit<QuoteProposal, 'id' | 'createdAt' | 'status'>) => Promise<void>;
   acceptProposal: (quoteRequestId: string, proposalId: string) => Promise<void>;
+  cancelQuoteRequest: (quoteRequestId: string) => Promise<void>;
+  deleteQuoteRequest: (quoteRequestId: string) => Promise<void>;
   createPriceAlert: (data: Omit<PriceAlert, 'id' | 'createdAt' | 'active' | 'notified'>) => Promise<void>;
   removePriceAlert: (id: string) => Promise<void>;
   addReview: (businessId: string, rating: number, comment: string) => Promise<void>;
   reportReview: (reviewId: string) => Promise<void>;
   sendChatMessage: (businessId: string, text: string, quoteRequestId?: string) => void;
   createOffer: (offerData: Omit<Offer, 'id' | 'viewsCount' | 'claimsCount'>) => Promise<void>;
+  addOffer: (offerData: Omit<Offer, 'id' | 'viewsCount' | 'claimsCount'>) => Promise<void>;
   createBusiness: (businessData: Omit<Business, 'id' | 'leadsReceivedCount'>) => Promise<void>;
   updateMonetization: (settings: AdminMonetizationSettings) => Promise<void>;
+  toggleBusinessActive: (businessId: string) => void;
+  toggleBusinessVerified: (businessId: string) => void;
+  toggleBusinessFeatured: (businessId: string) => void;
+  removeOffer: (offerId: string) => void;
+  deleteBusiness: (businessId: string) => void;
+  upgradeBusinessPlan: (businessId: string, planTier: 'free' | 'pro' | 'premium') => void;
   markNotificationRead: (id: string) => void;
   deleteAccountAndData: () => void;
+  refreshQuoteRequests: () => Promise<void>;
 
   // Modals & Navigation Helpers
   selectedBusinessId: string | null;
@@ -84,6 +96,8 @@ interface AppContextType {
   isQuoteModalOpen: boolean;
   setIsQuoteModalOpen: (open: boolean) => void;
   quoteCategoryPreset: string | null;
+  quoteTargetBusinessId: string | null;
+  setQuoteTargetBusinessId: (id: string | null) => void;
   setQuoteCategoryPreset: (cat: string | null) => void;
   comparingQuoteRequestId: string | null;
   setComparingQuoteRequestId: (id: string | null) => void;
@@ -111,9 +125,9 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
   const [isDatabaseConnected, setIsDatabaseConnected] = useState(isSupabaseConfigured);
 
   const [currentLocation, setCurrentLocation] = useState<UserLocation>({
-    city: 'São Paulo',
-    state: 'SP',
-    neighborhood: 'Centro',
+    city: '',
+    state: '',
+    neighborhood: '',
   });
 
   // Auth
@@ -121,19 +135,19 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
   const [isAuthModalOpen, setIsAuthModalOpen] = useState(false);
   const [userRole, setUserRole] = useState<UserRole>('customer');
 
+  // Sync userRole with currentUser
+  useEffect(() => {
+    if (currentUser) {
+      setUserRole(currentUser.role);
+    } else {
+      setUserRole('customer');
+    }
+  }, [currentUser]);
+
   // Persistence State
-  const [businesses, setBusinesses] = useState<Business[]>(() => {
-    // Only used as dev fallback if database credentials are not set
-    return isSupabaseConfigured ? [] : INITIAL_BUSINESSES;
-  });
-
-  const [offers, setOffers] = useState<Offer[]>(() => {
-    return isSupabaseConfigured ? [] : INITIAL_OFFERS;
-  });
-
-  const [quoteRequests, setQuoteRequests] = useState<QuoteRequest[]>(() => {
-    return isSupabaseConfigured ? [] : INITIAL_QUOTE_REQUESTS;
-  });
+  const [businesses, setBusinesses] = useState<Business[]>([]);
+  const [offers, setOffers] = useState<Offer[]>([]);
+  const [quoteRequests, setQuoteRequests] = useState<QuoteRequest[]>([]);
 
   const [reviews, setReviews] = useState<Review[]>(() => {
     return isSupabaseConfigured ? [] : INITIAL_REVIEWS;
@@ -154,6 +168,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
   const [selectedBusinessId, setSelectedBusinessId] = useState<string | null>(null);
   const [isQuoteModalOpen, setIsQuoteModalOpen] = useState(false);
   const [quoteCategoryPreset, setQuoteCategoryPreset] = useState<string | null>(null);
+  const [quoteTargetBusinessId, setQuoteTargetBusinessId] = useState<string | null>(null);
   const [comparingQuoteRequestId, setComparingQuoteRequestId] = useState<string | null>(null);
   const [isPriceAlertModalOpen, setIsPriceAlertModalOpen] = useState(false);
   const [activeChatBusinessId, setActiveChatBusinessId] = useState<string | null>(null);
@@ -198,7 +213,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       setIsLoadingData(true);
       try {
         const [bizList, offList, quoteList, settings, userProfile] = await Promise.all([
-          dataService.getBusinesses(),
+          dataService.getBusinesses(undefined, undefined, true),
           dataService.getOffers(),
           dataService.getQuoteRequests(),
           dataService.getMonetizationSettings(),
@@ -207,12 +222,31 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
 
         if (bizList && bizList.length > 0) setBusinesses(bizList);
         if (offList && offList.length > 0) setOffers(offList);
-        if (quoteList && quoteList.length > 0) setQuoteRequests(quoteList);
         if (settings) setMonetization(settings);
+
+        const deletedIds = getDeletedQuoteIds();
+        const initialCleanQuotes = (quoteList || []).filter((q) => !deletedIds.has(q.id) && q.status !== 'cancelado');
 
         if (userProfile) {
           setCurrentUser(userProfile);
           setUserRole(userProfile.role);
+
+          // Carrega favoritos persistidos do usuário autenticado no Supabase
+          const userFavs = await dataService.getUserFavorites(userProfile.id);
+          if (userFavs) {
+            setFavorites(userFavs);
+          }
+
+          // Identifica empresas pertencentes ao usuário para garantir orçamentos direcionados
+          const myBizIds = (bizList || [])
+            .filter((b) => (b.ownerId || '').toLowerCase() === (userProfile.id || '').toLowerCase())
+            .map((b) => b.id);
+
+          // Sincroniza todas as cotações: direcionadas às empresas do usuário + marketplace + cotações pessoais
+          const allQuotes = await dataService.syncAllQuoteRequests(userProfile.id, myBizIds);
+          setQuoteRequests(allQuotes);
+        } else {
+          setQuoteRequests(initialCleanQuotes);
         }
 
         setIsDatabaseConnected(true);
@@ -226,6 +260,29 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     loadBackendData();
   }, []);
 
+  // Sincroniza favoritos e cotações do usuário autenticado sempre que o login for realizado ou empresas atualizadas
+  useEffect(() => {
+    if (!currentUser?.id || !isSupabaseConfigured) {
+      return;
+    }
+
+    // Carrega favoritos do Supabase
+    dataService.getUserFavorites(currentUser.id).then((userFavs) => {
+      if (userFavs) {
+        setFavorites(userFavs);
+      }
+    });
+
+    const myBizIds = businesses
+      .filter((b) => (b.ownerId || '').toLowerCase() === (currentUser.id || '').toLowerCase())
+      .map((b) => b.id);
+
+    // Sincroniza unificadamente: orçamentos direcionados às empresas do usuário, oportunidades da região e cotações do cliente
+    dataService.syncAllQuoteRequests(currentUser.id, myBizIds).then((allQuotes) => {
+      setQuoteRequests(allQuotes);
+    });
+  }, [currentUser?.id, currentUser?.role, businesses]);
+
   // Geolocation trigger
   const detectUserLocation = () => {
     if (!navigator.geolocation) {
@@ -235,85 +292,163 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
 
     setIsLocating(true);
     navigator.geolocation.getCurrentPosition(
-      (pos) => {
-        setIsLocating(false);
-        setCurrentLocation({
-          city: 'São Paulo',
-          state: 'SP',
-          neighborhood: 'Bairro Local Detectado',
-          latitude: pos.coords.latitude,
-          longitude: pos.coords.longitude,
-        });
-        setNotifications((prev) => [
-          {
-            id: `loc-${Date.now()}`,
-            title: '📍 Localização Atualizada',
-            message: 'Buscando empresas e ofertas no seu raio de proximidade.',
-            timestamp: 'Agora',
-            type: 'system',
-            read: false,
-          },
-          ...prev,
-        ]);
+      async (pos) => {
+        try {
+          const lat = pos.coords.latitude;
+          const lon = pos.coords.longitude;
+          const res = await fetch(`https://nominatim.openstreetmap.org/reverse?format=json&lat=${lat}&lon=${lon}`);
+          if (!res.ok) throw new Error('Falha na geocodificação');
+          const data = await res.json();
+          
+          let cityName = data.address?.city || data.address?.town || data.address?.village || data.address?.municipality || '';
+          let stateName = data.address?.state || '';
+          let suburb = data.address?.suburb || data.address?.neighbourhood || '';
+
+          setCurrentLocation({
+            city: cityName,
+            state: stateName,
+            neighborhood: suburb,
+            latitude: lat,
+            longitude: lon,
+          });
+
+          setNotifications((prev) => [
+            {
+              id: `loc-${Date.now()}`,
+              title: '📍 Localização Atualizada',
+              message: `Localização definida para ${cityName}${stateName ? ` - ${stateName}` : ''}. Buscando ofertas próximas.`,
+              timestamp: 'Agora',
+              type: 'system',
+              read: false,
+            },
+            ...prev,
+          ]);
+        } catch (e) {
+          // Fallback if API fails
+          setCurrentLocation({
+            city: '',
+            state: '',
+            neighborhood: '',
+            latitude: pos.coords.latitude,
+            longitude: pos.coords.longitude,
+          });
+        } finally {
+          setIsLocating(false);
+        }
       },
       () => {
         setIsLocating(false);
         setCurrentLocation({
-          city: 'São Paulo',
-          state: 'SP',
-          neighborhood: 'Centro',
+          city: '',
+          state: '',
+          neighborhood: '',
         });
+        alert('Não foi possível obter sua localização. Verifique as permissões.');
       },
       { timeout: 8000 }
     );
   };
 
-  const toggleFavoriteBusiness = (id: string) => {
-    setFavorites((prev) => {
-      const exists = prev.businessIds.includes(id);
-      return {
+  const toggleFavoriteBusiness = async (id: string) => {
+    if (!currentUser?.id) {
+      setIsAuthModalOpen(true);
+      return;
+    }
+
+    const isFav = favorites.businessIds.includes(id);
+
+    if (isSupabaseConfigured) {
+      try {
+        if (isFav) {
+          await dataService.removeFavoriteBusiness(currentUser.id, id);
+          setFavorites((prev) => ({
+            ...prev,
+            businessIds: prev.businessIds.filter((bId) => bId !== id),
+          }));
+        } else {
+          await dataService.addFavoriteBusiness(currentUser.id, id);
+          setFavorites((prev) => ({
+            ...prev,
+            businessIds: [...prev.businessIds, id],
+          }));
+        }
+      } catch (err: any) {
+        console.error('Erro ao atualizar favorito no Supabase:', err);
+        alert(err.message || 'Erro ao sincronizar favorito com o servidor.');
+      }
+    } else {
+      setFavorites((prev) => ({
         ...prev,
-        businessIds: exists
+        businessIds: isFav
           ? prev.businessIds.filter((bId) => bId !== id)
           : [...prev.businessIds, id],
-      };
-    });
+      }));
+    }
   };
 
-  const toggleFavoriteOffer = (id: string) => {
-    setFavorites((prev) => {
-      const exists = prev.offerIds.includes(id);
-      return {
+  const toggleFavoriteOffer = async (id: string) => {
+    if (!currentUser?.id) {
+      setIsAuthModalOpen(true);
+      return;
+    }
+
+    const isFav = favorites.offerIds.includes(id);
+
+    if (isSupabaseConfigured) {
+      try {
+        if (isFav) {
+          await dataService.removeFavoriteOffer(currentUser.id, id);
+          setFavorites((prev) => ({
+            ...prev,
+            offerIds: prev.offerIds.filter((oId) => oId !== id),
+          }));
+        } else {
+          await dataService.addFavoriteOffer(currentUser.id, id);
+          setFavorites((prev) => ({
+            ...prev,
+            offerIds: [...prev.offerIds, id],
+          }));
+        }
+      } catch (err: any) {
+        console.error('Erro ao atualizar favorito de oferta no Supabase:', err);
+        alert(err.message || 'Erro ao sincronizar favorito com o servidor.');
+      }
+    } else {
+      setFavorites((prev) => ({
         ...prev,
-        offerIds: exists
+        offerIds: isFav
           ? prev.offerIds.filter((oId) => oId !== id)
           : [...prev.offerIds, id],
-      };
-    });
+      }));
+    }
   };
 
   const createQuoteRequest = async (
     data: Omit<QuoteRequest, 'id' | 'createdAt' | 'status' | 'proposals'>
   ): Promise<string> => {
-    const newId = `qr-${Date.now()}`;
+    if (!currentUser?.id) {
+      throw new Error('Você precisa estar autenticado para solicitar um orçamento.');
+    }
+
+    let assignedId = `qr-${Date.now()}`;
+
+    if (isSupabaseConfigured) {
+      const dbId = await dataService.createQuoteRequest(data, currentUser.id);
+      if (dbId) {
+        assignedId = dbId;
+      }
+    }
+
     const newQuote: QuoteRequest = {
       ...data,
-      id: newId,
+      id: assignedId,
+      userId: currentUser.id,
       createdAt: new Date().toISOString().split('T')[0],
       status: 'aberto',
       proposals: [],
     };
 
     setQuoteRequests((prev) => [newQuote, ...prev]);
-
-    if (isSupabaseConfigured && currentUser?.id) {
-      try {
-        const dbId = await dataService.createQuoteRequest(data, currentUser.id);
-        return dbId;
-      } catch (err) {
-        console.error('Erro ao persistir cotação no Supabase:', err);
-      }
-    }
 
     setNotifications((prev) => [
       {
@@ -328,50 +463,56 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       ...prev,
     ]);
 
-    return newId;
+    return assignedId;
   };
 
   const submitProposal = async (
     quoteRequestId: string,
     proposalData: Omit<QuoteProposal, 'id' | 'createdAt' | 'status'>
   ) => {
+    let realProposalId = `prop-${Date.now()}`;
+
+    if (isSupabaseConfigured) {
+      // 1. Aguarda o INSERT no Supabase e obtém o UUID real retornado pelo banco
+      realProposalId = await dataService.submitProposal({
+        quoteRequestId,
+        businessId: proposalData.businessId,
+        price: proposalData.price,
+        deadlineText: proposalData.deadlineText,
+        description: proposalData.description,
+      });
+    }
+
     const newProposal: QuoteProposal = {
       ...proposalData,
-      id: `prop-${Date.now()}`,
+      id: realProposalId,
       quoteRequestId,
       createdAt: 'Agora',
       status: 'pendente',
     };
 
+    // 2. Atualiza o estado React somente após a confirmação do Supabase
     setQuoteRequests((prev) =>
       prev.map((qr) => {
         if (qr.id === quoteRequestId) {
           return {
             ...qr,
             status: 'propostas_recebidas',
-            proposals: [...qr.proposals, newProposal],
+            proposals: [...qr.proposals.filter((p) => p.id !== realProposalId), newProposal],
           };
         }
         return qr;
       })
     );
-
-    if (isSupabaseConfigured) {
-      try {
-        await dataService.submitProposal({
-          quoteRequestId,
-          businessId: proposalData.businessId,
-          price: proposalData.price,
-          deadlineText: proposalData.deadlineText,
-          description: proposalData.description,
-        });
-      } catch (err) {
-        console.error('Erro ao salvar proposta no Supabase:', err);
-      }
-    }
   };
 
   const acceptProposal = async (quoteRequestId: string, proposalId: string) => {
+    if (isSupabaseConfigured) {
+      // 1. Aguarda o UPDATE no Supabase com o UUID real
+      await dataService.acceptProposal(quoteRequestId, proposalId);
+    }
+
+    // 2. Atualiza o estado React somente após confirmação do sucesso no banco
     setQuoteRequests((prev) =>
       prev.map((qr) => {
         if (qr.id === quoteRequestId) {
@@ -388,19 +529,73 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       })
     );
 
-    if (isSupabaseConfigured) {
-      try {
-        await dataService.acceptProposal(quoteRequestId, proposalId);
-      } catch (err) {
-        console.error('Erro ao aceitar proposta no Supabase:', err);
-      }
-    }
-
     setNotifications((prev) => [
       {
         id: `accept-${Date.now()}`,
         title: '🎉 Proposta Escolhida!',
         message: 'Você escolheu a proposta. A empresa foi notificada para agendamento.',
+        timestamp: 'Agora',
+        type: 'system',
+        read: false,
+      },
+      ...prev,
+    ]);
+  };
+
+  const cancelQuoteRequest = async (quoteRequestId: string) => {
+    const previous = [...quoteRequests];
+    setQuoteRequests((prev) =>
+      prev.map((qr) => (qr.id === quoteRequestId ? { ...qr, status: 'cancelado' as const } : qr))
+    );
+
+    if (isSupabaseConfigured) {
+      try {
+        await dataService.cancelQuoteRequest(quoteRequestId);
+      } catch (err: any) {
+        console.error('Erro ao encerrar cotação no Supabase:', err);
+        setQuoteRequests(previous);
+        throw err;
+      }
+    }
+
+    setNotifications((prev) => [
+      {
+        id: `cancel-${Date.now()}`,
+        title: 'Pedido de Orçamento Encerrado',
+        message: 'O pedido foi encerrado. As empresas foram notificadas de que você não precisa mais de propostas.',
+        timestamp: 'Agora',
+        type: 'system',
+        read: false,
+      },
+      ...prev,
+    ]);
+  };
+
+  const deleteQuoteRequest = async (quoteRequestId: string) => {
+    // 1. Marca imediatamente a exclusão permanente no armazenamento local
+    markQuoteAsDeletedLocally(quoteRequestId);
+
+    // 2. Remove imediatamente do estado visual
+    setQuoteRequests((prev) => prev.filter((qr) => qr.id !== quoteRequestId));
+
+    if (comparingQuoteRequestId === quoteRequestId) {
+      setComparingQuoteRequestId(null);
+    }
+
+    // 3. Persiste no Supabase com RPC e cascatas
+    if (isSupabaseConfigured) {
+      try {
+        await dataService.deleteQuoteRequest(quoteRequestId);
+      } catch (err: any) {
+        console.warn('Aviso ao sincronizar exclusão com o banco remoto:', err);
+      }
+    }
+
+    setNotifications((prev) => [
+      {
+        id: `del-qr-${Date.now()}`,
+        title: 'Solicitação de Orçamento Excluída',
+        message: 'O pedido de orçamento e todas as propostas vinculadas foram removidos permanentemente.',
         timestamp: 'Agora',
         type: 'system',
         read: false,
@@ -509,8 +704,17 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
   };
 
   const createOffer = async (offerData: Omit<Offer, 'id' | 'viewsCount' | 'claimsCount'>) => {
-    const newOffer: Offer = {
+    const verifiedImageUrl = !isInvalidOrDeadImageUrl(offerData.imageUrl)
+      ? offerData.imageUrl
+      : getSmartImage(offerData.categoryId, offerData.title);
+
+    const safeOfferData = {
       ...offerData,
+      imageUrl: verifiedImageUrl,
+    };
+
+    const newOffer: Offer = {
+      ...safeOfferData,
       id: `off-${Date.now()}`,
       viewsCount: 1,
       claimsCount: 0,
@@ -519,7 +723,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
 
     if (isSupabaseConfigured) {
       try {
-        await dataService.createOffer(offerData);
+        await dataService.createOffer(safeOfferData);
       } catch (err) {
         console.error('Erro ao criar oferta no Supabase:', err);
       }
@@ -527,31 +731,172 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
   };
 
   const createBusiness = async (businessData: Omit<Business, 'id' | 'leadsReceivedCount'>) => {
-    const newBusiness: Business = {
-      ...businessData,
-      id: `b-${Date.now()}`,
-      leadsReceivedCount: 0,
-    };
-    setBusinesses((prev) => [newBusiness, ...prev]);
+    if (!currentUser?.id) {
+      throw new Error('Você precisa estar autenticado para cadastrar uma empresa.');
+    }
 
-    if (isSupabaseConfigured && currentUser?.id) {
-      try {
-        await dataService.createBusiness(businessData, currentUser.id);
-      } catch (err) {
-        console.error('Erro ao criar empresa no Supabase:', err);
+    const verifiedPhoto = !isInvalidOrDeadImageUrl(businessData.coverImage)
+      ? businessData.coverImage
+      : !isInvalidOrDeadImageUrl(businessData.logo)
+      ? businessData.logo
+      : getSmartImage(businessData.categoryId, `${businessData.subcategory || ''} ${businessData.name}`);
+
+    const safeBusinessData = {
+      ...businessData,
+      logo: verifiedPhoto,
+      coverImage: verifiedPhoto,
+      photos: businessData.photos && businessData.photos.length > 0 ? businessData.photos : [verifiedPhoto],
+    };
+
+    let assignedId = `b-${Date.now()}`;
+
+    if (isSupabaseConfigured) {
+      const dbId = await dataService.createBusiness(safeBusinessData, currentUser.id);
+      if (dbId) {
+        assignedId = dbId;
       }
     }
+
+    const newBusiness: Business = {
+      ...safeBusinessData,
+      id: assignedId,
+      ownerId: currentUser.id,
+      leadsReceivedCount: 0,
+    };
+
+    setBusinesses((prev) => [newBusiness, ...prev]);
   };
 
   const updateMonetization = async (settings: AdminMonetizationSettings) => {
+    const previous = { ...monetization };
     setMonetization(settings);
     if (isSupabaseConfigured) {
       try {
         await dataService.updateMonetizationSettings(settings);
       } catch (err) {
         console.error('Erro ao salvar parametrizações:', err);
+        setMonetization(previous);
+        throw err;
       }
     }
+  };
+
+  const toggleBusinessVerified = async (businessId: string) => {
+    const business = businesses.find(b => b.id === businessId);
+    if (!business) return;
+    const newVerified = !business.verified;
+    
+    setBusinesses((prev) =>
+      prev.map((b) => (b.id === businessId ? { ...b, verified: newVerified } : b))
+    );
+
+    if (isSupabaseConfigured) {
+      try {
+        await dataService.toggleBusinessVerified(businessId, newVerified);
+      } catch (err) {
+        console.error('Erro ao verificar empresa:', err);
+        // Rollback on error
+        setBusinesses((prev) =>
+          prev.map((b) => (b.id === businessId ? { ...b, verified: !newVerified } : b))
+        );
+        alert(`Não foi possível alterar verificação: ${(err as Error).message}`);
+      }
+    }
+  };
+
+  const toggleBusinessActive = async (businessId: string) => {
+    const business = businesses.find(b => b.id === businessId);
+    if (!business) return;
+    const newActive = business.active === false ? true : false;
+
+    setBusinesses((prev) =>
+      prev.map((b) => (b.id === businessId ? { ...b, active: newActive } : b))
+    );
+
+    if (isSupabaseConfigured) {
+      try {
+        await dataService.toggleBusinessActive(businessId, newActive);
+      } catch (err) {
+        console.error('Erro ao alterar status da empresa:', err);
+        // Rollback on error
+        setBusinesses((prev) =>
+          prev.map((b) => (b.id === businessId ? { ...b, active: !newActive } : b))
+        );
+        alert(`Não foi possível alterar status da empresa: ${(err as Error).message}`);
+      }
+    }
+  };
+
+  const toggleBusinessFeatured = async (businessId: string) => {
+    const business = businesses.find(b => b.id === businessId);
+    if (!business) return;
+    const newFeatured = !business.featured;
+
+    setBusinesses((prev) =>
+      prev.map((b) => (b.id === businessId ? { ...b, featured: newFeatured } : b))
+    );
+
+    if (isSupabaseConfigured) {
+      try {
+        await dataService.toggleBusinessFeatured(businessId, newFeatured);
+      } catch (err) {
+        console.error('Erro ao destacar empresa:', err);
+        // Rollback on error
+        setBusinesses((prev) =>
+          prev.map((b) => (b.id === businessId ? { ...b, featured: !newFeatured } : b))
+        );
+        alert(`Não foi possível alterar destaque: ${(err as Error).message}`);
+      }
+    }
+  };
+
+  const removeOffer = async (offerId: string) => {
+    const previous = [...offers];
+    setOffers((prev) => prev.filter((o) => o.id !== offerId));
+    if (isSupabaseConfigured) {
+      try {
+        await dataService.deleteOffer(offerId);
+      } catch (err) {
+        console.error('Erro ao excluir oferta do Supabase:', err);
+        setOffers(previous);
+        alert(`Não foi possível excluir a oferta: ${(err as Error).message}`);
+      }
+    }
+  };
+
+  const deleteBusiness = async (businessId: string) => {
+    const previousBusinesses = [...businesses];
+    const previousOffers = [...offers];
+
+    setBusinesses((prev) => prev.filter((b) => b.id !== businessId));
+    setOffers((prev) => prev.filter((o) => o.businessId !== businessId));
+
+    if (isSupabaseConfigured) {
+      try {
+        await dataService.deleteBusiness(businessId);
+      } catch (err) {
+        console.error('Erro ao excluir empresa do Supabase:', err);
+        // Rollback on error
+        setBusinesses(previousBusinesses);
+        setOffers(previousOffers);
+        alert(`Não foi possível excluir o parceiro: ${(err as Error).message}`);
+      }
+    }
+  };
+
+  const upgradeBusinessPlan = (businessId: string, planTier: 'free' | 'pro' | 'premium') => {
+    // Integração de pagamento pendente. Não atualiza o plano falso.
+    setNotifications((prev) => [
+      {
+        id: `upgrade-${Date.now()}`,
+        title: 'Integração de Pagamento Pendente',
+        message: `A assinatura do plano ${planTier.toUpperCase()} requer configuração do Gateway de Pagamento (ex: Stripe/MercadoPago). Benefícios não foram ativados.`,
+        timestamp: 'Agora',
+        type: 'system',
+        read: false,
+      },
+      ...prev,
+    ]);
   };
 
   const markNotificationRead = (id: string) => {
@@ -569,6 +914,17 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     setChatMessages([]);
   };
 
+  const refreshQuoteRequests = async () => {
+    if (!isSupabaseConfigured) return;
+    const myBizIds = currentUser
+      ? businesses
+          .filter((b) => (b.ownerId || '').toLowerCase() === (currentUser.id || '').toLowerCase())
+          .map((b) => b.id)
+      : [];
+    const allQuotes = await dataService.syncAllQuoteRequests(currentUser?.id, myBizIds);
+    setQuoteRequests(allQuotes);
+  };
+
   const logout = async () => {
     try {
       await authService.signOut();
@@ -577,6 +933,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     }
     setCurrentUser(null);
     setUserRole('customer');
+    setFavorites({ businessIds: [], offerIds: [] });
   };
 
   return (
@@ -620,22 +977,34 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
         createQuoteRequest,
         submitProposal,
         acceptProposal,
+        cancelQuoteRequest,
+        deleteQuoteRequest,
         createPriceAlert,
         removePriceAlert,
         addReview,
         reportReview,
         sendChatMessage,
         createOffer,
+        addOffer: createOffer,
         createBusiness,
         updateMonetization,
+        toggleBusinessActive,
+        toggleBusinessVerified,
+        toggleBusinessFeatured,
+        removeOffer,
+        deleteBusiness,
+        upgradeBusinessPlan,
         markNotificationRead,
         deleteAccountAndData,
+        refreshQuoteRequests,
 
         selectedBusinessId,
         setSelectedBusinessId,
         isQuoteModalOpen,
         setIsQuoteModalOpen,
         quoteCategoryPreset,
+        quoteTargetBusinessId,
+        setQuoteTargetBusinessId,
         setQuoteCategoryPreset,
         comparingQuoteRequestId,
         setComparingQuoteRequestId,

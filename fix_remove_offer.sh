@@ -1,0 +1,2 @@
+sed -i 's/removeOffer = (offerId: string) => {/removeOffer = async (offerId: string) => {/g' src/context/AppContext.tsx
+sed -i 's/setOffers((prev) => prev.filter((o) => o.id !== offerId));/    setOffers((prev) => prev.filter((o) => o.id !== offerId));\n    if (isSupabaseConfigured) {\n      try {\n        await supabase.from('"'"'offers'"'"').delete().eq('"'"'id'"'"', offerId);\n      } catch (err) {\n        console.error('"'"'Erro ao excluir oferta do Supabase:'"'"', err);\n      }\n    }/g' src/context/AppContext.tsx

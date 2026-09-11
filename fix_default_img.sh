@@ -1,0 +1,3 @@
+sed -i 's/src={offer.imageUrl || undefined}/src={offer.imageUrl || "https:\/\/images.unsplash.com\/photo-1556742049-0cfed4f6a45d?auto=format\&fit=crop\&w=600\&q=80"}/g' src/components/HomeView.tsx
+sed -i 's/src={offer.imageUrl || undefined}/src={offer.imageUrl || "https:\/\/images.unsplash.com\/photo-1556742049-0cfed4f6a45d?auto=format\&fit=crop\&w=600\&q=80"}/g' src/components/OffersView.tsx
+sed -i 's/src={biz.coverImage || undefined}/src={biz.coverImage || "https:\/\/images.unsplash.com\/photo-1556742049-0cfed4f6a45d?auto=format\&fit=crop\&w=800\&q=80"}/g' src/components/BusinessDetailModal.tsx

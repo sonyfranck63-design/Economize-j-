@@ -1,5 +1,7 @@
 import React, { useState } from 'react';
 import { useApp } from '../context/AppContext';
+import { BusinessAvatar } from './BusinessAvatar';
+import { SafeImage } from './SafeImage';
 import {
   X,
   Star,
@@ -24,9 +26,12 @@ export const BusinessDetailModal: React.FC = () => {
     offers,
     setIsQuoteModalOpen,
     setQuoteCategoryPreset,
+    setQuoteTargetBusinessId,
     toggleFavoriteBusiness,
     favorites,
     addReview,
+    currentUser,
+    setIsAuthModalOpen,
   } = useApp();
 
   const [activeTab, setActiveTab] = useState<'servicos' | 'produtos' | 'ofertas' | 'avaliacoes'>('servicos');
@@ -35,7 +40,15 @@ export const BusinessDetailModal: React.FC = () => {
   const [showReviewForm, setShowReviewForm] = useState(false);
   const [reviewRating, setReviewRating] = useState(5);
   const [reviewComment, setReviewComment] = useState('');
-  const [reviewAuthor, setReviewAuthor] = useState('');
+
+  // Adiciona suporte a fechar com ESC para melhorar a acessibilidade e UX
+  React.useEffect(() => {
+    const handleEscape = (e: KeyboardEvent) => {
+      if (e.key === 'Escape') setSelectedBusinessId(null);
+    };
+    window.addEventListener('keydown', handleEscape);
+    return () => window.removeEventListener('keydown', handleEscape);
+  }, [setSelectedBusinessId]);
 
   if (!selectedBusinessId) return null;
 
@@ -47,10 +60,14 @@ export const BusinessDetailModal: React.FC = () => {
 
   const handleReviewSubmit = (e: React.FormEvent) => {
     e.preventDefault();
+    if (!currentUser) {
+      setIsAuthModalOpen(true);
+      return;
+    }
     if (!reviewComment.trim()) return;
 
     addReview(biz.id, {
-      authorName: reviewAuthor.trim() || 'Cliente Verificado',
+      authorName: currentUser.fullName,
       rating: reviewRating,
       comment: reviewComment.trim(),
     });
@@ -65,15 +82,20 @@ export const BusinessDetailModal: React.FC = () => {
   };
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-950/60 p-2 sm:p-4 backdrop-blur-xs overflow-y-auto">
-      <div className="w-full max-w-3xl bg-white rounded-2xl shadow-2xl border border-slate-100 animate-in fade-in zoom-in-95 my-6 overflow-hidden max-h-[92vh] flex flex-col">
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-950/60 p-2 sm:p-4 backdrop-blur-xs">
+      {/* Background Overlay */}
+      <div className="absolute inset-0" onClick={() => setSelectedBusinessId(null)} />
+      
+      {/* Modal Container */}
+      <div className="relative w-full max-w-3xl bg-white rounded-2xl shadow-2xl border border-slate-100 animate-in fade-in zoom-in-95 flex flex-col max-h-[92vh] overflow-hidden">
         
         {/* Cover / Header */}
         <div className="relative h-44 sm:h-56 bg-slate-900 shrink-0">
-          <img
+          <SafeImage
             src={biz.coverImage}
             alt={biz.name}
-            referrerPolicy="no-referrer"
+            category={biz.categoryId}
+            fallbackKeyword={`${biz.subcategory} ${biz.name}`}
             className="w-full h-full object-cover opacity-80"
           />
           <div className="absolute inset-0 bg-gradient-to-t from-slate-950/80 via-slate-950/30 to-transparent" />
@@ -98,11 +120,11 @@ export const BusinessDetailModal: React.FC = () => {
 
           {/* Business identity badge */}
           <div className="absolute -bottom-6 left-6 flex items-end gap-4 z-10">
-            <img
-              src={biz.logo}
-              alt={biz.name}
-              referrerPolicy="no-referrer"
-              className="w-20 h-20 sm:w-24 sm:h-24 rounded-2xl object-cover border-4 border-white shadow-md bg-white"
+            <BusinessAvatar
+              src={biz.logo || biz.photos?.[0]}
+              name={biz.name}
+              className="w-20 h-20 sm:w-24 sm:h-24 rounded-2xl border-4 border-white shadow-md bg-white"
+              iconClassName="w-8 h-8 text-emerald-600"
             />
           </div>
         </div>
@@ -155,6 +177,7 @@ export const BusinessDetailModal: React.FC = () => {
                 id="biz-btn-pedir-orcamento"
                 onClick={() => {
                   setQuoteCategoryPreset(biz.categoryId);
+                  setQuoteTargetBusinessId(biz.id);
                   setSelectedBusinessId(null);
                   setIsQuoteModalOpen(true);
                 }}
@@ -194,7 +217,7 @@ export const BusinessDetailModal: React.FC = () => {
                 activeTab === 'servicos' ? 'bg-slate-900 text-white' : 'text-slate-600 hover:bg-slate-100'
               }`}
             >
-              Serviços ({biz.services.length})
+              Serviços ({(biz.services?.length || 0)})
             </button>
             <button
               onClick={() => setActiveTab('produtos')}
@@ -202,7 +225,7 @@ export const BusinessDetailModal: React.FC = () => {
                 activeTab === 'produtos' ? 'bg-slate-900 text-white' : 'text-slate-600 hover:bg-slate-100'
               }`}
             >
-              Produtos ({biz.products.length})
+              Produtos ({(biz.products?.length || 0)})
             </button>
             <button
               onClick={() => setActiveTab('ofertas')}
@@ -218,7 +241,7 @@ export const BusinessDetailModal: React.FC = () => {
                 activeTab === 'avaliacoes' ? 'bg-slate-900 text-white' : 'text-slate-600 hover:bg-slate-100'
               }`}
             >
-              Avaliações ({biz.reviews.length})
+              Avaliações ({(biz.reviews?.length || 0)})
             </button>
           </div>
         </div>
@@ -228,7 +251,7 @@ export const BusinessDetailModal: React.FC = () => {
           {/* SERVIÇOS */}
           {activeTab === 'servicos' && (
             <div className="space-y-3">
-              {biz.services.map((svc) => (
+              {(biz.services || []).map((svc) => (
                 <div
                   key={svc.id}
                   className="flex items-start justify-between p-4 rounded-xl bg-slate-50 border border-slate-100 gap-3"
@@ -248,6 +271,7 @@ export const BusinessDetailModal: React.FC = () => {
                     <button
                       onClick={() => {
                         setQuoteCategoryPreset(biz.categoryId);
+                  setQuoteTargetBusinessId(biz.id);
                         setSelectedBusinessId(null);
                         setIsQuoteModalOpen(true);
                       }}
@@ -264,7 +288,7 @@ export const BusinessDetailModal: React.FC = () => {
           {/* PRODUTOS */}
           {activeTab === 'produtos' && (
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-              {biz.products.map((prod) => (
+              {(biz.products || []).map((prod) => (
                 <div
                   key={prod.id}
                   className="p-4 rounded-xl bg-slate-50 border border-slate-100 space-y-2 flex flex-col justify-between"
@@ -362,13 +386,9 @@ export const BusinessDetailModal: React.FC = () => {
                 <form onSubmit={handleReviewSubmit} className="p-4 rounded-xl bg-slate-50 border border-slate-200 space-y-3">
                   <span className="text-xs font-bold text-slate-800 block">Sua Avaliação</span>
                   <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
-                    <input
-                      type="text"
-                      placeholder="Seu nome"
-                      value={reviewAuthor}
-                      onChange={(e) => setReviewAuthor(e.target.value)}
-                      className="px-3 py-2 rounded-xl border border-slate-300 text-xs bg-white text-slate-800"
-                    />
+                    <div className="px-3 py-2 rounded-xl border border-slate-200 bg-slate-100 text-xs text-slate-500 font-semibold flex items-center">
+                      {currentUser?.fullName || 'Faça login para avaliar'}
+                    </div>
                     <div className="flex items-center gap-1">
                       <span className="text-xs font-semibold text-slate-600">Nota:</span>
                       {[1, 2, 3, 4, 5].map((star) => (
@@ -404,7 +424,7 @@ export const BusinessDetailModal: React.FC = () => {
 
               {/* Reviews list */}
               <div className="space-y-3">
-                {biz.reviews.map((rev) => (
+                {(biz.reviews || []).map((rev) => (
                   <div key={rev.id} className="p-4 rounded-xl bg-slate-50 border border-slate-100 space-y-1.5">
                     <div className="flex items-center justify-between">
                       <div className="flex items-center gap-2">

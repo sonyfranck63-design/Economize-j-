@@ -24,8 +24,8 @@ export const AuthModal: React.FC = () => {
   const [password, setPassword] = useState('');
   const [fullName, setFullName] = useState('');
   const [phone, setPhone] = useState('');
-  const [city, setCity] = useState('São Paulo');
-  const [state, setState] = useState('SP');
+  const [city, setCity] = useState('');
+  const [state, setState] = useState('');
   const [loading, setLoading] = useState(false);
   const [errorMessage, setErrorMessage] = useState('');
   const [successMessage, setSuccessMessage] = useState('');
@@ -41,11 +41,13 @@ export const AuthModal: React.FC = () => {
     try {
       if (!isSupabaseConfigured) {
         // Modo local quando as credenciais ainda não foram inseridas no .env
+        const isMaster = email.toLowerCase().trim() === 'matheusfranck2013@gmail.com';
+        const assignedRole = isMaster ? 'admin' : (tab === 'signup' && role === 'business' ? 'business' : 'customer');
         const dummyUser = {
           id: `local-u-${Date.now()}`,
           email,
           fullName: fullName || email.split('@')[0],
-          role: tab === 'signup' ? role : 'customer',
+          role: assignedRole,
           city,
           state,
           phone,

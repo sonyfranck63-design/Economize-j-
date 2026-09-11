@@ -1,5 +1,6 @@
 import React, { useState } from 'react';
 import { useApp } from '../context/AppContext';
+import { BusinessAvatar } from './BusinessAvatar';
 import { Heart, Star, MapPin, MessageCircle, ArrowRight, Building2, Tag } from 'lucide-react';
 
 export const FavoritesView: React.FC = () => {
@@ -70,11 +71,10 @@ export const FavoritesView: React.FC = () => {
                 className="bg-white rounded-2xl border border-slate-100 p-5 shadow-sm hover:shadow-md transition flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4"
               >
                 <div className="flex items-start gap-4">
-                  <img
+                  <BusinessAvatar
                     src={biz.logo}
-                    alt={biz.name}
-                    referrerPolicy="no-referrer"
-                    className="w-16 h-16 rounded-2xl object-cover border border-slate-100 shrink-0"
+                    name={biz.name}
+                    className="w-16 h-16 rounded-2xl border border-slate-100"
                   />
                   <div>
                     <span className="text-[10px] font-bold text-emerald-600 uppercase">{biz.subcategory}</span>

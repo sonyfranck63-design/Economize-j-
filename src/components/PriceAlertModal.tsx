@@ -35,126 +35,144 @@ export const PriceAlertModal: React.FC = () => {
     setMaxPrice('');
   };
 
+  // Adiciona suporte a fechar com ESC para melhorar a acessibilidade e UX
+  React.useEffect(() => {
+    const handleEscape = (e: KeyboardEvent) => {
+      if (e.key === 'Escape') setIsPriceAlertModalOpen(false);
+    };
+    window.addEventListener('keydown', handleEscape);
+    return () => window.removeEventListener('keydown', handleEscape);
+  }, [setIsPriceAlertModalOpen]);
+
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-950/60 p-4 backdrop-blur-xs overflow-y-auto">
-      <div className="w-full max-w-lg bg-white rounded-2xl p-6 sm:p-8 shadow-2xl border border-slate-100 animate-in fade-in zoom-in-95 my-8 space-y-6">
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-950/60 p-2 sm:p-4 backdrop-blur-xs">
+      {/* Background Overlay */}
+      <div className="absolute inset-0" onClick={() => setIsPriceAlertModalOpen(false)} />
+      
+      {/* Modal Container */}
+      <div className="relative w-full max-w-lg bg-white rounded-2xl shadow-2xl border border-slate-100 animate-in fade-in zoom-in-95 flex flex-col max-h-[92vh] sm:max-h-[85vh] overflow-hidden">
         
-        {/* Header */}
-        <div className="flex items-start justify-between pb-4 border-b border-slate-100">
+        {/* Header - Totalmente Fixo */}
+        <div className="flex items-start justify-between p-5 sm:p-6 border-b border-slate-100 bg-white shrink-0">
           <div>
             <div className="inline-flex items-center gap-1.5 text-xs font-bold text-emerald-700 bg-emerald-50 px-2.5 py-0.5 rounded-md mb-1">
               <TrendingDown className="w-3.5 h-3.5" />
               <span>Economia Automática</span>
             </div>
-            <h3 className="text-xl font-bold text-slate-900">Quero Pagar Menos</h3>
+            <h3 className="text-lg sm:text-xl font-bold text-slate-900">Quero Pagar Menos</h3>
             <p className="text-xs text-slate-500 mt-0.5">
               Defina o valor máximo que deseja pagar. Avisaremos você assim que uma oferta compatível surgir!
             </p>
           </div>
           <button
             onClick={() => setIsPriceAlertModalOpen(false)}
-            className="text-slate-400 hover:text-slate-700 p-1.5 rounded-lg"
+            className="text-slate-400 hover:text-slate-700 p-2 rounded-lg hover:bg-slate-100 transition-colors"
+            title="Fechar"
+            type="button"
           >
             <X className="w-5 h-5" />
           </button>
         </div>
 
-        {/* Creation Form */}
-        <form onSubmit={handleSubmit} className="space-y-4 bg-slate-50 p-4 rounded-xl border border-slate-100">
-          <span className="text-xs font-bold text-slate-800 uppercase tracking-wide block">
-            Criar Novo Alerta de Preço
-          </span>
+        {/* Scrollable Content */}
+        <div className="flex-1 overflow-y-auto p-5 sm:p-6 space-y-6">
+          {/* Creation Form */}
+          <form onSubmit={handleSubmit} className="space-y-4 bg-slate-50 p-4 rounded-xl border border-slate-100">
+            <span className="text-xs font-bold text-slate-800 uppercase tracking-wide block">
+              Criar Novo Alerta de Preço
+            </span>
 
-          <div>
-            <label className="block text-xs font-semibold text-slate-700 mb-1">
-              Produto ou Serviço Desejado
-            </label>
-            <input
-              type="text"
-              required
-              value={keyword}
-              onChange={(e) => setKeyword(e.target.value)}
-              placeholder="Ex: Pneu aro 15, Troca de tela iPhone, Pintura de sala..."
-              className="w-full px-3.5 py-2.5 rounded-xl border border-slate-200 bg-white text-sm focus:ring-2 focus:ring-emerald-500 focus:outline-hidden text-slate-800"
-            />
-          </div>
-
-          <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
             <div>
               <label className="block text-xs font-semibold text-slate-700 mb-1">
-                Quero pagar até (R$)
+                Produto ou Serviço Desejado
               </label>
               <input
-                type="number"
-                step="0.01"
+                type="text"
                 required
-                value={maxPrice}
-                onChange={(e) => setMaxPrice(e.target.value)}
-                placeholder="Ex: 350.00"
+                value={keyword}
+                onChange={(e) => setKeyword(e.target.value)}
+                placeholder="Ex: Pneu aro 15, Troca de tela iPhone, Pintura de sala..."
                 className="w-full px-3.5 py-2.5 rounded-xl border border-slate-200 bg-white text-sm focus:ring-2 focus:ring-emerald-500 focus:outline-hidden text-slate-800"
               />
             </div>
 
-            <div>
-              <label className="block text-xs font-semibold text-slate-700 mb-1">
-                Categoria
-              </label>
-              <select
-                value={categoryId}
-                onChange={(e) => setCategoryId(e.target.value)}
-                className="w-full px-3.5 py-2.5 rounded-xl border border-slate-200 bg-white text-sm text-slate-800 focus:ring-2 focus:ring-emerald-500 focus:outline-hidden"
-              >
-                {CATEGORIES.map((c) => (
-                  <option key={c.id} value={c.id}>
-                    {c.name}
-                  </option>
-                ))}
-              </select>
-            </div>
-          </div>
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+              <div>
+                <label className="block text-xs font-semibold text-slate-700 mb-1">
+                  Quero pagar até (R$)
+                </label>
+                <input
+                  type="number"
+                  step="0.01"
+                  required
+                  value={maxPrice}
+                  onChange={(e) => setMaxPrice(e.target.value)}
+                  placeholder="Ex: 350.00"
+                  className="w-full px-3.5 py-2.5 rounded-xl border border-slate-200 bg-white text-sm focus:ring-2 focus:ring-emerald-500 focus:outline-hidden text-slate-800"
+                />
+              </div>
 
-          <button
-            type="submit"
-            className="w-full py-2.5 rounded-xl bg-emerald-600 hover:bg-emerald-700 text-white font-bold text-xs shadow-sm shadow-emerald-600/20 transition active:scale-98 flex items-center justify-center gap-1.5"
-          >
-            <Bell className="w-3.5 h-3.5" />
-            <span>ATIVAR ALERTA DE PREÇO</span>
-          </button>
-        </form>
-
-        {/* Existing Alerts */}
-        <div className="space-y-3">
-          <span className="text-xs font-bold text-slate-800 uppercase tracking-wide block">
-            Seus Alertas Ativos ({priceAlerts.length})
-          </span>
-
-          {priceAlerts.length === 0 ? (
-            <p className="text-xs text-slate-400 py-2">Nenhum alerta cadastrado no momento.</p>
-          ) : (
-            <div className="space-y-2">
-              {priceAlerts.map((alert) => (
-                <div
-                  key={alert.id}
-                  className="flex items-center justify-between p-3.5 rounded-xl bg-white border border-slate-100 text-xs shadow-xs"
+              <div>
+                <label className="block text-xs font-semibold text-slate-700 mb-1">
+                  Categoria
+                </label>
+                <select
+                  value={categoryId}
+                  onChange={(e) => setCategoryId(e.target.value)}
+                  className="w-full px-3.5 py-2.5 rounded-xl border border-slate-200 bg-white text-sm text-slate-800 focus:ring-2 focus:ring-emerald-500 focus:outline-hidden"
                 >
-                  <div className="space-y-0.5">
-                    <span className="font-bold text-slate-900 capitalize block">{alert.keyword}</span>
-                    <span className="text-emerald-600 font-semibold">
-                      Até R$ {alert.maxPrice.toFixed(2)} • {alert.city}
-                    </span>
-                  </div>
-
-                  <button
-                    onClick={() => removePriceAlert(alert.id)}
-                    className="p-2 text-slate-400 hover:text-rose-600 transition rounded-lg"
-                    title="Excluir alerta"
-                  >
-                    <Trash2 className="w-4 h-4" />
-                  </button>
-                </div>
-              ))}
+                  {CATEGORIES.map((c) => (
+                    <option key={c.id} value={c.id}>
+                      {c.name}
+                    </option>
+                  ))}
+                </select>
+              </div>
             </div>
-          )}
+
+            <button
+              type="submit"
+              className="w-full py-2.5 rounded-xl bg-emerald-600 hover:bg-emerald-700 text-white font-bold text-xs shadow-sm shadow-emerald-600/20 transition active:scale-98 flex items-center justify-center gap-1.5"
+            >
+              <Bell className="w-3.5 h-3.5" />
+              <span>ATIVAR ALERTA DE PREÇO</span>
+            </button>
+          </form>
+
+          {/* Existing Alerts */}
+          <div className="space-y-3">
+            <span className="text-xs font-bold text-slate-800 uppercase tracking-wide block">
+              Seus Alertas Ativos ({priceAlerts.length})
+            </span>
+
+            {priceAlerts.length === 0 ? (
+              <p className="text-xs text-slate-400 py-2">Nenhum alerta cadastrado no momento.</p>
+            ) : (
+              <div className="space-y-2">
+                {priceAlerts.map((alert) => (
+                  <div
+                    key={alert.id}
+                    className="flex items-center justify-between p-3.5 rounded-xl bg-white border border-slate-100 text-xs shadow-xs"
+                  >
+                    <div className="space-y-0.5">
+                      <span className="font-bold text-slate-900 capitalize block">{alert.keyword}</span>
+                      <span className="text-emerald-600 font-semibold">
+                        Até R$ {alert.maxPrice.toFixed(2)} • {alert.city}
+                      </span>
+                    </div>
+
+                    <button
+                      onClick={() => removePriceAlert(alert.id)}
+                      className="p-2 text-slate-400 hover:text-rose-600 transition rounded-lg"
+                      title="Excluir alerta"
+                    >
+                      <Trash2 className="w-4 h-4" />
+                    </button>
+                  </div>
+                ))}
+              </div>
+            )}
+          </div>
         </div>
 
       </div>

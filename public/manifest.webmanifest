@@ -12,15 +12,15 @@
   "categories": ["shopping", "business", "finance", "lifestyle"],
   "icons": [
     {
-      "src": "/icon.svg",
+      "src": "/pwa-192x192.png",
       "sizes": "192x192 512x512",
-      "type": "image/svg+xml",
+      "type": "image/png",
       "purpose": "any"
     },
     {
-      "src": "/icon.svg",
+      "src": "/pwa-192x192.png",
       "sizes": "512x512",
-      "type": "image/svg+xml",
+      "type": "image/png",
       "purpose": "maskable"
     }
   ],
@@ -30,14 +30,14 @@
       "short_name": "Orçamento",
       "description": "Peça cotações gratuitas de serviços e produtos",
       "url": "/?action=quote",
-      "icons": [{ "src": "/icon.svg", "sizes": "192x192" }]
+      "icons": [{ "src": "/pwa-192x192.png", "sizes": "192x192" }]
     },
     {
       "name": "Ofertas Próximas",
       "short_name": "Ofertas",
       "description": "Veja descontos perto de você",
       "url": "/?tab=offers",
-      "icons": [{ "src": "/icon.svg", "sizes": "192x192" }]
+      "icons": [{ "src": "/pwa-192x192.png", "sizes": "192x192" }]
     }
   ]
 }

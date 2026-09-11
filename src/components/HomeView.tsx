@@ -1,6 +1,8 @@
 import React, { useState } from 'react';
 import { useApp } from '../context/AppContext';
 import { CATEGORIES } from '../data/categories';
+import { BusinessAvatar } from './BusinessAvatar';
+import { SafeImage } from './SafeImage';
 import {
   Search,
   MapPin,
@@ -84,7 +86,7 @@ export const HomeView: React.FC = () => {
     setActiveTab('search');
   };
 
-  const featuredBusinesses = businesses.filter((b) => b.featured);
+  const featuredBusinesses = businesses.filter((b) => b.featured && b.active !== false);
   const activeOffers = offers.slice(0, 4);
 
   return (
@@ -264,10 +266,11 @@ export const HomeView: React.FC = () => {
               >
                 <div>
                   <div className="relative h-44 overflow-hidden rounded-xl bg-slate-100 mb-3">
-                    <img
+                    <SafeImage
                       src={offer.imageUrl}
                       alt={offer.title}
-                      referrerPolicy="no-referrer"
+                      category={offer.categoryId}
+                      fallbackKeyword={`${offer.title} ${offer.businessName}`}
                       className="w-full h-full object-cover group-hover:scale-105 transition duration-300"
                     />
                     <div className="absolute top-2 left-2 bg-emerald-500 text-white text-[10px] font-bold px-2 py-1 rounded-md shadow-xs">
@@ -356,11 +359,10 @@ export const HomeView: React.FC = () => {
               key={biz.id}
               className="rounded-2xl border border-slate-100 bg-white p-5 shadow-sm hover:shadow-md transition flex flex-col sm:flex-row items-start sm:items-center gap-4"
             >
-              <img
+              <BusinessAvatar
                 src={biz.logo}
-                alt={biz.name}
-                referrerPolicy="no-referrer"
-                className="w-16 h-16 rounded-2xl object-cover border border-slate-100 shrink-0"
+                name={biz.name}
+                className="w-16 h-16 rounded-2xl border border-slate-100"
               />
 
               <div className="flex-1 min-w-0 space-y-1">
@@ -430,59 +432,74 @@ export const HomeView: React.FC = () => {
           </button>
         </div>
 
-        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-          {quoteRequests.map((qr) => (
-            <div
-              key={qr.id}
-              className="rounded-2xl border border-slate-100 bg-white p-5 shadow-sm space-y-3"
+        {quoteRequests.filter((qr) => qr.status !== 'cancelado').length === 0 ? (
+          <div className="rounded-2xl border border-dashed border-slate-200 bg-white p-6 text-center space-y-3">
+            <p className="text-sm font-medium text-slate-600">Nenhuma solicitação de orçamento em andamento.</p>
+            <button
+              onClick={() => setIsQuoteModalOpen(true)}
+              className="px-5 py-2.5 bg-emerald-600 hover:bg-emerald-700 text-white text-xs font-bold rounded-xl transition shadow-xs"
             >
-              <div className="flex items-start justify-between gap-2">
-                <div className="border-l-4 border-emerald-500 pl-3">
-                  <span className="text-xs font-bold text-slate-400 uppercase tracking-wide">
-                    ID: #{qr.id.replace('req_', '')} • {qr.neighborhood}
-                  </span>
-                  <h3 className="font-semibold text-sm text-slate-900 mt-0.5">{qr.title}</h3>
-                </div>
-                <span className="text-[10px] bg-emerald-100 text-emerald-700 font-bold px-2 py-0.5 rounded uppercase tracking-wider shrink-0">
-                  {qr.proposals.length} {qr.proposals.length === 1 ? 'proposta' : 'respostas'}
-                </span>
-              </div>
-
-              <p className="text-xs text-slate-600 line-clamp-2">{qr.description}</p>
-
-              {/* Best proposal snippet */}
-              {qr.proposals.length > 0 && (
-                <div className="bg-slate-50 rounded-xl p-3 border border-slate-100 flex items-center justify-between text-xs">
-                  <div>
-                    <span className="text-[10px] text-slate-400 font-medium">Melhor proposta:</span>
-                    <p className="font-bold text-slate-900">{qr.proposals[0].businessName}</p>
-                  </div>
-                  <div className="text-right">
-                    <span className="text-sm font-bold text-emerald-600">
-                      R$ {qr.proposals[0].price.toFixed(2)}
-                    </span>
-                    <p className="text-[10px] text-slate-400">{qr.proposals[0].deadlineText}</p>
-                  </div>
-                </div>
-              )}
-
-              <div className="pt-1 flex items-center justify-between">
-                <span className="text-[11px] text-slate-400">
-                  Prazo: {qr.desiredDeadline}
-                </span>
-                <button
-                  onClick={() => {
-                    setComparingQuoteRequestId(qr.id);
-                  }}
-                  className="px-3.5 py-1.5 rounded-xl bg-emerald-50 hover:bg-emerald-100 text-emerald-700 text-xs font-bold transition flex items-center gap-1.5"
+              Pedir Orçamento Grátis
+            </button>
+          </div>
+        ) : (
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+            {quoteRequests
+              .filter((qr) => qr.status !== 'cancelado')
+              .slice(0, 4)
+              .map((qr) => (
+                <div
+                  key={qr.id}
+                  className="rounded-2xl border border-slate-100 bg-white p-5 shadow-sm space-y-3"
                 >
-                  <span>Compare as Opções</span>
-                  <ArrowRight className="w-3 h-3" />
-                </button>
-              </div>
-            </div>
-          ))}
-        </div>
+                  <div className="flex items-start justify-between gap-2">
+                    <div className="border-l-4 border-emerald-500 pl-3">
+                      <span className="text-xs font-bold text-slate-400 uppercase tracking-wide">
+                        ID: #{qr.id.replace('req_', '')} • {qr.neighborhood}
+                      </span>
+                      <h3 className="font-semibold text-sm text-slate-900 mt-0.5">{qr.title}</h3>
+                    </div>
+                    <span className="text-[10px] bg-emerald-100 text-emerald-700 font-bold px-2 py-0.5 rounded uppercase tracking-wider shrink-0">
+                      {(qr.proposals || []).length} {(qr.proposals || []).length === 1 ? 'proposta' : 'respostas'}
+                    </span>
+                  </div>
+
+                  <p className="text-xs text-slate-600 line-clamp-2">{qr.description}</p>
+
+                  {/* Best proposal snippet */}
+                  {(qr.proposals || []).length > 0 && (
+                    <div className="bg-slate-50 rounded-xl p-3 border border-slate-100 flex items-center justify-between text-xs">
+                      <div>
+                        <span className="text-[10px] text-slate-400 font-medium">Melhor proposta:</span>
+                        <p className="font-bold text-slate-900">{qr.proposals[0].businessName}</p>
+                      </div>
+                      <div className="text-right">
+                        <span className="text-sm font-bold text-emerald-600">
+                          R$ {qr.proposals[0].price.toFixed(2)}
+                        </span>
+                        <p className="text-[10px] text-slate-400">{qr.proposals[0].deadlineText}</p>
+                      </div>
+                    </div>
+                  )}
+
+                  <div className="pt-1 flex items-center justify-between">
+                    <span className="text-[11px] text-slate-400">
+                      Prazo: {qr.desiredDeadline}
+                    </span>
+                    <button
+                      onClick={() => {
+                        setComparingQuoteRequestId(qr.id);
+                      }}
+                      className="px-3.5 py-1.5 rounded-xl bg-emerald-50 hover:bg-emerald-100 text-emerald-700 text-xs font-bold transition flex items-center gap-1.5"
+                    >
+                      <span>Compare as Opções</span>
+                      <ArrowRight className="w-3 h-3" />
+                    </button>
+                  </div>
+                </div>
+              ))}
+          </div>
+        )}
       </section>
 
     </div>

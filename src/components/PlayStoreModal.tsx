@@ -207,9 +207,8 @@ export const PlayStoreModal: React.FC = () => {
               <div className="p-3.5 rounded-xl border border-slate-100 bg-slate-50/50 space-y-1">
                 <span className="font-bold text-slate-900 block">Permissões Declaradas:</span>
                 <ul className="list-disc list-inside text-slate-600 text-[11px] space-y-1">
-                  <li><code className="font-mono">ACCESS_COARSE_LOCATION</code> (opcional para filtro de distância)</li>
-                  <li><code className="font-mono">ACCESS_FINE_LOCATION</code> (opcional para GPS de alta precisão)</li>
-                  <li><code className="font-mono">INTERNET</code> & <code className="font-mono">ACCESS_NETWORK_STATE</code></li>
+                  <li><code className="font-mono">ACCESS_COARSE_LOCATION</code> (localização aproximada por cidade/bairro para ofertas e empresas na região)</li>
+                  <li><code className="font-mono">INTERNET</code> & <code className="font-mono">ACCESS_NETWORK_STATE</code> (comunicação segura com a nuvem)</li>
                 </ul>
               </div>
             </div>

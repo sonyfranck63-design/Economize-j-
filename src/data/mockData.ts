@@ -371,4 +371,10 @@ export const INITIAL_MONETIZATION: AdminMonetizationSettings = {
   planPremiumMonthly: 159.90,
   featuredDailyRate: 19.90,
   platformCommissionPercent: 8.0, // 8% de comissão opcional
+  adminPixKey: 'pix@economizaja.com.br',
+  adminPixKeyType: 'email',
+  adminPixBeneficiary: 'EconomizaJá Intermediações e Tecnologia LTDA',
+  adminPixBank: 'Banco Inter / Nubank PJ',
+  adminWhatsapp: '5511999998888',
+  adminReceiptInstructions: 'Após efetuar o PIX, envie o comprovante para nosso WhatsApp com o nome da sua empresa para ativação em até 15 minutos.',
 };

@@ -44,8 +44,8 @@ export const PrivacyPolicyView: React.FC<Props> = ({ onBack }) => {
           <ul className="list-disc pl-5 space-y-1">
             <li><strong>Dados de Cadastro (Consumidores):</strong> Nome completo, endereço de e-mail, telefone/WhatsApp e cidade/bairro de residência.</li>
             <li><strong>Dados de Empresas e Prestadores:</strong> Razão social, nome fantasia, CNPJ/CPF, endereço comercial, telefone, WhatsApp, fotos dos serviços e catálogo.</li>
-            <li><strong>Dados de Geolocalização:</strong> Localização aproximada ou precisa mediante consentimento expresso em seu aparelho, utilizada estritamente para ordenar empresas e ofertas por distância até você. Se você recusar a permissão de GPS, o aplicativo continuará plenamente operacional através da seleção manual de sua cidade.</li>
-            <li><strong>Conteúdo Fornecido pelo Usuário:</strong> Descrição de solicitações de orçamento, fotos de orçamentos, mensagens do chat integrado e avaliações legítimas de empresas.</li>
+            <li><strong>Dados de Geolocalização:</strong> Localização aproximada (bairro, cidade ou raio aproximado via rede) mediante consentimento expresso em seu aparelho, utilizada estritamente para ordenar empresas e ofertas por proximidade até você. Não coletamos localização precisa contínua nem rastreamos seu deslocamento em segundo plano. Se você recusar a permissão, o aplicativo continuará plenamente operacional através da seleção manual de sua cidade.</li>
+            <li><strong>Conteúdo Fornecido pelo Usuário:</strong> Descrição de solicitações de orçamento, mensagens do chat integrado, empresas e ofertas favoritadas para comparação e avaliações legítimas de empresas parceiras.</li>
           </ul>
         </section>
 

@@ -26,6 +26,7 @@ export interface BusinessProduct {
 }
 
 export interface Business {
+  ownerId?: string;
   id: string;
   name: string;
   ownerName: string;
@@ -45,14 +46,18 @@ export interface Business {
   reviewCount: number;
   verified: boolean;
   featured: boolean; // "DESTAQUE" / "PATROCINADO"
+  active?: boolean;
   openNow: boolean;
   workingHours: string;
   distanceKm: number; // relative to current selected city
   plan: 'gratis' | 'pro' | 'premium';
+  planTier?: 'gratis' | 'pro' | 'premium';
+  coverImage?: string;
   leadsReceivedCount: number;
   isDemo: boolean;
   services: BusinessService[];
   products: BusinessProduct[];
+  reviews?: Review[];
 }
 
 export interface Offer {
@@ -78,6 +83,7 @@ export interface Offer {
 export interface QuoteRequest {
   id: string;
   userId: string;
+  targetBusinessId?: string;
   userName: string;
   userPhone: string;
   userEmail: string;
@@ -92,7 +98,7 @@ export interface QuoteRequest {
   budgetRange?: string;
   photos?: string[];
   createdAt: string;
-  status: 'aberto' | 'propostas_recebidas' | 'escolhido' | 'finalizado';
+  status: 'aberto' | 'propostas_recebidas' | 'escolhido' | 'finalizado' | 'cancelado';
   proposals: QuoteProposal[];
 }
 
@@ -156,6 +162,12 @@ export interface AdminMonetizationSettings {
   planPremiumMonthly: number;
   featuredDailyRate: number;
   platformCommissionPercent: number;
+  adminPixKey?: string;
+  adminPixKeyType?: 'cpf' | 'cnpj' | 'email' | 'telefone' | 'aleatoria';
+  adminPixBeneficiary?: string;
+  adminPixBank?: string;
+  adminWhatsapp?: string;
+  adminReceiptInstructions?: string;
 }
 
 export interface NotificationItem {

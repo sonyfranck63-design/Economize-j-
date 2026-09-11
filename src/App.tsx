@@ -27,15 +27,18 @@ import { TermsOfServiceView } from './components/TermsOfServiceView';
 import { DeleteAccountView } from './components/DeleteAccountView';
 
 const MainContent: React.FC = () => {
-  const { activeTab, publicRoute, setPublicRoute } = useApp();
+  const { activeTab, publicRoute, setPublicRoute, userRole } = useApp();
 
   const resetToApp = () => {
     window.location.hash = '';
     setPublicRoute('app');
   };
 
+  const isBusinessOrAdmin = userRole === 'business' || userRole === 'admin';
+  const isAdmin = userRole === 'admin';
+
   return (
-    <div className="min-h-screen flex flex-col bg-slate-50 text-slate-900 selection:bg-emerald-500 selection:text-white font-sans antialiased">
+    <div className="min-h-screen w-full overflow-x-hidden flex flex-col bg-slate-50 text-slate-900 selection:bg-emerald-500 selection:text-white font-sans antialiased">
       {/* Sticky Header */}
       <Header />
 
@@ -52,8 +55,8 @@ const MainContent: React.FC = () => {
             {activeTab === 'offers' && <OffersView />}
             {activeTab === 'quotes' && <QuotesView />}
             {activeTab === 'favorites' && <FavoritesView />}
-            {activeTab === 'business_portal' && <BusinessPortalView />}
-            {activeTab === 'admin_portal' && <AdminPortalView />}
+            {activeTab === 'business_portal' && (isBusinessOrAdmin ? <BusinessPortalView /> : <BusinessPortalView />)}
+            {activeTab === 'admin_portal' && (isAdmin ? <AdminPortalView /> : <HomeView />)}
           </>
         )}
       </main>

@@ -2,6 +2,7 @@ import React, { useState } from 'react';
 import { useApp } from '../context/AppContext';
 import { CATEGORIES } from '../data/categories';
 import { Tag, MapPin, Clock, MessageCircle, Heart, Info, ArrowUpDown } from 'lucide-react';
+import { SafeImage } from './SafeImage';
 
 export const OffersView: React.FC = () => {
   const {
@@ -97,10 +98,11 @@ export const OffersView: React.FC = () => {
               className="bg-white rounded-2xl border border-slate-100 overflow-hidden shadow-sm hover:shadow-md transition flex flex-col justify-between group"
             >
               <div className="relative h-48 bg-slate-100 overflow-hidden">
-                <img
+                <SafeImage
                   src={offer.imageUrl}
                   alt={offer.title}
-                  referrerPolicy="no-referrer"
+                  category={offer.categoryId}
+                  fallbackKeyword={`${offer.title} ${offer.businessName}`}
                   className="w-full h-full object-cover group-hover:scale-105 transition duration-300"
                 />
 

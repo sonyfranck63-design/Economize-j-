@@ -1,6 +1,8 @@
 import React, { useState, useMemo } from 'react';
 import { useApp } from '../context/AppContext';
 import { CATEGORIES } from '../data/categories';
+import { BusinessAvatar } from './BusinessAvatar';
+import { SafeImage } from './SafeImage';
 import {
   Search,
   Filter,
@@ -44,6 +46,8 @@ export const SearchView: React.FC = () => {
   const filteredBusinesses = useMemo(() => {
     return businesses
       .filter((b) => {
+        if (b.active === false) return false;
+
         // Text query matching name, description, services, products, subcategory
         if (searchQuery.trim()) {
           const q = searchQuery.toLowerCase().trim();
@@ -339,11 +343,10 @@ export const SearchView: React.FC = () => {
                 className="bg-white rounded-2xl border border-slate-100 p-5 shadow-sm hover:shadow-md transition flex flex-col md:flex-row items-start md:items-center justify-between gap-4"
               >
                 <div className="flex items-start gap-4">
-                  <img
+                  <BusinessAvatar
                     src={biz.logo}
-                    alt={biz.name}
-                    referrerPolicy="no-referrer"
-                    className="w-16 h-16 rounded-2xl object-cover border border-slate-100 shrink-0"
+                    name={biz.name}
+                    className="w-16 h-16 rounded-2xl border border-slate-100"
                   />
                   <div className="space-y-1">
                     <div className="flex items-center gap-2 flex-wrap">
@@ -417,10 +420,11 @@ export const SearchView: React.FC = () => {
               className="bg-white rounded-2xl border border-slate-100 overflow-hidden shadow-sm hover:shadow-md transition flex flex-col justify-between"
             >
               <div className="h-44 relative bg-slate-100">
-                <img
+                <SafeImage
                   src={offer.imageUrl}
                   alt={offer.title}
-                  referrerPolicy="no-referrer"
+                  category={offer.categoryId}
+                  fallbackKeyword={`${offer.title} ${offer.businessName}`}
                   className="w-full h-full object-cover"
                 />
                 <div className="absolute top-2 left-2 bg-emerald-500 text-white text-[10px] font-bold px-2 py-0.5 rounded-md">

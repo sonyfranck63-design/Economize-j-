@@ -15,11 +15,11 @@ export const PWAInstallButton: React.FC = () => {
       <button
         id="btn-install-pwa"
         onClick={install}
-        className="flex items-center gap-1.5 rounded-full bg-emerald-700 hover:bg-emerald-800 text-white px-3 py-1.5 text-xs font-semibold shadow-sm transition active:scale-95"
+        className="flex items-center gap-1.5 rounded-full bg-emerald-700 hover:bg-emerald-800 text-white px-2 sm:px-3 py-1.5 text-xs font-semibold shadow-sm transition active:scale-95"
         title="Instalar EconomizaJá no dispositivo"
       >
         <Download className="w-3.5 h-3.5" />
-        <span>Instalar App</span>
+        <span className="hidden sm:inline">Instalar App</span>
       </button>
     );
   }

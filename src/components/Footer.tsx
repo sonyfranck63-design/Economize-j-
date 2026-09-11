@@ -1,9 +1,10 @@
 import React from 'react';
 import { useApp } from '../context/AppContext';
+import { BrandLogo } from './BrandLogo';
 import { ShieldCheck, Lock, Heart, Smartphone } from 'lucide-react';
 
 export const Footer: React.FC = () => {
-  const { setActiveTab, setIsPlayStoreModalOpen } = useApp();
+  const { setActiveTab, setIsPlayStoreModalOpen, currentUser } = useApp();
 
   return (
     <footer className="bg-slate-900 text-slate-400 text-xs border-t border-slate-800 mt-16 pb-20 md:pb-8">
@@ -12,12 +13,7 @@ export const Footer: React.FC = () => {
           
           {/* Col 1 */}
           <div className="space-y-3">
-            <div className="flex items-center gap-2 text-white font-display font-black text-lg">
-              <div className="w-8 h-8 rounded-lg bg-emerald-500 flex items-center justify-center text-white font-bold">
-                $
-              </div>
-              <span>Economiza<span className="text-emerald-400">Já</span></span>
-            </div>
+            <BrandLogo size="md" textColor="light" showSlogan={false} />
             <p className="text-slate-400 text-xs leading-relaxed">
               Antes de comprar ou contratar, compare. A plataforma que ajuda consumidores a economizar e conecta empresas locais a clientes reais.
             </p>
@@ -80,11 +76,13 @@ export const Footer: React.FC = () => {
                   Planos & Destaque
                 </button>
               </li>
-              <li>
-                <button onClick={() => setActiveTab('admin_portal')} className="hover:text-white transition text-slate-500">
-                  Painel de Administração
-                </button>
-              </li>
+              {currentUser?.role === 'admin' && (
+                <li>
+                  <button onClick={() => setActiveTab('admin_portal')} className="hover:text-white transition text-slate-500">
+                    Painel de Administração
+                  </button>
+                </li>
+              )}
             </ul>
           </div>
 
