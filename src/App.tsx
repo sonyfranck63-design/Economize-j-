@@ -55,7 +55,7 @@ const MainContent: React.FC = () => {
             {activeTab === 'offers' && <OffersView />}
             {activeTab === 'quotes' && <QuotesView />}
             {activeTab === 'favorites' && <FavoritesView />}
-            {activeTab === 'business_portal' && (isBusinessOrAdmin ? <BusinessPortalView /> : <BusinessPortalView />)}
+            {activeTab === 'business_portal' && <BusinessPortalView />}
             {activeTab === 'admin_portal' && (isAdmin ? <AdminPortalView /> : <HomeView />)}
           </>
         )}

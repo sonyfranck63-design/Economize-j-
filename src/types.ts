@@ -46,6 +46,7 @@ export interface Business {
   reviewCount: number;
   verified: boolean;
   featured: boolean; // "DESTAQUE" / "PATROCINADO"
+  featuredUntil?: string; // Validade temporal do destaque
   active?: boolean;
   openNow: boolean;
   workingHours: string;
@@ -100,6 +101,7 @@ export interface QuoteRequest {
   createdAt: string;
   status: 'aberto' | 'propostas_recebidas' | 'escolhido' | 'finalizado' | 'cancelado';
   proposals: QuoteProposal[];
+  origin?: 'geral' | 'direcionado' | 'proprio_consumidor' | 'recebido_parceiro';
 }
 
 export interface QuoteProposal {

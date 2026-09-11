@@ -55,7 +55,18 @@ export const QuoteRequestModal: React.FC = () => {
     setSubmittedId(null);
   };
 
-  // Adiciona suporte a fechar com ESC para melhorar a acessibilidade e UX
+  // Bloqueia scroll do body enquanto modal está aberto para impedir que a página suba ou se mova
+  useEffect(() => {
+    if (isQuoteModalOpen) {
+      const originalOverflow = document.body.style.overflow;
+      document.body.style.overflow = 'hidden';
+      return () => {
+        document.body.style.overflow = originalOverflow;
+      };
+    }
+  }, [isQuoteModalOpen]);
+
+  // Adiciona suporte a fechar com ESC para acessibilidade
   useEffect(() => {
     const handleEscape = (e: KeyboardEvent) => {
       if (e.key === 'Escape') handleClose();
@@ -124,15 +135,15 @@ export const QuoteRequestModal: React.FC = () => {
   };
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-950/60 p-2 sm:p-4 backdrop-blur-xs">
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-950/60 p-2 sm:p-4 backdrop-blur-xs overflow-y-auto">
       {/* Background Overlay */}
-      <div className="absolute inset-0" onClick={handleClose} />
+      <div className="fixed inset-0" onClick={handleClose} />
       
       {/* Modal Container */}
-      <div className="relative w-full max-w-xl bg-white rounded-2xl shadow-2xl border border-slate-100 animate-in fade-in zoom-in-95 flex flex-col max-h-[92vh] sm:max-h-[85vh] overflow-hidden">
+      <div className="relative w-full max-w-xl bg-white rounded-2xl shadow-2xl border border-slate-100 animate-in fade-in zoom-in-95 flex flex-col max-h-[90vh] my-auto overflow-hidden">
         
-        {/* Header - Totalmente Fixo */}
-        <div className="flex items-center justify-between px-5 py-4 sm:px-6 border-b border-slate-100 bg-white shrink-0">
+        {/* Header - Totalmente Fixo e Acessível */}
+        <div className="sticky top-0 z-10 flex items-center justify-between px-5 py-4 sm:px-6 border-b border-slate-100 bg-white shrink-0">
           <div>
             <div className="inline-flex items-center gap-1 text-[11px] font-bold text-emerald-700 bg-emerald-50 px-2.5 py-0.5 rounded-md mb-1">
               <Sparkles className="w-3 h-3" />

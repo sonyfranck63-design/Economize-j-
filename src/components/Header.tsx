@@ -37,28 +37,30 @@ export const Header: React.FC = () => {
 
   return (
     <header className="sticky top-0 z-40 bg-white/95 backdrop-blur-md border-b border-slate-200 shadow-xs">
-      {/* Real Infrastructure Status Banner */}
-      <div className={`text-xs px-3 py-1 text-center font-medium flex items-center justify-center gap-1.5 transition ${
-        isDatabaseConnected 
-          ? 'bg-emerald-900 text-emerald-100 border-b border-emerald-800' 
-          : 'bg-slate-900 text-slate-300 border-b border-slate-800'
-      }`}>
-        {isDatabaseConnected ? (
-          <>
-            <span className="w-2 h-2 rounded-full bg-emerald-400 animate-ping shrink-0" />
-            <span>
-              <strong className="text-white">CONEXÃO ATIVA:</strong> Banco de Dados Supabase Conectado • PostgreSQL em Produção
-            </span>
-          </>
-        ) : (
-          <>
-            <Info className="w-3.5 h-3.5 text-amber-400 shrink-0" />
-            <span>
-              <strong className="text-white">ECONOMIZAJÁ:</strong> Configure <code>VITE_SUPABASE_URL</code> no arquivo <code>.env</code> para sincronização instantânea em nuvem.
-            </span>
-          </>
-        )}
-      </div>
+      {/* Infrastructure Status Banner — restrito exclusivamente a administradores para diagnóstico */}
+      {currentUser?.role === 'admin' && (
+        <div className={`text-xs px-3 py-1 text-center font-medium flex items-center justify-center gap-1.5 transition ${
+          isDatabaseConnected 
+            ? 'bg-emerald-900 text-emerald-100 border-b border-emerald-800' 
+            : 'bg-slate-900 text-slate-300 border-b border-slate-800'
+        }`}>
+          {isDatabaseConnected ? (
+            <>
+              <span className="w-2 h-2 rounded-full bg-emerald-400 animate-ping shrink-0" />
+              <span>
+                <strong className="text-white">CONEXÃO ATIVA:</strong> Banco de Dados Supabase Conectado • PostgreSQL em Produção
+              </span>
+            </>
+          ) : (
+            <>
+              <Info className="w-3.5 h-3.5 text-amber-400 shrink-0" />
+              <span>
+                <strong className="text-white">ECONOMIZAJÁ:</strong> Configure <code>VITE_SUPABASE_URL</code> no arquivo <code>.env</code> para sincronização instantânea em nuvem.
+              </span>
+            </>
+          )}
+        </div>
+      )}
 
       <div className="max-w-7xl mx-auto px-2 sm:px-6 lg:px-8">
         <div className="flex items-center justify-between h-16 gap-1 sm:gap-3">

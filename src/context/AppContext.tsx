@@ -182,11 +182,21 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       const path = window.location.pathname.toLowerCase();
       const hash = window.location.hash.toLowerCase();
 
-      if (path.includes('privacy') || hash.includes('privacy')) {
+      if (
+        path.includes('privacy') || hash.includes('privacy') ||
+        path.includes('privacidade') || hash.includes('privacidade')
+      ) {
         setPublicRoute('privacy');
-      } else if (path.includes('terms') || hash.includes('terms')) {
+      } else if (
+        path.includes('terms') || hash.includes('terms') ||
+        path.includes('termos') || hash.includes('termos')
+      ) {
         setPublicRoute('terms');
-      } else if (path.includes('delete-account') || hash.includes('delete-account')) {
+      } else if (
+        path.includes('delete-account') || hash.includes('delete-account') ||
+        path.includes('excluir-conta') || hash.includes('excluir-conta') ||
+        path.includes('excluir_conta') || hash.includes('excluir_conta')
+      ) {
         setPublicRoute('delete_account');
       } else {
         setPublicRoute('app');
@@ -281,7 +291,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     dataService.syncAllQuoteRequests(currentUser.id, myBizIds).then((allQuotes) => {
       setQuoteRequests(allQuotes);
     });
-  }, [currentUser?.id, currentUser?.role, businesses]);
+  }, [currentUser?.id, currentUser?.role, businesses.length]);
 
   // Geolocation trigger
   const detectUserLocation = () => {
@@ -884,19 +894,40 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     }
   };
 
-  const upgradeBusinessPlan = (businessId: string, planTier: 'free' | 'pro' | 'premium') => {
-    // Integração de pagamento pendente. Não atualiza o plano falso.
-    setNotifications((prev) => [
-      {
-        id: `upgrade-${Date.now()}`,
-        title: 'Integração de Pagamento Pendente',
-        message: `A assinatura do plano ${planTier.toUpperCase()} requer configuração do Gateway de Pagamento (ex: Stripe/MercadoPago). Benefícios não foram ativados.`,
-        timestamp: 'Agora',
-        type: 'system',
-        read: false,
-      },
-      ...prev,
-    ]);
+  const upgradeBusinessPlan = async (businessId: string, planTier: 'free' | 'pro' | 'premium') => {
+    if (planTier === 'free') {
+      alert('Sua empresa já está no plano Gratuito.');
+      return;
+    }
+
+    try {
+      if (isSupabaseConfigured) {
+        await dataService.initiatePlanSubscription(businessId, planTier);
+      }
+      setNotifications((prev) => [
+        {
+          id: `upgrade-${Date.now()}`,
+          title: `Solicitação do Plano ${planTier.toUpperCase()} Registrada`,
+          message: `O pedido de assinatura foi gerado no status PENDING. A ativação ocorrerá automaticamente após a confirmação do pagamento no provedor.`,
+          timestamp: 'Agora',
+          type: 'system',
+          read: false,
+        },
+        ...prev,
+      ]);
+    } catch (err: any) {
+      setNotifications((prev) => [
+        {
+          id: `upgrade-err-${Date.now()}`,
+          title: 'Assinatura Pendente de Confirmação',
+          message: err.message || `A assinatura do plano ${planTier.toUpperCase()} está registrada como pendente.`,
+          timestamp: 'Agora',
+          type: 'system',
+          read: false,
+        },
+        ...prev,
+      ]);
+    }
   };
 
   const markNotificationRead = (id: string) => {
@@ -912,6 +943,8 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     setPriceAlerts([]);
     setNotifications([]);
     setChatMessages([]);
+    setQuoteRequests([]);
+    setActiveTab('home');
   };
 
   const refreshQuoteRequests = async () => {
@@ -934,6 +967,9 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     setCurrentUser(null);
     setUserRole('customer');
     setFavorites({ businessIds: [], offerIds: [] });
+    setQuoteRequests([]);
+    setNotifications([]);
+    setActiveTab('home');
   };
 
   return (

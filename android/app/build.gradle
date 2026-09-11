@@ -20,17 +20,12 @@ android {
     signingConfigs {
         release {
             def keystorePath = System.getenv("KEYSTORE_PATH")
-            if (keystorePath == null || keystorePath.isEmpty()) {
-                throw new GradleException("KEYSTORE_PATH is required for release build")
+            if (keystorePath != null && !keystorePath.isEmpty()) {
+                storeFile file(keystorePath)
+                storePassword System.getenv("KEYSTORE_PASSWORD")
+                keyAlias System.getenv("KEY_ALIAS")
+                keyPassword System.getenv("KEY_PASSWORD")
             }
-            def keystorePassword = System.getenv("KEYSTORE_PASSWORD")
-            if (keystorePassword == null || keystorePassword.isEmpty()) {
-                throw new GradleException("KEYSTORE_PASSWORD is required for release build")
-            }
-            storeFile file(keystorePath)
-            storePassword keystorePassword
-            keyAlias System.getenv("KEY_ALIAS")
-            keyPassword System.getenv("KEY_PASSWORD")
         }
     }
     buildTypes {
@@ -38,7 +33,10 @@ android {
         release {
             minifyEnabled true
             shrinkResources true
-            signingConfig signingConfigs.release
+            def keystorePath = System.getenv("KEYSTORE_PATH")
+            if (keystorePath != null && !keystorePath.isEmpty()) {
+                signingConfig signingConfigs.release
+            }
             proguardFiles getDefaultProguardFile('proguard-android.txt'), 'proguard-rules.pro'
         }
     }

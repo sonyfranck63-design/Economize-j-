@@ -5,6 +5,7 @@ import { BusinessAvatar } from './BusinessAvatar';
 import { SafeImage } from './SafeImage';
 import { getSmartImage, isInvalidOrDeadImageUrl, OFFER_IMAGE_SUGGESTIONS } from '../utils/imageUtils';
 import { isQuoteMatchingBusiness } from '../utils/quoteStorage';
+import { dataService } from '../services/dataService';
 import {
   Building2,
   Send,
@@ -91,6 +92,25 @@ export const BusinessPortalView: React.FC = () => {
   // Plan checkout modal
   const [checkoutPlan, setCheckoutPlan] = useState<'pro' | 'premium' | null>(null);
   const [copiedPix, setCopiedPix] = useState(false);
+
+  // Featured highlight state
+  const [highlightDays, setHighlightDays] = useState<number>(7);
+  const [highlightSuccess, setHighlightSuccess] = useState(false);
+  const [isHighlighting, setIsHighlighting] = useState(false);
+
+  const handleHireHighlight = async () => {
+    if (!currentBiz) return;
+    setIsHighlighting(true);
+    try {
+      await dataService.createFeaturedListing(currentBiz.id, highlightDays);
+      setHighlightSuccess(true);
+      setTimeout(() => setHighlightSuccess(false), 5000);
+    } catch (err: any) {
+      alert(`Não foi possível registrar o destaque: ${err.message}`);
+    } finally {
+      setIsHighlighting(false);
+    }
+  };
 
   // Proposal modal state
   const [activeQuoteId, setActiveQuoteId] = useState<string | null>(null);
@@ -934,20 +954,20 @@ export const BusinessPortalView: React.FC = () => {
               </button>
             </div>
 
-            {/* Premium / Destaque */}
+            {/* Premium */}
             <div className="bg-white rounded-2xl border-2 border-emerald-500 p-6 space-y-4 flex flex-col justify-between shadow-sm">
               <div className="space-y-2">
                 <div className="flex items-center gap-1 text-emerald-700 text-xs font-bold uppercase">
                   <Crown className="w-4 h-4 text-emerald-600" />
-                  <span>Plano Destaque Premium</span>
+                  <span>Plano Premium</span>
                 </div>
                 <h4 className="text-2xl font-bold text-slate-900">R$ {monetization.planPremiumMonthly.toFixed(2)} <span className="text-xs text-slate-400 font-normal">/mês</span></h4>
-                <p className="text-xs text-slate-500">Liderança absoluta na sua categoria e região</p>
+                <p className="text-xs text-slate-500">Capacidade operacional máxima para empresas líderes</p>
                 <ul className="text-xs text-slate-600 space-y-2 pt-2 border-t border-slate-100">
-                  <li>✓ Posição nº 1 no topo das buscas</li>
-                  <li>✓ Destaque na tela inicial do app</li>
-                  <li>✓ Leads prioritários imediatos</li>
-                  <li>✓ Ofertas ilimitadas</li>
+                  <li>✓ Propostas ilimitadas para orçamentos</li>
+                  <li>✓ Ofertas ativas ilimitadas no marketplace</li>
+                  <li>✓ Selo corporativo de Empresa Premium</li>
+                  <li>✓ Acesso prioritário imediato a novos leads</li>
                   <li>✓ Suporte VIP dedicado</li>
                 </ul>
               </div>
@@ -956,8 +976,84 @@ export const BusinessPortalView: React.FC = () => {
                 onClick={() => setCheckoutPlan('premium')}
                 className="w-full py-2.5 rounded-xl bg-slate-900 hover:bg-slate-800 text-white text-xs font-bold transition"
               >
-                {isPremium ? 'Plano Atual Ativo' : 'Quero Ser Destaque'}
+                {isPremium ? 'Plano Atual Ativo' : 'Assinar Plano Premium'}
               </button>
+            </div>
+          </div>
+
+          {/* SEÇÃO INDEPENDENTE: DESTAQUE PATROCINADO (PLANO ≠ DESTAQUE) */}
+          <div className="mt-8 bg-linear-to-br from-amber-500/10 via-amber-500/5 to-transparent border-2 border-amber-400/40 rounded-3xl p-6 sm:p-8 space-y-6">
+            <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+              <div className="space-y-1">
+                <div className="inline-flex items-center gap-1.5 bg-amber-500 text-slate-950 text-[11px] font-black px-3 py-1 rounded-full uppercase tracking-wider">
+                  <Sparkles className="w-3.5 h-3.5" />
+                  <span>Visibilidade Máxima • Topo das Buscas</span>
+                </div>
+                <h3 className="text-xl font-bold text-slate-900">Destaque Patrocinado da Empresa</h3>
+                <p className="text-xs text-slate-600 max-w-2xl leading-relaxed">
+                  O <strong>Destaque Patrocinado</strong> é uma contratação separada e independente do seu plano. Empresas com qualquer plano (Gratuito, Pró ou Premium) podem contratar diárias de destaque para figurar no topo do guia e na tela inicial.
+                </p>
+              </div>
+
+              <div className="bg-white p-4 rounded-2xl border border-amber-200 shadow-xs shrink-0 text-center sm:text-right">
+                <span className="text-[10px] text-slate-500 font-medium block uppercase">Investimento Diário</span>
+                <span className="text-2xl font-black text-slate-900">
+                  R$ {monetization.featuredDailyRate.toFixed(2)}
+                  <span className="text-xs font-normal text-slate-500"> /dia</span>
+                </span>
+                <span className="text-[11px] text-emerald-700 font-bold block mt-0.5">
+                  {currentBiz.featured ? '★ Sua empresa está em DESTAQUE' : 'Sem destaque ativo'}
+                </span>
+              </div>
+            </div>
+
+            {/* Configuração de Período do Destaque */}
+            <div className="bg-white/80 backdrop-blur-xs p-5 rounded-2xl border border-amber-200/70 space-y-4">
+              <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+                <span className="text-xs font-bold text-slate-800">Escolha a duração do Destaque:</span>
+                <div className="flex items-center gap-2">
+                  {[7, 15, 30].map((days) => (
+                    <button
+                      key={days}
+                      type="button"
+                      onClick={() => setHighlightDays(days)}
+                      className={`px-4 py-2 rounded-xl text-xs font-bold transition ${
+                        highlightDays === days
+                          ? 'bg-amber-500 text-slate-950 shadow-xs'
+                          : 'bg-slate-100 text-slate-700 hover:bg-slate-200'
+                      }`}
+                    >
+                      {days} dias
+                    </button>
+                  ))}
+                </div>
+              </div>
+
+              <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 pt-3 border-t border-amber-100">
+                <div className="text-xs text-slate-600">
+                  Total para <strong>{highlightDays} dias de destaque</strong>:{' '}
+                  <strong className="text-base text-slate-900">
+                    R$ {(highlightDays * monetization.featuredDailyRate).toFixed(2)}
+                  </strong>
+                </div>
+
+                <button
+                  type="button"
+                  disabled={isHighlighting}
+                  onClick={handleHireHighlight}
+                  className="px-6 py-2.5 rounded-xl bg-amber-500 hover:bg-amber-600 text-slate-950 font-bold text-xs shadow-sm transition flex items-center justify-center gap-2"
+                >
+                  <Sparkles className="w-4 h-4" />
+                  <span>{isHighlighting ? 'Processando...' : 'Contratar Destaque Patrocinado'}</span>
+                </button>
+              </div>
+
+              {highlightSuccess && (
+                <div className="p-3 bg-emerald-50 border border-emerald-200 rounded-xl text-xs text-emerald-800 flex items-center gap-2 animate-fade-in">
+                  <CheckCircle2 className="w-4 h-4 text-emerald-600 shrink-0" />
+                  <span>Destaque contratado com sucesso! Sua empresa está em destaque na plataforma.</span>
+                </div>
+              )}
             </div>
           </div>
         </div>
@@ -1014,7 +1110,7 @@ export const BusinessPortalView: React.FC = () => {
                   Assinatura Corporativa
                 </span>
                 <h3 className="text-lg font-bold text-slate-900 mt-1">
-                  Ativação do Plano {checkoutPlan === 'pro' ? 'Pró' : 'Destaque Premium'}
+                  Ativação do Plano {checkoutPlan === 'pro' ? 'Pró' : 'Premium'}
                 </h3>
               </div>
               <button
@@ -1037,16 +1133,27 @@ export const BusinessPortalView: React.FC = () => {
                 </div>
               </div>
               <span className="text-xs bg-emerald-50 text-emerald-700 font-bold px-3 py-1.5 rounded-xl border border-emerald-200">
-                Cancelamento a qualquer momento
+                Estado inicial: PENDING
               </span>
             </div>
 
-            {/* OPÇÃO 1: PIX DIRETO */}
+            {/* Aviso de Conformidade com Google Play e Segurança */}
+            <div className="p-3.5 bg-blue-50 border border-blue-200 rounded-xl text-xs text-blue-900 space-y-1">
+              <strong className="flex items-center gap-1.5 font-bold">
+                <Smartphone className="w-4 h-4 text-blue-700" />
+                <span>Google Play Billing & Faturamento Digital</span>
+              </strong>
+              <p className="text-[11px] text-blue-800 leading-relaxed">
+                No app Android publicado na Google Play Store, cobranças digitais de planos e serviços são processadas através do Google Play Billing. Nenhum benefício é liberado antes da confirmação real do provedor no backend (transição segura de PENDING para ACTIVE).
+              </p>
+            </div>
+
+            {/* OPÇÃO 1: PIX DIRETO (CANAL EXTERNO WEB) */}
             <div className="border border-emerald-200 bg-emerald-50/50 rounded-2xl p-4 space-y-3">
               <div className="flex items-center justify-between">
                 <span className="text-xs font-bold text-emerald-900 uppercase flex items-center gap-1.5">
                   <QrCode className="w-4 h-4 text-emerald-700" />
-                  <span>Opção 1: Pagamento via PIX ou Boleto</span>
+                  <span>Canal Web / Administrativo: Pagamento via PIX</span>
                 </span>
                 <span className="text-[10px] bg-emerald-600 text-white font-bold px-2 py-0.5 rounded-full">
                   Sem taxas
@@ -1101,7 +1208,7 @@ export const BusinessPortalView: React.FC = () => {
                 <a
                   href={`https://wa.me/${monetization.adminWhatsapp.replace(/\D/g, '')}?text=${encodeURIComponent(
                     `Olá! Sou da empresa *${currentBiz.name}* no EconomizaJá. Acabei de realizar o pagamento PIX do *Plano ${
-                      checkoutPlan === 'pro' ? 'Pró' : 'Destaque Premium'
+                      checkoutPlan === 'pro' ? 'Pró' : 'Premium'
                     }* e gostaria de solicitar a ativação.`
                   )}`}
                   target="_blank"
@@ -1114,34 +1221,23 @@ export const BusinessPortalView: React.FC = () => {
               )}
             </div>
 
-            {/* OPÇÃO 2: GOOGLE PLAY BILLING */}
-            <div className="border border-slate-200 bg-white rounded-2xl p-4 space-y-2">
-              <span className="text-xs font-bold text-slate-800 uppercase flex items-center gap-1.5">
-                <Smartphone className="w-4 h-4 text-slate-600" />
-                <span>Opção 2: Google Play Billing (App Android)</span>
-              </span>
-              <p className="text-xs text-slate-500">
-                Se você estiver utilizando nosso app instalado pelo Google Play, a cobrança pode ser realizada mensalmente direto no seu cartão cadastrado na sua Conta Google.
-              </p>
-            </div>
-
-            {/* BOTÃO ATIVAÇÃO IMEDIATA DEMO / TESTE */}
-            <div className="pt-2 border-t border-slate-100 flex items-center justify-between">
+            {/* AÇÕES DE CHECKOUT */}
+            <div className="pt-2 border-t border-slate-100 flex items-center justify-between gap-3">
               <button
                 type="button"
                 onClick={() => {
                   upgradeBusinessPlan(currentBiz.id, checkoutPlan);
                   setCheckoutPlan(null);
                 }}
-                className="text-xs font-bold text-slate-500 hover:text-slate-700 hover:underline flex items-center gap-1"
+                className="px-4 py-2.5 rounded-xl bg-slate-900 hover:bg-slate-800 text-white font-bold text-xs transition shadow-xs"
               >
-                <span>💳 Configurar Pagamento (Pendente)</span>
+                <span>Solicitar Assinatura (Gerar Cobrança PENDING)</span>
               </button>
 
               <button
                 type="button"
                 onClick={() => setCheckoutPlan(null)}
-                className="px-4 py-2 rounded-xl bg-slate-100 hover:bg-slate-200 text-slate-700 font-bold text-xs transition"
+                className="px-4 py-2.5 rounded-xl bg-slate-100 hover:bg-slate-200 text-slate-700 font-bold text-xs transition"
               >
                 Fechar
               </button>

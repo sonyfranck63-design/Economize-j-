@@ -46,6 +46,24 @@ export const dataService = {
       return [];
     }
 
+    // Consulta destaques vigentes em featured_listings para desassociar plano de destaque
+    const activeFeaturedMap = new Map<string, string>();
+    try {
+      const todayStr = new Date().toISOString().split('T')[0];
+      const { data: featuredData } = await supabase
+        .from('featured_listings')
+        .select('business_id, end_date')
+        .eq('active', true)
+        .gte('end_date', todayStr);
+      if (featuredData) {
+        featuredData.forEach((f: any) => {
+          activeFeaturedMap.set(f.business_id, f.end_date);
+        });
+      }
+    } catch (fErr) {
+      console.warn('Aviso ao consultar featured_listings:', fErr);
+    }
+
     return data.map((b: any) => ({
       id: b.id,
       name: b.name,
@@ -66,7 +84,8 @@ export const dataService = {
       rating: Number(b.rating) || 5,
       reviewCount: b.review_count || 0,
       verified: Boolean(b.verified),
-      featured: Boolean(b.featured),
+      featured: activeFeaturedMap.has(b.id) || Boolean(b.featured && activeFeaturedMap.size === 0),
+      featuredUntil: activeFeaturedMap.get(b.id),
       active: b.active !== false,
       openNow: true,
       workingHours: b.working_hours || 'Seg a Sex: 08h às 18h',
@@ -628,47 +647,92 @@ export const dataService = {
   },
 
   /**
-   * Sincronização unificada: combina cotações do cliente, cotações direcionadas às suas empresas e marketplace
+   * Sincronização unificada com normalização e deduplicação profunda:
+   * Combina cotações de marketplace, direcionadas às empresas do parceiro e cotações do consumidor.
+   * Garante que dados completos (não mascarados) nunca sejam sobrescritos por parciais,
+   * preserva propostas consolidadas e identifica a origem com precisão.
    */
   async syncAllQuoteRequests(userId?: string, ownedBusinessIds: string[] = []): Promise<QuoteRequest[]> {
     const deletedIds = getDeletedQuoteIds();
     const map = new Map<string, QuoteRequest>();
 
-    // 1. Cotações de marketplace (secure_leads_view)
+    const mergeQuote = (newQuote: QuoteRequest, source: 'marketplace' | 'direct' | 'user') => {
+      if (!newQuote || deletedIds.has(newQuote.id) || newQuote.status === 'cancelado') {
+        return;
+      }
+
+      // Determina origem canônica
+      let calculatedOrigin: 'geral' | 'direcionado' | 'proprio_consumidor' | 'recebido_parceiro' = 'geral';
+      if (userId && newQuote.userId === userId) {
+        calculatedOrigin = 'proprio_consumidor';
+      } else if (newQuote.targetBusinessId && ownedBusinessIds.includes(newQuote.targetBusinessId)) {
+        calculatedOrigin = 'recebido_parceiro';
+      } else if (newQuote.targetBusinessId) {
+        calculatedOrigin = 'direcionado';
+      }
+
+      const existing = map.get(newQuote.id);
+      if (!existing) {
+        map.set(newQuote.id, {
+          ...newQuote,
+          origin: calculatedOrigin,
+          proposals: newQuote.proposals || [],
+        });
+        return;
+      }
+
+      // Se já existe, mescla sem perder informações sensíveis desmascaradas
+      const isNewPhoneReal = newQuote.userPhone && !newQuote.userPhone.includes('****');
+      const isExistingPhoneMasked = !existing.userPhone || existing.userPhone.includes('****');
+
+      const isNewEmailReal = newQuote.userEmail && !newQuote.userEmail.includes('oculto@');
+      const isExistingEmailMasked = !existing.userEmail || existing.userEmail.includes('oculto@');
+
+      const isNewNameReal = newQuote.userName && !newQuote.userName.includes('(Cliente)');
+      const isExistingNameMasked = !existing.userName || existing.userName.includes('(Cliente)');
+
+      // Consolidação atômica de propostas por id único
+      const proposalMap = new Map<string, QuoteProposal>();
+      (existing.proposals || []).forEach((p) => proposalMap.set(p.id, p));
+      (newQuote.proposals || []).forEach((p) => proposalMap.set(p.id, p));
+
+      const merged: QuoteRequest = {
+        ...existing,
+        ...newQuote,
+        userName: isNewNameReal || !isExistingNameMasked ? (isNewNameReal ? newQuote.userName : existing.userName) : existing.userName,
+        userPhone: isNewPhoneReal || !isExistingPhoneMasked ? (isNewPhoneReal ? newQuote.userPhone : existing.userPhone) : existing.userPhone,
+        userEmail: isNewEmailReal || !isExistingEmailMasked ? (isNewEmailReal ? newQuote.userEmail : existing.userEmail) : existing.userEmail,
+        targetBusinessId: newQuote.targetBusinessId || existing.targetBusinessId,
+        origin: calculatedOrigin,
+        proposals: Array.from(proposalMap.values()),
+      };
+
+      map.set(newQuote.id, merged);
+    };
+
+    // 1. Marketplace (oportunidades gerais da região via secure_leads_view)
     try {
       const marketQuotes = await this.getMarketplaceQuoteRequests();
-      (marketQuotes || []).forEach((q) => {
-        if (!deletedIds.has(q.id) && q.status !== 'cancelado') {
-          map.set(q.id, q);
-        }
-      });
+      (marketQuotes || []).forEach((q) => mergeQuote(q, 'marketplace'));
     } catch (e) {
       console.warn('Aviso ao sincronizar cotações do marketplace:', e);
     }
 
-    // 2. Se o usuário possuir empresas, busca cotações direcionadas diretamente às suas empresas
+    // 2. Cotações direcionadas diretamente às empresas do usuário parceiro
     if (ownedBusinessIds && ownedBusinessIds.length > 0) {
       try {
         const directQuotes = await this.getBusinessDirectQuoteRequests(ownedBusinessIds);
-        (directQuotes || []).forEach((q) => {
-          if (!deletedIds.has(q.id) && q.status !== 'cancelado') {
-            map.set(q.id, q);
-          }
-        });
+        (directQuotes || []).forEach((q) => mergeQuote(q, 'direct'));
       } catch (e) {
         console.warn('Aviso ao sincronizar cotações direcionadas às empresas:', e);
       }
     }
 
-    // 3. Se for usuário autenticado, busca suas cotações pessoais (com propostas completas de clientes)
+    // 3. Cotações do próprio usuário consumidor autenticado
     if (userId) {
       try {
         const userQuotes = await this.getUserQuoteRequests(userId);
-        (userQuotes || []).forEach((q) => {
-          if (!deletedIds.has(q.id) && q.status !== 'cancelado') {
-            map.set(q.id, q);
-          }
-        });
+        (userQuotes || []).forEach((q) => mergeQuote(q, 'user'));
       } catch (e) {
         console.warn('Aviso ao sincronizar cotações do usuário:', e);
       }
@@ -722,21 +786,31 @@ export const dataService = {
       throw new Error(error.message || 'Erro ao registrar solicitação de orçamento');
     }
 
-    // Cria o lead comercial correspondente (se tabela leads estiver acessível)
-    try {
-      await supabase.from('leads').insert({
-        quote_request_id: data.id,
-        category_id: quote.categoryId,
-        city: quote.city,
-        state: quote.state,
-        neighborhood: quote.neighborhood,
-        title: quote.title,
-        description: quote.description,
-        price: 15.00,
-        status: 'AVAILABLE',
-      });
-    } catch (leadErr) {
-      console.warn('Aviso ao criar registro na tabela leads:', leadErr);
+    // Se a cotação for geral (sem empresa direcionada), o trigger tr_auto_create_lead_from_quote
+    // do Supabase gera automaticamente o lead comercial com a precificação dinâmica configurada pelo Admin.
+    // Como fallback resiliente de integração:
+    if (!quote.targetBusinessId) {
+      try {
+        const settings = await this.getMonetizationSettings();
+        const leadPrice = settings?.costPerLead || 15.00;
+        await supabase.from('leads').upsert(
+          {
+            quote_request_id: data.id,
+            category_id: quote.categoryId,
+            city: quote.city,
+            state: quote.state,
+            neighborhood: quote.neighborhood,
+            title: quote.title,
+            description: quote.description,
+            price: leadPrice,
+            status: 'AVAILABLE',
+            origin: 'organic',
+          },
+          { onConflict: 'quote_request_id' }
+        );
+      } catch (leadErr) {
+        // Ignora silenciosamente se o trigger do banco já tiver gerado o lead
+      }
     }
 
     return data.id;
@@ -1022,5 +1096,50 @@ export const dataService = {
       });
 
     if (error) throw new Error(error.message);
+  },
+
+  // ==========================================
+  // PLAN SUBSCRIPTIONS, HIGHLIGHTS & LEADS
+  // ==========================================
+  async initiatePlanSubscription(businessId: string, planTier: 'pro' | 'premium', billingProvider = 'google_play_billing'): Promise<any> {
+    if (!isSupabaseConfigured || !supabase) throw new Error('Supabase não configurado');
+    const { data, error } = await supabase.rpc('initiate_plan_subscription', {
+      p_business_id: businessId,
+      p_plan_tier: planTier,
+      p_billing_provider: billingProvider,
+    });
+    if (error) throw new Error(error.message);
+    return data;
+  },
+
+  async confirmPlanSubscription(subscriptionId: string, providerTransactionId?: string): Promise<any> {
+    if (!isSupabaseConfigured || !supabase) throw new Error('Supabase não configurado');
+    const { data, error } = await supabase.rpc('confirm_plan_subscription', {
+      p_subscription_id: subscriptionId,
+      p_provider_transaction_id: providerTransactionId || null,
+    });
+    if (error) throw new Error(error.message);
+    return data;
+  },
+
+  async createFeaturedListing(businessId: string, days: number, offerId?: string): Promise<any> {
+    if (!isSupabaseConfigured || !supabase) throw new Error('Supabase não configurado');
+    const { data, error } = await supabase.rpc('create_featured_listing', {
+      p_business_id: businessId,
+      p_days: days,
+      p_offer_id: offerId || null,
+    });
+    if (error) throw new Error(error.message);
+    return data;
+  },
+
+  async purchaseLead(leadId: string, businessId: string): Promise<any> {
+    if (!isSupabaseConfigured || !supabase) throw new Error('Supabase não configurado');
+    const { data, error } = await supabase.rpc('purchase_lead_with_credits', {
+      p_lead_id: leadId,
+      p_business_id: businessId,
+    });
+    if (error) throw new Error(error.message);
+    return data;
   },
 };
