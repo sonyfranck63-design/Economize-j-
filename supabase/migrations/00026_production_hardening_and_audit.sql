@@ -1,49 +1,148 @@
 -- ==============================================================================
 -- EconomizaJá — Migração 00026: Hardening de Produção, Segurança e Conformidade
 -- Atende a:
--- 1. Status PENDING e FAILED para assinaturas e default PENDING
+-- 1. Criação e atualização de tabelas de monetização (subscriptions, payments, featured_listings, lead_purchases)
 -- 2. Limites de planos validados estritamente no banco (backend)
 -- 3. Precificação dinâmica e automática de leads comerciais via app_settings
 -- 4. Isolamento estrito de orçamentos direcionados (bloqueio de propostas indevidas)
 -- 5. Revogação de acesso anon na secure_leads_view
--- 6. RPCs seguras de transação para assinaturas e leads
+-- 6. RPCs seguras de transação para assinaturas, destaques e leads
 -- 7. Desacoplamento de plano e destaque patrocinado (validação temporal)
 -- 8. Limpeza atômica completa para LGPD / Google Play
 -- ==============================================================================
 
 -- ------------------------------------------------------------------------------
--- 1. ENUM E DEFAULTS DE SUBSCRIPTION STATUS
+-- 1. TABELAS DE MONETIZAÇÃO, ASSINATURAS E LEADS (IDEMPOTENTE)
 -- ------------------------------------------------------------------------------
-DO $$ 
-BEGIN
-  -- Adiciona PENDING se não existir no enum subscription_status_type
-  IF NOT EXISTS (
-    SELECT 1 FROM pg_enum e 
-    JOIN pg_type t ON t.oid = e.enumtypid 
-    WHERE t.typname = 'subscription_status_type' AND e.enumlabel = 'PENDING'
-  ) THEN
-    ALTER TYPE public.subscription_status_type ADD VALUE 'PENDING';
-  END IF;
 
-  -- Adiciona FAILED se não existir no enum subscription_status_type
-  IF NOT EXISTS (
-    SELECT 1 FROM pg_enum e 
-    JOIN pg_type t ON t.oid = e.enumtypid 
-    WHERE t.typname = 'subscription_status_type' AND e.enumlabel = 'FAILED'
-  ) THEN
-    ALTER TYPE public.subscription_status_type ADD VALUE 'FAILED';
-  END IF;
-END $$;
+-- Garante colunas necessárias na tabela leads
+ALTER TABLE public.leads ADD COLUMN IF NOT EXISTS price NUMERIC(10, 2) DEFAULT 15.00;
+ALTER TABLE public.leads ADD COLUMN IF NOT EXISTS status TEXT DEFAULT 'AVAILABLE';
+ALTER TABLE public.leads ADD COLUMN IF NOT EXISTS origin TEXT DEFAULT 'organic';
 
--- Garante que subscriptions.status tenha default PENDING
-ALTER TABLE public.subscriptions 
-  ALTER COLUMN status SET DEFAULT 'PENDING'::public.subscription_status_type;
+-- Garante colunas na tabela businesses
+ALTER TABLE public.businesses ADD COLUMN IF NOT EXISTS leads_count INT DEFAULT 0;
+ALTER TABLE public.businesses ADD COLUMN IF NOT EXISTS plan_tier TEXT DEFAULT 'gratis';
+ALTER TABLE public.businesses ADD COLUMN IF NOT EXISTS featured BOOLEAN DEFAULT false;
+
+-- Tabela de Assinaturas (subscriptions)
+CREATE TABLE IF NOT EXISTS public.subscriptions (
+  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  business_id UUID NOT NULL REFERENCES public.businesses(id) ON DELETE CASCADE,
+  plan_tier TEXT NOT NULL CHECK (plan_tier IN ('gratis', 'pro', 'premium')),
+  status TEXT NOT NULL DEFAULT 'PENDING' CHECK (status IN ('PENDING', 'ACTIVE', 'CANCELLED', 'EXPIRED', 'FAILED')),
+  billing_provider TEXT DEFAULT 'google_play_billing',
+  provider_subscription_id TEXT,
+  current_period_start TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+  current_period_end TIMESTAMPTZ NOT NULL DEFAULT NOW() + INTERVAL '30 days',
+  created_at TIMESTAMPTZ DEFAULT NOW(),
+  updated_at TIMESTAMPTZ DEFAULT NOW()
+);
+
+ALTER TABLE public.subscriptions ENABLE ROW LEVEL SECURITY;
+
+DROP POLICY IF EXISTS "Users can view own business subscriptions" ON public.subscriptions;
+CREATE POLICY "Users can view own business subscriptions"
+  ON public.subscriptions FOR SELECT
+  USING (
+    business_id IN (SELECT id FROM public.businesses WHERE owner_id = auth.uid())
+    OR (SELECT role FROM public.profiles WHERE id = auth.uid()) = 'admin'
+  );
+
+DROP POLICY IF EXISTS "Admins can manage all subscriptions" ON public.subscriptions;
+CREATE POLICY "Admins can manage all subscriptions"
+  ON public.subscriptions FOR ALL
+  USING ((SELECT role FROM public.profiles WHERE id = auth.uid()) = 'admin');
+
+-- Tabela de Pagamentos (payments)
+CREATE TABLE IF NOT EXISTS public.payments (
+  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  user_id UUID REFERENCES auth.users(id) ON DELETE SET NULL,
+  business_id UUID REFERENCES public.businesses(id) ON DELETE CASCADE,
+  amount NUMERIC(10, 2) NOT NULL,
+  currency TEXT NOT NULL DEFAULT 'BRL',
+  status TEXT NOT NULL DEFAULT 'PENDING' CHECK (status IN ('PENDING', 'COMPLETED', 'FAILED', 'REFUNDED')),
+  payment_method TEXT DEFAULT 'google_play_billing',
+  purpose TEXT NOT NULL,
+  provider_payment_id TEXT,
+  created_at TIMESTAMPTZ DEFAULT NOW(),
+  updated_at TIMESTAMPTZ DEFAULT NOW()
+);
+
+ALTER TABLE public.payments ENABLE ROW LEVEL SECURITY;
+
+DROP POLICY IF EXISTS "Users can view own payments" ON public.payments;
+CREATE POLICY "Users can view own payments"
+  ON public.payments FOR SELECT
+  USING (
+    user_id = auth.uid()
+    OR business_id IN (SELECT id FROM public.businesses WHERE owner_id = auth.uid())
+    OR (SELECT role FROM public.profiles WHERE id = auth.uid()) = 'admin'
+  );
+
+DROP POLICY IF EXISTS "Admins can manage all payments" ON public.payments;
+CREATE POLICY "Admins can manage all payments"
+  ON public.payments FOR ALL
+  USING ((SELECT role FROM public.profiles WHERE id = auth.uid()) = 'admin');
+
+-- Tabela de Destaques Patrocinados (featured_listings)
+CREATE TABLE IF NOT EXISTS public.featured_listings (
+  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  business_id UUID NOT NULL REFERENCES public.businesses(id) ON DELETE CASCADE,
+  offer_id UUID REFERENCES public.offers(id) ON DELETE SET NULL,
+  start_date DATE NOT NULL DEFAULT CURRENT_DATE,
+  end_date DATE NOT NULL,
+  active BOOLEAN NOT NULL DEFAULT true,
+  daily_cost NUMERIC(10, 2) NOT NULL DEFAULT 9.90,
+  created_at TIMESTAMPTZ DEFAULT NOW()
+);
+
+ALTER TABLE public.featured_listings ENABLE ROW LEVEL SECURITY;
+
+DROP POLICY IF EXISTS "Anyone can view active featured listings" ON public.featured_listings;
+CREATE POLICY "Anyone can view active featured listings"
+  ON public.featured_listings FOR SELECT
+  USING (active = true);
+
+DROP POLICY IF EXISTS "Owners can manage their featured listings" ON public.featured_listings;
+CREATE POLICY "Owners can manage their featured listings"
+  ON public.featured_listings FOR ALL
+  USING (
+    business_id IN (SELECT id FROM public.businesses WHERE owner_id = auth.uid())
+    OR (SELECT role FROM public.profiles WHERE id = auth.uid()) = 'admin'
+  );
+
+-- Tabela de Compras de Lead (lead_purchases)
+CREATE TABLE IF NOT EXISTS public.lead_purchases (
+  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  lead_id UUID NOT NULL REFERENCES public.leads(id) ON DELETE CASCADE,
+  business_id UUID NOT NULL REFERENCES public.businesses(id) ON DELETE CASCADE,
+  price NUMERIC(10, 2) NOT NULL,
+  status TEXT NOT NULL DEFAULT 'CONFIRMED',
+  purchased_at TIMESTAMPTZ DEFAULT NOW(),
+  CONSTRAINT uq_lead_business UNIQUE (lead_id, business_id)
+);
+
+ALTER TABLE public.lead_purchases ENABLE ROW LEVEL SECURITY;
+
+DROP POLICY IF EXISTS "Businesses can view own lead purchases" ON public.lead_purchases;
+CREATE POLICY "Businesses can view own lead purchases"
+  ON public.lead_purchases FOR SELECT
+  USING (
+    business_id IN (SELECT id FROM public.businesses WHERE owner_id = auth.uid())
+    OR (SELECT role FROM public.profiles WHERE id = auth.uid()) = 'admin'
+  );
 
 -- ------------------------------------------------------------------------------
 -- 2. REVOGAÇÃO DE ACESSO ANON NA VIEW SECURE_LEADS_VIEW
 -- ------------------------------------------------------------------------------
-REVOKE ALL ON public.secure_leads_view FROM anon;
-GRANT SELECT ON public.secure_leads_view TO authenticated;
+DO $$
+BEGIN
+  IF EXISTS (SELECT 1 FROM pg_views WHERE viewname = 'secure_leads_view' AND schemaname = 'public') THEN
+    REVOKE ALL ON public.secure_leads_view FROM anon;
+    GRANT SELECT ON public.secure_leads_view TO authenticated;
+  END IF;
+END $$;
 
 -- ------------------------------------------------------------------------------
 -- 3. TRIGGER: PRECIFICAÇÃO DINÂMICA E CRIAÇÃO AUTOMÁTICA DE LEADS
@@ -115,12 +214,12 @@ CREATE OR REPLACE FUNCTION public.tg_validate_quote_proposal_submission()
 RETURNS TRIGGER AS $$
 DECLARE
   v_biz_owner UUID;
-  v_biz_plan public.business_plan_type;
+  v_biz_plan TEXT;
   v_target_biz UUID;
   v_monthly_count INT;
 BEGIN
   -- 1. Verifica se a empresa existe e se o usuário atual é o proprietário ou admin
-  SELECT owner_id, COALESCE(plan_tier, 'gratis'::public.business_plan_type)
+  SELECT owner_id, COALESCE(plan_tier, 'gratis')
   INTO v_biz_owner, v_biz_plan
   FROM public.businesses
   WHERE id = NEW.business_id;
@@ -172,7 +271,7 @@ CREATE OR REPLACE FUNCTION public.tg_validate_offer_submission()
 RETURNS TRIGGER AS $$
 DECLARE
   v_biz_owner UUID;
-  v_biz_plan public.business_plan_type;
+  v_biz_plan TEXT;
   v_active_offers_count INT;
 BEGIN
   -- Só aplica checagem em novas inserções ativas ou ativação de oferta
@@ -180,7 +279,7 @@ BEGIN
     RETURN NEW;
   END IF;
 
-  SELECT owner_id, COALESCE(plan_tier, 'gratis'::public.business_plan_type)
+  SELECT owner_id, COALESCE(plan_tier, 'gratis')
   INTO v_biz_owner, v_biz_plan
   FROM public.businesses
   WHERE id = NEW.business_id;
@@ -271,8 +370,8 @@ BEGIN
     current_period_end
   ) VALUES (
     p_business_id,
-    p_plan_tier::public.business_plan_type,
-    'PENDING'::public.subscription_status_type,
+    p_plan_tier,
+    'PENDING',
     p_billing_provider,
     NOW(),
     NOW() + INTERVAL '30 days'
@@ -293,7 +392,7 @@ BEGIN
     p_business_id,
     v_amount,
     'BRL',
-    'PENDING'::public.payment_status_type,
+    'PENDING',
     p_billing_provider,
     'subscription_' || p_plan_tier,
     v_sub_id::text
@@ -337,7 +436,7 @@ BEGIN
 
   -- Transiciona assinatura para ACTIVE
   UPDATE public.subscriptions
-  SET status = 'ACTIVE'::public.subscription_status_type,
+  SET status = 'ACTIVE',
       provider_subscription_id = COALESCE(p_provider_transaction_id, provider_subscription_id),
       current_period_start = NOW(),
       current_period_end = NOW() + INTERVAL '30 days',
@@ -346,7 +445,7 @@ BEGIN
 
   -- Transiciona pagamentos vinculados para COMPLETED
   UPDATE public.payments
-  SET status = 'COMPLETED'::public.payment_status_type
+  SET status = 'COMPLETED'
   WHERE business_id = v_sub.business_id 
     AND (provider_payment_id = p_subscription_id::text OR status = 'PENDING');
 
