@@ -483,7 +483,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     let realProposalId = `prop-${Date.now()}`;
 
     if (isSupabaseConfigured) {
-      // 1. Aguarda o INSERT no Supabase e obtém o UUID real retornado pelo banco
+      // 1. Invoca a RPC atômica submit_quote_proposal e obtém o UUID confirmado pelo banco
       realProposalId = await dataService.submitProposal({
         quoteRequestId,
         businessId: proposalData.businessId,
@@ -491,53 +491,55 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
         deadlineText: proposalData.deadlineText,
         description: proposalData.description,
       });
+      // 2. Sincroniza imediatamente com o banco para garantir consistência em todas as visões
+      await refreshQuoteRequests();
+    } else {
+      const newProposal: QuoteProposal = {
+        ...proposalData,
+        id: realProposalId,
+        quoteRequestId,
+        createdAt: 'Agora',
+        status: 'pendente',
+      };
+
+      setQuoteRequests((prev) =>
+        prev.map((qr) => {
+          if (qr.id === quoteRequestId) {
+            return {
+              ...qr,
+              status: 'propostas_recebidas',
+              proposals: [...qr.proposals.filter((p) => p.id !== realProposalId), newProposal],
+            };
+          }
+          return qr;
+        })
+      );
     }
-
-    const newProposal: QuoteProposal = {
-      ...proposalData,
-      id: realProposalId,
-      quoteRequestId,
-      createdAt: 'Agora',
-      status: 'pendente',
-    };
-
-    // 2. Atualiza o estado React somente após a confirmação do Supabase
-    setQuoteRequests((prev) =>
-      prev.map((qr) => {
-        if (qr.id === quoteRequestId) {
-          return {
-            ...qr,
-            status: 'propostas_recebidas',
-            proposals: [...qr.proposals.filter((p) => p.id !== realProposalId), newProposal],
-          };
-        }
-        return qr;
-      })
-    );
   };
 
   const acceptProposal = async (quoteRequestId: string, proposalId: string) => {
     if (isSupabaseConfigured) {
-      // 1. Aguarda o UPDATE no Supabase com o UUID real
+      // 1. Aguarda a transação atômica no Supabase via RPC accept_quote_proposal
       await dataService.acceptProposal(quoteRequestId, proposalId);
+      // 2. Recarrega as cotações diretamente da fonte de verdade (Supabase)
+      await refreshQuoteRequests();
+    } else {
+      setQuoteRequests((prev) =>
+        prev.map((qr) => {
+          if (qr.id === quoteRequestId) {
+            return {
+              ...qr,
+              status: 'escolhido',
+              proposals: qr.proposals.map((p) => ({
+                ...p,
+                status: p.id === proposalId ? 'escolhida' : 'recusada',
+              })),
+            };
+          }
+          return qr;
+        })
+      );
     }
-
-    // 2. Atualiza o estado React somente após confirmação do sucesso no banco
-    setQuoteRequests((prev) =>
-      prev.map((qr) => {
-        if (qr.id === quoteRequestId) {
-          return {
-            ...qr,
-            status: 'escolhido',
-            proposals: qr.proposals.map((p) => ({
-              ...p,
-              status: p.id === proposalId ? 'escolhida' : 'recusada',
-            })),
-          };
-        }
-        return qr;
-      })
-    );
 
     setNotifications((prev) => [
       {

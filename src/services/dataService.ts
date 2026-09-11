@@ -830,46 +830,47 @@ export const dataService = {
       throw new Error('Sua sessão expirou. Faça login novamente para enviar uma proposta.');
     }
 
-    const { data, error } = await supabase
-      .from('quote_proposals')
-      .insert({
-        quote_request_id: params.quoteRequestId,
-        business_id: params.businessId,
-        price: params.price,
-        deadline_text: params.deadlineText,
-        description: params.description,
-        status: 'pendente',
-      })
-      .select('id')
-      .single();
+    // 1. Invoca a RPC atômica submit_quote_proposal (Migration 00027)
+    const { data: rpcData, error: rpcError } = await supabase.rpc('submit_quote_proposal', {
+      p_quote_request_id: params.quoteRequestId,
+      p_business_id: params.businessId,
+      p_price: params.price,
+      p_deadline_text: params.deadlineText,
+      p_description: params.description,
+    });
 
-    if (error) {
-      console.error('Erro ao inserir proposta no Supabase (técnico):', error);
-      throw new Error('Não foi possível enviar a proposta. Verifique sua sessão e tente novamente.');
+    if (rpcError) {
+      console.error('Erro na RPC submit_quote_proposal:', rpcError);
+      throw new Error(rpcError.message || 'Não foi possível enviar a proposta comercial.');
     }
 
-    // Atualiza status do pedido de orçamento (Agora feito via Trigger MIGRATION 00016)
-    // O trigger tg_quote_proposals_after_insert garante atualização segura para 'propostas_recebidas'
-    return data.id;
+    if (!rpcData?.proposal_id) {
+      throw new Error('Falha ao obter confirmação de envio da proposta no banco de dados.');
+    }
+
+    return rpcData.proposal_id;
   },
 
-  async acceptProposal(quoteRequestId: string, proposalId: string): Promise<void> {
+  async acceptProposal(quoteRequestId: string, proposalId: string): Promise<any> {
     if (!isSupabaseConfigured || !supabase) throw new Error('Supabase não configurado');
 
-    // 1. Marca a proposta escolhida com UUID real
-    const { error: propError } = await supabase
-      .from('quote_proposals')
-      .update({ status: 'escolhida' })
-      .eq('id', proposalId);
+    // 1. Executa a transação atômica de aceite via RPC com SECURITY DEFINER (Migration 00027)
+    // Atualiza a proposta para 'escolhida', as outras para 'recusada' e o pedido para 'escolhido'
+    const { data, error } = await supabase.rpc('accept_quote_proposal', {
+      p_quote_request_id: quoteRequestId,
+      p_proposal_id: proposalId,
+    });
 
-    if (propError) {
-      console.error('Erro ao atualizar proposta no Supabase:', propError);
-      throw new Error(propError.message || 'Erro ao registrar aceite da proposta no banco de dados.');
+    if (error) {
+      console.error('Erro ao aceitar proposta no Supabase (RPC):', error);
+      throw new Error(error.message || 'Erro ao registrar aceite da proposta no banco de dados.');
     }
 
-    // Nota: O banco de dados agora possui triggers automáticos (MIGRATION 00016)
-    // que atualizam o status do pedido de orçamento para 'escolhido'
-    // e rejeitam as demais propostas automaticamente.
+    if (!data || data.success !== true) {
+      throw new Error('Não foi possível confirmar o aceite da proposta no banco de dados.');
+    }
+
+    return data;
   },
 
   async cancelQuoteRequest(quoteRequestId: string): Promise<void> {
@@ -1122,12 +1123,28 @@ export const dataService = {
     return data;
   },
 
-  async createFeaturedListing(businessId: string, days: number, offerId?: string): Promise<any> {
+  async initiateFeaturedListing(businessId: string, days: number, offerId?: string): Promise<any> {
     if (!isSupabaseConfigured || !supabase) throw new Error('Supabase não configurado');
-    const { data, error } = await supabase.rpc('create_featured_listing', {
+    // Chama a RPC segura que gera cobrança PENDING e NÃO ativa destaque prematuramente
+    const { data, error } = await supabase.rpc('initiate_featured_listing', {
       p_business_id: businessId,
       p_days: days,
       p_offer_id: offerId || null,
+    });
+    if (error) throw new Error(error.message);
+    return data;
+  },
+
+  // Mantém retrocompatibilidade chamando a versão segura com status PENDING
+  async createFeaturedListing(businessId: string, days: number, offerId?: string): Promise<any> {
+    return this.initiateFeaturedListing(businessId, days, offerId);
+  },
+
+  async confirmFeaturedListing(listingId: string, providerTransactionId?: string): Promise<any> {
+    if (!isSupabaseConfigured || !supabase) throw new Error('Supabase não configurado');
+    const { data, error } = await supabase.rpc('confirm_featured_listing', {
+      p_listing_id: listingId,
+      p_provider_transaction_id: providerTransactionId || null,
     });
     if (error) throw new Error(error.message);
     return data;
@@ -1141,5 +1158,57 @@ export const dataService = {
     });
     if (error) throw new Error(error.message);
     return data;
+  },
+
+  async getAdminPendingMonetization(): Promise<{
+    subscriptions: any[];
+    featuredListings: any[];
+    payments: any[];
+  }> {
+    if (!isSupabaseConfigured || !supabase) return { subscriptions: [], featuredListings: [], payments: [] };
+
+    const [subsRes, featRes, payRes] = await Promise.all([
+      supabase
+        .from('subscriptions')
+        .select(`
+          *,
+          businesses (
+            id,
+            name,
+            whatsapp,
+            city,
+            state
+          )
+        `)
+        .eq('status', 'PENDING')
+        .order('created_at', { ascending: false }),
+
+      supabase
+        .from('featured_listings')
+        .select(`
+          *,
+          businesses (
+            id,
+            name,
+            whatsapp,
+            city,
+            state
+          )
+        `)
+        .eq('active', false)
+        .order('created_at', { ascending: false }),
+
+      supabase
+        .from('payments')
+        .select('*')
+        .eq('status', 'PENDING')
+        .order('created_at', { ascending: false }),
+    ]);
+
+    return {
+      subscriptions: subsRes.data || [],
+      featuredListings: featRes.data || [],
+      payments: payRes.data || [],
+    };
   },
 };

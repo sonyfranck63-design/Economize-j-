@@ -22,7 +22,9 @@ import {
   Check,
   ExternalLink,
   Info,
+  Clock,
 } from 'lucide-react';
+import { dataService } from '../services/dataService';
 
 export const AdminPortalView: React.FC = () => {
   const {
@@ -49,7 +51,60 @@ export const AdminPortalView: React.FC = () => {
     );
   }
 
-  const [adminTab, setAdminTab] = useState<'empresas' | 'ofertas' | 'leads' | 'monetizacao'>('empresas');
+  const [adminTab, setAdminTab] = useState<'empresas' | 'ofertas' | 'leads' | 'assinaturas' | 'monetizacao'>('empresas');
+
+  // Pending monetization state
+  const [pendingItems, setPendingItems] = useState<{
+    subscriptions: any[];
+    featuredListings: any[];
+    payments: any[];
+  }>({ subscriptions: [], featuredListings: [], payments: [] });
+  const [isLoadingPending, setIsLoadingPending] = useState(false);
+  const [processingId, setProcessingId] = useState<string | null>(null);
+
+  const fetchPendingMonetization = async () => {
+    setIsLoadingPending(true);
+    try {
+      const data = await dataService.getAdminPendingMonetization();
+      setPendingItems(data);
+    } catch (e) {
+      console.warn('Erro ao carregar itens pendentes:', e);
+    } finally {
+      setIsLoadingPending(false);
+    }
+  };
+
+  React.useEffect(() => {
+    fetchPendingMonetization();
+  }, []);
+
+  const handleApproveSubscription = async (subId: string) => {
+    if (!confirm('Deseja confirmar o pagamento e ATIVAR esta assinatura?')) return;
+    setProcessingId(subId);
+    try {
+      await dataService.confirmPlanSubscription(subId);
+      alert('Assinatura ativada com sucesso!');
+      await fetchPendingMonetization();
+    } catch (err: any) {
+      alert(`Erro ao ativar assinatura: ${err.message}`);
+    } finally {
+      setProcessingId(null);
+    }
+  };
+
+  const handleApproveFeatured = async (featId: string) => {
+    if (!confirm('Deseja confirmar o pagamento e ATIVAR este destaque patrocinado?')) return;
+    setProcessingId(featId);
+    try {
+      await dataService.confirmFeaturedListing(featId);
+      alert('Destaque ativado com sucesso!');
+      await fetchPendingMonetization();
+    } catch (err: any) {
+      alert(`Erro ao ativar destaque: ${err.message}`);
+    } finally {
+      setProcessingId(null);
+    }
+  };
 
   // Form state for monetization & PIX settings
   const [formData, setFormData] = useState({
@@ -200,6 +255,15 @@ export const AdminPortalView: React.FC = () => {
             }`}
           >
             Orçamentos / Leads ({quoteRequests.length})
+          </button>
+          <button
+            onClick={() => setAdminTab('assinaturas')}
+            className={`px-3.5 py-2 rounded-xl font-bold transition whitespace-nowrap flex items-center gap-1.5 ${
+              adminTab === 'assinaturas' ? 'bg-white text-slate-900' : 'text-slate-300 hover:bg-slate-800'
+            }`}
+          >
+            <Clock className="w-3.5 h-3.5 text-amber-400" />
+            <span>Cobranças & Assinaturas ({pendingItems.subscriptions.length + pendingItems.featuredListings.length})</span>
           </button>
           <button
             onClick={() => setAdminTab('monetizacao')}
@@ -390,6 +454,167 @@ export const AdminPortalView: React.FC = () => {
             ))}
             </div>
           )}
+        </div>
+      )}
+
+      {/* TAB: COBRANÇAS & ASSINATURAS PENDENTES */}
+      {adminTab === 'assinaturas' && (
+        <div className="space-y-6">
+          <div className="bg-white rounded-2xl p-6 border border-slate-100 shadow-sm space-y-4">
+            <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 border-b border-slate-100 pb-4">
+              <div>
+                <h3 className="text-lg font-bold text-slate-900 flex items-center gap-2">
+                  <Clock className="w-5 h-5 text-amber-500" />
+                  <span>Auditoria & Ativação de Pagamentos Pendentes</span>
+                </h3>
+                <p className="text-xs text-slate-500 mt-0.5">
+                  Valide os comprovantes de PIX recebidos no WhatsApp e ative as assinaturas e destaques com segurança transacional
+                </p>
+              </div>
+
+              <button
+                onClick={fetchPendingMonetization}
+                disabled={isLoadingPending}
+                className="px-3 py-1.5 rounded-xl border border-slate-200 hover:bg-slate-50 text-slate-700 text-xs font-bold transition flex items-center gap-1.5 self-start sm:self-auto"
+              >
+                <span>{isLoadingPending ? 'Atualizando...' : 'Atualizar Lista'}</span>
+              </button>
+            </div>
+
+            {/* SEÇÃO 1: ASSINATURAS PENDENTES */}
+            <div className="space-y-3">
+              <h4 className="text-xs font-bold uppercase tracking-wider text-slate-600 flex items-center gap-1.5">
+                <span>1. Assinaturas de Planos Aguardando Confirmação</span>
+                <span className="bg-amber-100 text-amber-800 text-[10px] px-2 py-0.2 rounded-full font-extrabold">
+                  {pendingItems.subscriptions.length}
+                </span>
+              </h4>
+
+              {pendingItems.subscriptions.length === 0 ? (
+                <div className="p-6 bg-slate-50 rounded-xl text-center border border-dashed border-slate-200 text-xs text-slate-500">
+                  Nenhuma solicitação de assinatura pendente no momento.
+                </div>
+              ) : (
+                <div className="divide-y divide-slate-100">
+                  {pendingItems.subscriptions.map((sub) => {
+                    const bizName = sub.businesses?.name || 'Empresa';
+                    const cleanPhone = (sub.businesses?.whatsapp || '').replace(/\D/g, '');
+                    return (
+                      <div key={sub.id} className="py-4 flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+                        <div>
+                          <div className="flex items-center gap-2">
+                            <span className="text-[10px] font-bold uppercase bg-amber-100 text-amber-800 px-2 py-0.5 rounded-md">
+                              STATUS: PENDING
+                            </span>
+                            <span className="text-xs font-bold uppercase text-emerald-700">
+                              PLANO {sub.plan_tier}
+                            </span>
+                            <span className="text-xs text-slate-400">
+                              • Solicitado em {new Date(sub.created_at).toLocaleDateString('pt-BR')}
+                            </span>
+                          </div>
+                          <h4 className="text-sm font-bold text-slate-900 mt-1">{bizName}</h4>
+                          <p className="text-xs text-slate-500">
+                            Cidade: {sub.businesses?.city || 'Local'} • Provedor: {sub.billing_provider || 'PIX'}
+                          </p>
+                        </div>
+
+                        <div className="flex items-center gap-2">
+                          {cleanPhone && (
+                            <a
+                              href={`https://wa.me/${cleanPhone}`}
+                              target="_blank"
+                              rel="noreferrer"
+                              className="px-3 py-2 bg-emerald-50 hover:bg-emerald-100 text-emerald-800 border border-emerald-200 rounded-xl text-xs font-bold transition flex items-center gap-1.5"
+                            >
+                              <Phone className="w-3.5 h-3.5" />
+                              <span>Ver WhatsApp</span>
+                            </a>
+                          )}
+
+                          <button
+                            disabled={processingId === sub.id}
+                            onClick={() => handleApproveSubscription(sub.id)}
+                            className="px-4 py-2 bg-slate-900 hover:bg-slate-800 text-white rounded-xl text-xs font-bold transition flex items-center gap-1.5 shadow-xs"
+                          >
+                            <CheckCircle2 className="w-3.5 h-3.5 text-emerald-400" />
+                            <span>{processingId === sub.id ? 'Ativando...' : 'Confirmar & Ativar Plano'}</span>
+                          </button>
+                        </div>
+                      </div>
+                    );
+                  })}
+                </div>
+              )}
+            </div>
+
+            {/* SEÇÃO 2: DESTAQUES PATROCINADOS PENDENTES */}
+            <div className="space-y-3 pt-6 border-t border-slate-100">
+              <h4 className="text-xs font-bold uppercase tracking-wider text-slate-600 flex items-center gap-1.5">
+                <span>2. Destaques Patrocinados Aguardando Confirmação</span>
+                <span className="bg-amber-100 text-amber-800 text-[10px] px-2 py-0.2 rounded-full font-extrabold">
+                  {pendingItems.featuredListings.length}
+                </span>
+              </h4>
+
+              {pendingItems.featuredListings.length === 0 ? (
+                <div className="p-6 bg-slate-50 rounded-xl text-center border border-dashed border-slate-200 text-xs text-slate-500">
+                  Nenhuma solicitação de destaque pendente no momento.
+                </div>
+              ) : (
+                <div className="divide-y divide-slate-100">
+                  {pendingItems.featuredListings.map((feat) => {
+                    const bizName = feat.businesses?.name || 'Empresa';
+                    const cleanPhone = (feat.businesses?.whatsapp || '').replace(/\D/g, '');
+                    const days = Math.max(1, Math.round((new Date(feat.end_date).getTime() - new Date(feat.start_date).getTime()) / (1000 * 60 * 60 * 24)));
+                    const totalCost = Number(feat.daily_cost) * days;
+
+                    return (
+                      <div key={feat.id} className="py-4 flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+                        <div>
+                          <div className="flex items-center gap-2">
+                            <span className="text-[10px] font-bold uppercase bg-amber-100 text-amber-800 px-2 py-0.5 rounded-md">
+                              STATUS: PENDING
+                            </span>
+                            <span className="text-xs font-bold text-slate-800">
+                              {days} dias • R$ {totalCost.toFixed(2)} (R$ {Number(feat.daily_cost).toFixed(2)}/dia)
+                            </span>
+                          </div>
+                          <h4 className="text-sm font-bold text-slate-900 mt-1">{bizName}</h4>
+                          <p className="text-xs text-slate-500">
+                            Cidade: {feat.businesses?.city || 'Local'} • Início agendado: {feat.start_date}
+                          </p>
+                        </div>
+
+                        <div className="flex items-center gap-2">
+                          {cleanPhone && (
+                            <a
+                              href={`https://wa.me/${cleanPhone}`}
+                              target="_blank"
+                              rel="noreferrer"
+                              className="px-3 py-2 bg-emerald-50 hover:bg-emerald-100 text-emerald-800 border border-emerald-200 rounded-xl text-xs font-bold transition flex items-center gap-1.5"
+                            >
+                              <Phone className="w-3.5 h-3.5" />
+                              <span>Ver WhatsApp</span>
+                            </a>
+                          )}
+
+                          <button
+                            disabled={processingId === feat.id}
+                            onClick={() => handleApproveFeatured(feat.id)}
+                            className="px-4 py-2 bg-amber-500 hover:bg-amber-600 text-slate-950 rounded-xl text-xs font-bold transition flex items-center gap-1.5 shadow-xs"
+                          >
+                            <CheckCircle2 className="w-3.5 h-3.5" />
+                            <span>{processingId === feat.id ? 'Ativando...' : 'Confirmar & Ativar Destaque'}</span>
+                          </button>
+                        </div>
+                      </div>
+                    );
+                  })}
+                </div>
+              )}
+            </div>
+          </div>
         </div>
       )}
 

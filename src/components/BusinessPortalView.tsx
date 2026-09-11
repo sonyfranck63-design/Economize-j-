@@ -97,16 +97,24 @@ export const BusinessPortalView: React.FC = () => {
   const [highlightDays, setHighlightDays] = useState<number>(7);
   const [highlightSuccess, setHighlightSuccess] = useState(false);
   const [isHighlighting, setIsHighlighting] = useState(false);
+  const [highlightPendingInfo, setHighlightPendingInfo] = useState<{
+    days: number;
+    totalCost: number;
+  } | null>(null);
 
   const handleHireHighlight = async () => {
     if (!currentBiz) return;
     setIsHighlighting(true);
     try {
-      await dataService.createFeaturedListing(currentBiz.id, highlightDays);
+      const res = await dataService.createFeaturedListing(currentBiz.id, highlightDays);
+      setHighlightPendingInfo({
+        days: highlightDays,
+        totalCost: res?.total_cost || highlightDays * monetization.featuredDailyRate,
+      });
       setHighlightSuccess(true);
-      setTimeout(() => setHighlightSuccess(false), 5000);
+      setTimeout(() => setHighlightSuccess(false), 8000);
     } catch (err: any) {
-      alert(`Não foi possível registrar o destaque: ${err.message}`);
+      alert(`Não foi possível registrar a solicitação de destaque: ${err.message}`);
     } finally {
       setIsHighlighting(false);
     }
@@ -1048,10 +1056,32 @@ export const BusinessPortalView: React.FC = () => {
                 </button>
               </div>
 
-              {highlightSuccess && (
-                <div className="p-3 bg-emerald-50 border border-emerald-200 rounded-xl text-xs text-emerald-800 flex items-center gap-2 animate-fade-in">
-                  <CheckCircle2 className="w-4 h-4 text-emerald-600 shrink-0" />
-                  <span>Destaque contratado com sucesso! Sua empresa está em destaque na plataforma.</span>
+              {highlightSuccess && highlightPendingInfo && (
+                <div className="p-4 bg-amber-50 border border-amber-300 rounded-2xl text-xs text-amber-950 space-y-2 animate-fade-in">
+                  <div className="flex items-center gap-2 font-bold text-amber-900">
+                    <Clock className="w-4 h-4 text-amber-700 shrink-0" />
+                    <span>Solicitação de Destaque Registrada (Status: PENDING)</span>
+                  </div>
+                  <p className="text-[11px] text-amber-900 leading-relaxed">
+                    A solicitação de <strong>{highlightPendingInfo.days} dias de destaque</strong> (R$ {highlightPendingInfo.totalCost.toFixed(2)}) foi gerada no status PENDING. A ativação no guia ocorrerá após a confirmação do pagamento.
+                  </p>
+                  {monetization.adminPixKey && (
+                    <div className="p-2.5 bg-white rounded-xl border border-amber-200 text-[11px] flex flex-col sm:flex-row sm:items-center justify-between gap-2">
+                      <span>Chave PIX: <strong className="font-mono text-slate-900">{monetization.adminPixKey}</strong></span>
+                      {monetization.adminWhatsapp && (
+                        <a
+                          href={`https://wa.me/${monetization.adminWhatsapp.replace(/\D/g, '')}?text=${encodeURIComponent(
+                            `Olá! Sou da empresa *${currentBiz.name}* no EconomizaJá. Solicitei ${highlightPendingInfo.days} dias de Destaque Patrocinado (R$ ${highlightPendingInfo.totalCost.toFixed(2)}) e gostaria de enviar o comprovante PIX para confirmação.`
+                          )}`}
+                          target="_blank"
+                          rel="noreferrer"
+                          className="px-3 py-1.5 bg-emerald-600 hover:bg-emerald-700 text-white rounded-lg font-bold text-[10px] text-center transition shrink-0"
+                        >
+                          Enviar Comprovante WhatsApp
+                        </a>
+                      )}
+                    </div>
+                  )}
                 </div>
               )}
             </div>

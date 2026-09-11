@@ -501,30 +501,35 @@ export const CompareQuotesModal: React.FC = () => {
                       {/* Customer / Admin button */}
                       {(currentUser?.id === quote.userId || currentUser?.role === 'admin') && (
                         <button
-                          disabled={quote.status === 'cancelado'}
+                          disabled={quote.status === 'cancelado' || isProcessingAction}
                           onClick={async () => {
                             if (isAccepted) {
                               // Se já foi escolhida, permite soltar os fogos de comemoração novamente!
                               triggerCelebrationFireworks();
                               return;
                             }
+                            setIsProcessingAction(true);
                             try {
                               await acceptProposal(quote.id, prop.id);
                               triggerCelebrationFireworks();
                             } catch (err: any) {
                               alert(err.message || 'Erro ao escolher proposta comercial.');
+                            } finally {
+                              setIsProcessingAction(false);
                             }
                           }}
                           className={`py-2.5 px-2 rounded-xl text-xs font-bold transition text-center ${
                             isAccepted
                               ? 'bg-emerald-100 hover:bg-emerald-200 text-emerald-800 cursor-pointer flex items-center justify-center gap-1 shadow-xs active:scale-95'
-                              : quote.status === 'cancelado'
+                              : quote.status === 'cancelado' || isProcessingAction
                               ? 'bg-slate-100 text-slate-400 cursor-not-allowed'
                               : 'bg-slate-900 hover:bg-slate-800 text-white shadow-xs active:scale-95 cursor-pointer'
                           }`}
                           title={isAccepted ? "Proposta escolhida! Clique para soltar fogos de comemoração 🎉" : "Escolher esta proposta"}
                         >
-                          {isAccepted ? (
+                          {isProcessingAction ? (
+                            'Processando...'
+                          ) : isAccepted ? (
                             <>
                               <Sparkles className="w-3.5 h-3.5 text-amber-500 animate-pulse" />
                               <span>Escolhida 🎉</span>
