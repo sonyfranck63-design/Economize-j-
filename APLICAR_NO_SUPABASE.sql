@@ -1,0 +1,1211 @@
+﻿-- ==============================================================================
+-- EconomizaJÃ¡ â€” MigraÃ§Ã£o 00026: Hardening de ProduÃ§Ã£o, SeguranÃ§a e Conformidade
+-- Atende a:
+-- 1. CriaÃ§Ã£o e atualizaÃ§Ã£o de tabelas de monetizaÃ§Ã£o (subscriptions, payments, featured_listings, lead_purchases)
+-- 2. Limites de planos validados estritamente no banco (backend)
+-- 3. PrecificaÃ§Ã£o dinÃ¢mica e automÃ¡tica de leads comerciais via app_settings
+-- 4. Isolamento estrito de orÃ§amentos direcionados (bloqueio de propostas indevidas)
+-- 5. RevogaÃ§Ã£o de acesso anon na secure_leads_view
+-- 6. RPCs seguras de transaÃ§Ã£o para assinaturas, destaques e leads
+-- 7. Desacoplamento de plano e destaque patrocinado (validaÃ§Ã£o temporal)
+-- 8. Limpeza atÃ´mica completa para LGPD / Google Play
+-- ==============================================================================
+
+-- ------------------------------------------------------------------------------
+-- 1. TABELAS DE MONETIZAÃ‡ÃƒO, ASSINATURAS E LEADS (IDEMPOTENTE)
+-- ------------------------------------------------------------------------------
+
+-- Garante colunas necessÃ¡rias na tabela leads
+ALTER TABLE public.leads ADD COLUMN IF NOT EXISTS price NUMERIC(10, 2) DEFAULT 15.00;
+ALTER TABLE public.leads ADD COLUMN IF NOT EXISTS status TEXT DEFAULT 'AVAILABLE';
+ALTER TABLE public.leads ADD COLUMN IF NOT EXISTS origin TEXT DEFAULT 'organic';
+
+-- Garante colunas na tabela businesses
+ALTER TABLE public.businesses ADD COLUMN IF NOT EXISTS leads_count INT DEFAULT 0;
+ALTER TABLE public.businesses ADD COLUMN IF NOT EXISTS plan_tier TEXT DEFAULT 'gratis';
+ALTER TABLE public.businesses ADD COLUMN IF NOT EXISTS featured BOOLEAN DEFAULT false;
+
+-- Tabela de Assinaturas (subscriptions)
+CREATE TABLE IF NOT EXISTS public.subscriptions (
+  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  business_id UUID NOT NULL REFERENCES public.businesses(id) ON DELETE CASCADE,
+  plan_tier TEXT NOT NULL CHECK (plan_tier IN ('gratis', 'pro', 'premium')),
+  status TEXT NOT NULL DEFAULT 'PENDING' CHECK (status IN ('PENDING', 'ACTIVE', 'CANCELLED', 'EXPIRED', 'FAILED')),
+  billing_provider TEXT DEFAULT 'google_play_billing',
+  provider_subscription_id TEXT,
+  current_period_start TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+  current_period_end TIMESTAMPTZ NOT NULL DEFAULT NOW() + INTERVAL '30 days',
+  created_at TIMESTAMPTZ DEFAULT NOW(),
+  updated_at TIMESTAMPTZ DEFAULT NOW()
+);
+
+ALTER TABLE public.subscriptions ENABLE ROW LEVEL SECURITY;
+
+DROP POLICY IF EXISTS "Users can view own business subscriptions" ON public.subscriptions;
+CREATE POLICY "Users can view own business subscriptions"
+  ON public.subscriptions FOR SELECT
+  USING (
+    business_id IN (SELECT id FROM public.businesses WHERE owner_id = auth.uid())
+    OR (SELECT role FROM public.profiles WHERE id = auth.uid()) = 'admin'
+  );
+
+DROP POLICY IF EXISTS "Admins can manage all subscriptions" ON public.subscriptions;
+CREATE POLICY "Admins can manage all subscriptions"
+  ON public.subscriptions FOR ALL
+  USING ((SELECT role FROM public.profiles WHERE id = auth.uid()) = 'admin');
+
+-- Tabela de Pagamentos (payments)
+CREATE TABLE IF NOT EXISTS public.payments (
+  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  user_id UUID REFERENCES auth.users(id) ON DELETE SET NULL,
+  business_id UUID REFERENCES public.businesses(id) ON DELETE CASCADE,
+  amount NUMERIC(10, 2) NOT NULL,
+  currency TEXT NOT NULL DEFAULT 'BRL',
+  status TEXT NOT NULL DEFAULT 'PENDING' CHECK (status IN ('PENDING', 'COMPLETED', 'FAILED', 'REFUNDED')),
+  payment_method TEXT DEFAULT 'google_play_billing',
+  purpose TEXT NOT NULL,
+  provider_payment_id TEXT,
+  created_at TIMESTAMPTZ DEFAULT NOW(),
+  updated_at TIMESTAMPTZ DEFAULT NOW()
+);
+
+ALTER TABLE public.payments ENABLE ROW LEVEL SECURITY;
+
+DROP POLICY IF EXISTS "Users can view own payments" ON public.payments;
+CREATE POLICY "Users can view own payments"
+  ON public.payments FOR SELECT
+  USING (
+    user_id = auth.uid()
+    OR business_id IN (SELECT id FROM public.businesses WHERE owner_id = auth.uid())
+    OR (SELECT role FROM public.profiles WHERE id = auth.uid()) = 'admin'
+  );
+
+DROP POLICY IF EXISTS "Admins can manage all payments" ON public.payments;
+CREATE POLICY "Admins can manage all payments"
+  ON public.payments FOR ALL
+  USING ((SELECT role FROM public.profiles WHERE id = auth.uid()) = 'admin');
+
+-- Tabela de Destaques Patrocinados (featured_listings)
+CREATE TABLE IF NOT EXISTS public.featured_listings (
+  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  business_id UUID NOT NULL REFERENCES public.businesses(id) ON DELETE CASCADE,
+  offer_id UUID REFERENCES public.offers(id) ON DELETE SET NULL,
+  start_date DATE NOT NULL DEFAULT CURRENT_DATE,
+  end_date DATE NOT NULL,
+  active BOOLEAN NOT NULL DEFAULT true,
+  daily_cost NUMERIC(10, 2) NOT NULL DEFAULT 9.90,
+  created_at TIMESTAMPTZ DEFAULT NOW()
+);
+
+ALTER TABLE public.featured_listings ENABLE ROW LEVEL SECURITY;
+
+DROP POLICY IF EXISTS "Anyone can view active featured listings" ON public.featured_listings;
+CREATE POLICY "Anyone can view active featured listings"
+  ON public.featured_listings FOR SELECT
+  USING (active = true);
+
+DROP POLICY IF EXISTS "Owners can manage their featured listings" ON public.featured_listings;
+CREATE POLICY "Owners can manage their featured listings"
+  ON public.featured_listings FOR ALL
+  USING (
+    business_id IN (SELECT id FROM public.businesses WHERE owner_id = auth.uid())
+    OR (SELECT role FROM public.profiles WHERE id = auth.uid()) = 'admin'
+  );
+
+-- Tabela de Compras de Lead (lead_purchases)
+CREATE TABLE IF NOT EXISTS public.lead_purchases (
+  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  lead_id UUID NOT NULL REFERENCES public.leads(id) ON DELETE CASCADE,
+  business_id UUID NOT NULL REFERENCES public.businesses(id) ON DELETE CASCADE,
+  price NUMERIC(10, 2) NOT NULL,
+  status TEXT NOT NULL DEFAULT 'CONFIRMED',
+  purchased_at TIMESTAMPTZ DEFAULT NOW(),
+  CONSTRAINT uq_lead_business UNIQUE (lead_id, business_id)
+);
+
+ALTER TABLE public.lead_purchases ENABLE ROW LEVEL SECURITY;
+
+DROP POLICY IF EXISTS "Businesses can view own lead purchases" ON public.lead_purchases;
+CREATE POLICY "Businesses can view own lead purchases"
+  ON public.lead_purchases FOR SELECT
+  USING (
+    business_id IN (SELECT id FROM public.businesses WHERE owner_id = auth.uid())
+    OR (SELECT role FROM public.profiles WHERE id = auth.uid()) = 'admin'
+  );
+
+-- ------------------------------------------------------------------------------
+-- 2. REVOGAÃ‡ÃƒO DE ACESSO ANON NA VIEW SECURE_LEADS_VIEW
+-- ------------------------------------------------------------------------------
+DO $$
+BEGIN
+  IF EXISTS (SELECT 1 FROM pg_views WHERE viewname = 'secure_leads_view' AND schemaname = 'public') THEN
+    REVOKE ALL ON public.secure_leads_view FROM anon;
+    GRANT SELECT ON public.secure_leads_view TO authenticated;
+  END IF;
+END $$;
+
+-- ------------------------------------------------------------------------------
+-- 3. TRIGGER: PRECIFICAÃ‡ÃƒO DINÃ‚MICA E CRIAÃ‡ÃƒO AUTOMÃTICA DE LEADS
+-- LÃª o preÃ§o configurado pelo Admin em app_settings ('monetization'->'costPerLead')
+-- ------------------------------------------------------------------------------
+CREATE OR REPLACE FUNCTION public.tg_auto_create_lead_from_quote()
+RETURNS TRIGGER AS $$
+DECLARE
+  v_lead_price NUMERIC(10, 2) := 15.00;
+  v_settings_val JSONB;
+BEGIN
+  -- OrÃ§amentos direcionados para uma empresa especÃ­fica sÃ£o exclusivos
+  -- e NÃƒO viram leads Ã  venda no marketplace geral.
+  IF NEW.target_business_id IS NOT NULL THEN
+    RETURN NEW;
+  END IF;
+
+  -- Tenta buscar o preÃ§o parametrizado pelo Admin em app_settings
+  BEGIN
+    SELECT value INTO v_settings_val 
+    FROM public.app_settings 
+    WHERE key = 'monetization';
+
+    IF v_settings_val IS NOT NULL AND (v_settings_val->>'costPerLead') IS NOT NULL THEN
+      v_lead_price := (v_settings_val->>'costPerLead')::NUMERIC(10, 2);
+    END IF;
+  EXCEPTION WHEN OTHERS THEN
+    v_lead_price := 15.00;
+  END;
+
+  -- Cria o lead comercial correspondente
+  INSERT INTO public.leads (
+    quote_request_id,
+    category_id,
+    city,
+    state,
+    neighborhood,
+    title,
+    description,
+    price,
+    status,
+    origin
+  ) VALUES (
+    NEW.id,
+    NEW.category_id,
+    NEW.city,
+    NEW.state,
+    NEW.neighborhood,
+    NEW.title,
+    NEW.description,
+    v_lead_price,
+    'AVAILABLE',
+    'organic'
+  );
+
+  RETURN NEW;
+END;
+$$ LANGUAGE plpgsql SECURITY DEFINER SET search_path = public;
+
+DROP TRIGGER IF EXISTS tr_auto_create_lead_from_quote ON public.quote_requests;
+CREATE TRIGGER tr_auto_create_lead_from_quote
+  AFTER INSERT ON public.quote_requests
+  FOR EACH ROW EXECUTE FUNCTION public.tg_auto_create_lead_from_quote();
+
+-- ------------------------------------------------------------------------------
+-- 4. TRIGGER: VALIDAÃ‡ÃƒO DE LIMITES DE PLANO E ORÃ‡AMENTOS DIRECIONADOS EM PROPOSTAS
+-- ------------------------------------------------------------------------------
+CREATE OR REPLACE FUNCTION public.tg_validate_quote_proposal_submission()
+RETURNS TRIGGER AS $$
+DECLARE
+  v_biz_owner UUID;
+  v_biz_plan TEXT;
+  v_target_biz UUID;
+  v_monthly_count INT;
+BEGIN
+  -- 1. Verifica se a empresa existe e se o usuÃ¡rio atual Ã© o proprietÃ¡rio ou admin
+  SELECT owner_id, COALESCE(plan_tier, 'gratis')
+  INTO v_biz_owner, v_biz_plan
+  FROM public.businesses
+  WHERE id = NEW.business_id;
+
+  IF v_biz_owner IS NULL THEN
+    RAISE EXCEPTION 'Empresa proponente nÃ£o encontrada.';
+  END IF;
+
+  IF v_biz_owner != auth.uid() AND NOT public.is_admin() THEN
+    RAISE EXCEPTION 'VocÃª sÃ³ pode enviar propostas atravÃ©s de empresas das quais Ã© proprietÃ¡rio.';
+  END IF;
+
+  -- 2. Verifica se o orÃ§amento Ã© direcionado para OUTRA empresa
+  SELECT target_business_id
+  INTO v_target_biz
+  FROM public.quote_requests
+  WHERE id = NEW.quote_request_id;
+
+  IF v_target_biz IS NOT NULL AND v_target_biz != NEW.business_id THEN
+    RAISE EXCEPTION 'Este orÃ§amento Ã© exclusivo e foi direcionado a outro parceiro.';
+  END IF;
+
+  -- 3. Limite do Plano Gratuito: mÃ¡ximo 3 propostas por mÃªs
+  IF v_biz_plan = 'gratis' AND NOT public.is_admin() THEN
+    SELECT COUNT(*)
+    INTO v_monthly_count
+    FROM public.quote_proposals
+    WHERE business_id = NEW.business_id
+      AND created_at >= date_trunc('month', NOW());
+
+    IF v_monthly_count >= 3 THEN
+      RAISE EXCEPTION 'Limite de 3 propostas mensais atingido para o Plano Gratuito. FaÃ§a upgrade para o Plano PrÃ³ para enviar propostas ilimitadas.';
+    END IF;
+  END IF;
+
+  RETURN NEW;
+END;
+$$ LANGUAGE plpgsql SECURITY DEFINER SET search_path = public;
+
+DROP TRIGGER IF EXISTS tr_validate_quote_proposal_submission ON public.quote_proposals;
+CREATE TRIGGER tr_validate_quote_proposal_submission
+  BEFORE INSERT ON public.quote_proposals
+  FOR EACH ROW EXECUTE FUNCTION public.tg_validate_quote_proposal_submission();
+
+-- ------------------------------------------------------------------------------
+-- 5. TRIGGER: VALIDAÃ‡ÃƒO DE LIMITES DE OFERTAS ATIVAS POR PLANO
+-- ------------------------------------------------------------------------------
+CREATE OR REPLACE FUNCTION public.tg_validate_offer_submission()
+RETURNS TRIGGER AS $$
+DECLARE
+  v_biz_owner UUID;
+  v_biz_plan TEXT;
+  v_active_offers_count INT;
+BEGIN
+  -- SÃ³ aplica checagem em novas inserÃ§Ãµes ativas ou ativaÃ§Ã£o de oferta
+  IF NEW.active IS FALSE THEN
+    RETURN NEW;
+  END IF;
+
+  SELECT owner_id, COALESCE(plan_tier, 'gratis')
+  INTO v_biz_owner, v_biz_plan
+  FROM public.businesses
+  WHERE id = NEW.business_id;
+
+  IF v_biz_owner IS NULL THEN
+    RAISE EXCEPTION 'Empresa vinculada Ã  oferta nÃ£o encontrada.';
+  END IF;
+
+  IF v_biz_owner != auth.uid() AND NOT public.is_admin() THEN
+    RAISE EXCEPTION 'VocÃª sÃ³ pode publicar ofertas em empresas das quais Ã© proprietÃ¡rio.';
+  END IF;
+
+  -- Contagem de ofertas ativas da empresa
+  SELECT COUNT(*)
+  INTO v_active_offers_count
+  FROM public.offers
+  WHERE business_id = NEW.business_id
+    AND active = true
+    AND (TG_OP = 'INSERT' OR id != NEW.id);
+
+  IF v_biz_plan = 'gratis' AND v_active_offers_count >= 1 AND NOT public.is_admin() THEN
+    RAISE EXCEPTION 'Limite de 1 oferta ativa atingido para o Plano Gratuito. FaÃ§a upgrade para o Plano PrÃ³ para publicar atÃ© 5 ofertas simultÃ¢neas.';
+  ELSIF v_biz_plan = 'pro' AND v_active_offers_count >= 5 AND NOT public.is_admin() THEN
+    RAISE EXCEPTION 'Limite de 5 ofertas ativas atingido para o Plano PrÃ³. FaÃ§a upgrade para o Plano Premium para publicar ofertas ilimitadas.';
+  END IF;
+
+  RETURN NEW;
+END;
+$$ LANGUAGE plpgsql SECURITY DEFINER SET search_path = public;
+
+DROP TRIGGER IF EXISTS tr_validate_offer_submission ON public.offers;
+CREATE TRIGGER tr_validate_offer_submission
+  BEFORE INSERT OR UPDATE OF active ON public.offers
+  FOR EACH ROW EXECUTE FUNCTION public.tg_validate_offer_submission();
+
+-- ------------------------------------------------------------------------------
+-- 6. RPC: INICIAR ASSINATURA DE PLANO (ESTADO PENDING SEGURO)
+-- ------------------------------------------------------------------------------
+CREATE OR REPLACE FUNCTION public.initiate_plan_subscription(
+  p_business_id UUID,
+  p_plan_tier TEXT,
+  p_billing_provider TEXT DEFAULT 'google_play_billing'
+)
+RETURNS JSONB AS $$
+DECLARE
+  v_biz_owner UUID;
+  v_sub_id UUID;
+  v_payment_id UUID;
+  v_amount NUMERIC(10, 2) := 0.00;
+  v_settings_val JSONB;
+BEGIN
+  IF auth.uid() IS NULL THEN
+    RAISE EXCEPTION 'NÃ£o autenticado.';
+  END IF;
+
+  -- Valida proprietÃ¡rio da empresa
+  SELECT owner_id INTO v_biz_owner
+  FROM public.businesses
+  WHERE id = p_business_id;
+
+  IF v_biz_owner IS NULL OR (v_biz_owner != auth.uid() AND NOT public.is_admin()) THEN
+    RAISE EXCEPTION 'Apenas o responsÃ¡vel pela empresa pode contratar planos.';
+  END IF;
+
+  IF p_plan_tier NOT IN ('pro', 'premium') THEN
+    RAISE EXCEPTION 'Plano invÃ¡lido para contrataÃ§Ã£o: %', p_plan_tier;
+  END IF;
+
+  -- Determina valor no app_settings
+  BEGIN
+    SELECT value INTO v_settings_val FROM public.app_settings WHERE key = 'monetization';
+    IF p_plan_tier = 'pro' THEN
+      v_amount := COALESCE((v_settings_val->>'planProMonthly')::NUMERIC(10, 2), 49.90);
+    ELSE
+      v_amount := COALESCE((v_settings_val->>'planPremiumMonthly')::NUMERIC(10, 2), 149.90);
+    END IF;
+  EXCEPTION WHEN OTHERS THEN
+    v_amount := CASE WHEN p_plan_tier = 'pro' THEN 49.90 ELSE 149.90 END;
+  END;
+
+  -- Cria assinatura com status PENDING
+  INSERT INTO public.subscriptions (
+    business_id,
+    plan_tier,
+    status,
+    billing_provider,
+    current_period_start,
+    current_period_end
+  ) VALUES (
+    p_business_id,
+    p_plan_tier,
+    'PENDING',
+    p_billing_provider,
+    NOW(),
+    NOW() + INTERVAL '30 days'
+  ) RETURNING id INTO v_sub_id;
+
+  -- Registra intenÃ§Ã£o de pagamento com status PENDING
+  INSERT INTO public.payments (
+    user_id,
+    business_id,
+    amount,
+    currency,
+    status,
+    payment_method,
+    purpose,
+    provider_payment_id
+  ) VALUES (
+    auth.uid(),
+    p_business_id,
+    v_amount,
+    'BRL',
+    'PENDING',
+    p_billing_provider,
+    'subscription_' || p_plan_tier,
+    v_sub_id::text
+  ) RETURNING id INTO v_payment_id;
+
+  RETURN jsonb_build_object(
+    'subscription_id', v_sub_id,
+    'payment_id', v_payment_id,
+    'plan_tier', p_plan_tier,
+    'status', 'PENDING',
+    'amount', v_amount
+  );
+END;
+$$ LANGUAGE plpgsql SECURITY DEFINER SET search_path = public;
+
+GRANT EXECUTE ON FUNCTION public.initiate_plan_subscription(UUID, TEXT, TEXT) TO authenticated;
+
+-- ------------------------------------------------------------------------------
+-- 7. RPC: CONFIRMAÃ‡ÃƒO DE ASSINATURA (TRANSIÃ‡ÃƒO PENDING -> ACTIVE)
+-- ValidaÃ§Ã£o segura por Admin ou Provedor de Pagamento
+-- ------------------------------------------------------------------------------
+CREATE OR REPLACE FUNCTION public.confirm_plan_subscription(
+  p_subscription_id UUID,
+  p_provider_transaction_id TEXT DEFAULT NULL
+)
+RETURNS JSONB AS $$
+DECLARE
+  v_sub RECORD;
+BEGIN
+  IF NOT public.is_admin() THEN
+    RAISE EXCEPTION 'Apenas administradores ou webhooks autorizados podem ativar assinaturas.';
+  END IF;
+
+  SELECT * INTO v_sub
+  FROM public.subscriptions
+  WHERE id = p_subscription_id;
+
+  IF v_sub.id IS NULL THEN
+    RAISE EXCEPTION 'Assinatura nÃ£o encontrada.';
+  END IF;
+
+  -- Transiciona assinatura para ACTIVE
+  UPDATE public.subscriptions
+  SET status = 'ACTIVE',
+      provider_subscription_id = COALESCE(p_provider_transaction_id, provider_subscription_id),
+      current_period_start = NOW(),
+      current_period_end = NOW() + INTERVAL '30 days',
+      updated_at = NOW()
+  WHERE id = p_subscription_id;
+
+  -- Transiciona pagamentos vinculados para COMPLETED
+  UPDATE public.payments
+  SET status = 'COMPLETED'
+  WHERE business_id = v_sub.business_id 
+    AND (provider_payment_id = p_subscription_id::text OR status = 'PENDING');
+
+  -- Atualiza o benefÃ­cio (plan_tier) na tabela de empresas
+  UPDATE public.businesses
+  SET plan_tier = v_sub.plan_tier
+  WHERE id = v_sub.business_id;
+
+  RETURN jsonb_build_object(
+    'success', true,
+    'subscription_id', p_subscription_id,
+    'business_id', v_sub.business_id,
+    'plan_tier', v_sub.plan_tier,
+    'status', 'ACTIVE'
+  );
+END;
+$$ LANGUAGE plpgsql SECURITY DEFINER SET search_path = public;
+
+GRANT EXECUTE ON FUNCTION public.confirm_plan_subscription(UUID, TEXT) TO authenticated;
+
+-- ------------------------------------------------------------------------------
+-- 8. GESTÃƒO TEMPORAL DE DESTAQUES PATROCINADOS (FEATURED_LISTINGS)
+-- Plano != Destaque. O destaque tem inÃ­cio e tÃ©rmino definidos.
+-- ------------------------------------------------------------------------------
+CREATE OR REPLACE FUNCTION public.create_featured_listing(
+  p_business_id UUID,
+  p_days INT,
+  p_offer_id UUID DEFAULT NULL
+)
+RETURNS JSONB AS $$
+DECLARE
+  v_biz_owner UUID;
+  v_daily_rate NUMERIC(10, 2) := 9.90;
+  v_settings_val JSONB;
+  v_total_cost NUMERIC(10, 2);
+  v_listing_id UUID;
+BEGIN
+  IF auth.uid() IS NULL THEN
+    RAISE EXCEPTION 'NÃ£o autenticado.';
+  END IF;
+
+  SELECT owner_id INTO v_biz_owner
+  FROM public.businesses
+  WHERE id = p_business_id;
+
+  IF v_biz_owner IS NULL OR (v_biz_owner != auth.uid() AND NOT public.is_admin()) THEN
+    RAISE EXCEPTION 'Apenas o proprietÃ¡rio da empresa pode contratar destaque.';
+  END IF;
+
+  IF p_days < 1 THEN
+    RAISE EXCEPTION 'PerÃ­odo mÃ­nimo de destaque Ã© de 1 dia.';
+  END IF;
+
+  BEGIN
+    SELECT value INTO v_settings_val FROM public.app_settings WHERE key = 'monetization';
+    v_daily_rate := COALESCE((v_settings_val->>'featuredDailyRate')::NUMERIC(10, 2), 9.90);
+  EXCEPTION WHEN OTHERS THEN
+    v_daily_rate := 9.90;
+  END;
+
+  v_total_cost := v_daily_rate * p_days;
+
+  INSERT INTO public.featured_listings (
+    business_id,
+    offer_id,
+    start_date,
+    end_date,
+    active,
+    daily_cost
+  ) VALUES (
+    p_business_id,
+    p_offer_id,
+    CURRENT_DATE,
+    CURRENT_DATE + (p_days || ' days')::INTERVAL,
+    true,
+    v_daily_rate
+  ) RETURNING id INTO v_listing_id;
+
+  -- Atualiza a flag da empresa
+  UPDATE public.businesses
+  SET featured = true
+  WHERE id = p_business_id;
+
+  RETURN jsonb_build_object(
+    'listing_id', v_listing_id,
+    'business_id', p_business_id,
+    'days', p_days,
+    'daily_rate', v_daily_rate,
+    'total_cost', v_total_cost
+  );
+END;
+$$ LANGUAGE plpgsql SECURITY DEFINER SET search_path = public;
+
+GRANT EXECUTE ON FUNCTION public.create_featured_listing(UUID, INT, UUID) TO authenticated;
+
+-- ------------------------------------------------------------------------------
+-- 9. RPC: COMPRA TRANSACIONAL DE LEAD (PREVINE RACE CONDITION E DUPLICIDADE)
+-- ------------------------------------------------------------------------------
+CREATE OR REPLACE FUNCTION public.purchase_lead_with_credits(
+  p_lead_id UUID,
+  p_business_id UUID
+)
+RETURNS JSONB AS $$
+DECLARE
+  v_lead RECORD;
+  v_biz_owner UUID;
+BEGIN
+  IF auth.uid() IS NULL THEN
+    RAISE EXCEPTION 'NÃ£o autenticado.';
+  END IF;
+
+  SELECT owner_id INTO v_biz_owner
+  FROM public.businesses
+  WHERE id = p_business_id;
+
+  IF v_biz_owner IS NULL OR (v_biz_owner != auth.uid() AND NOT public.is_admin()) THEN
+    RAISE EXCEPTION 'Apenas o proprietÃ¡rio da empresa pode adquirir este lead.';
+  END IF;
+
+  -- Lock no registro do lead para evitar concorrÃªncia simultÃ¢nea
+  SELECT * INTO v_lead
+  FROM public.leads
+  WHERE id = p_lead_id
+  FOR UPDATE;
+
+  IF v_lead.id IS NULL THEN
+    RAISE EXCEPTION 'Lead nÃ£o encontrado.';
+  END IF;
+
+  IF v_lead.status NOT IN ('AVAILABLE', 'NEW') THEN
+    RAISE EXCEPTION 'Este lead nÃ£o estÃ¡ mais disponÃ­vel para aquisiÃ§Ã£o.';
+  END IF;
+
+  -- Verifica se a empresa jÃ¡ comprou o lead
+  IF EXISTS (
+    SELECT 1 FROM public.lead_purchases 
+    WHERE lead_id = p_lead_id AND business_id = p_business_id
+  ) THEN
+    RETURN jsonb_build_object(
+      'success', true,
+      'already_purchased', true,
+      'lead_id', p_lead_id
+    );
+  END IF;
+
+  -- Registra a compra atÃ´mica
+  INSERT INTO public.lead_purchases (
+    lead_id,
+    business_id,
+    price,
+    status
+  ) VALUES (
+    p_lead_id,
+    p_business_id,
+    v_lead.price,
+    'CONFIRMED'
+  );
+
+  -- Atualiza contador transacional de mÃ©tricas da empresa
+  UPDATE public.businesses
+  SET leads_count = COALESCE(leads_count, 0) + 1
+  WHERE id = p_business_id;
+
+  RETURN jsonb_build_object(
+    'success', true,
+    'lead_id', p_lead_id,
+    'business_id', p_business_id,
+    'price', v_lead.price
+  );
+END;
+$$ LANGUAGE plpgsql SECURITY DEFINER SET search_path = public;
+
+GRANT EXECUTE ON FUNCTION public.purchase_lead_with_credits(UUID, UUID) TO authenticated;
+
+-- ------------------------------------------------------------------------------
+-- 10. HARDENING LGPD & GOOGLE PLAY: EXCLUSÃƒO ATÃ”MICA TOTAL DE CONTA
+-- ------------------------------------------------------------------------------
+CREATE OR REPLACE FUNCTION public.delete_own_account()
+RETURNS void AS $$
+DECLARE
+  v_user_id UUID;
+  r_quote RECORD;
+BEGIN
+  v_user_id := auth.uid();
+  IF v_user_id IS NULL THEN
+    RAISE EXCEPTION 'NÃ£o autenticado: faÃ§a login para excluir sua conta.';
+  END IF;
+
+  -- 1. Exclui com integridade todas as cotaÃ§Ãµes criadas pelo usuÃ¡rio
+  FOR r_quote IN SELECT id FROM public.quote_requests WHERE user_id = v_user_id LOOP
+    PERFORM public.delete_quote_request(r_quote.id);
+  END LOOP;
+
+  -- 2. Remove notificaÃ§Ãµes e favoritos
+  DELETE FROM public.favorites WHERE user_id = v_user_id;
+  DELETE FROM public.price_alerts WHERE user_id = v_user_id;
+  DELETE FROM public.notifications WHERE user_id = v_user_id;
+  DELETE FROM public.device_tokens WHERE user_id = v_user_id;
+
+  -- 3. Inativa empresas do usuÃ¡rio para nÃ£o deixar registros Ã³rfÃ£os
+  UPDATE public.businesses SET active = false WHERE owner_id = v_user_id;
+
+  -- 4. Remove o perfil em public.profiles
+  DELETE FROM public.profiles WHERE id = v_user_id;
+
+  -- 5. Remove o usuÃ¡rio da autenticaÃ§Ã£o Supabase (auth.users)
+  DELETE FROM auth.users WHERE id = v_user_id;
+END;
+$$ LANGUAGE plpgsql SECURITY DEFINER SET search_path = public, auth;
+
+GRANT EXECUTE ON FUNCTION public.delete_own_account() TO authenticated;
+
+NOTIFY pgrst, 'reload schema';
+-- ==============================================================================
+-- EconomizaJÃ¡ â€” MigraÃ§Ã£o 00027: CorreÃ§Ã£o Definitiva do Aceite, Propostas e MonetizaÃ§Ã£o
+-- 1. RPC accept_quote_proposal: Aceite atÃ´mico pelo consumidor com bloqueio transacional
+-- 2. RPC submit_quote_proposal: SubmissÃ£o transacional com transiÃ§Ã£o para propostas_recebidas
+-- 3. CorreÃ§Ã£o do Destaque: initiate_featured_listing com status PENDING e sem ativaÃ§Ã£o indevida
+-- 4. RPC confirm_featured_listing: ConfirmaÃ§Ã£o protegida restrita a administradores
+-- 5. Trigger on_proposal_inserted: AtualizaÃ§Ã£o automÃ¡tica para propostas_recebidas
+-- 6. Trigger trg_protect_quote_request_status: ValidaÃ§Ã£o rigorosa de mÃ¡quina de estados
+-- ==============================================================================
+
+-- 1. RPC: ACEITE DE PROPOSTA PELO CONSUMIDOR (TRANSAÃ‡ÃƒO ATÃ”MICA PROTEGIDA)
+CREATE OR REPLACE FUNCTION public.accept_quote_proposal(
+  p_quote_request_id UUID,
+  p_proposal_id UUID
+)
+RETURNS JSONB AS $$
+DECLARE
+  v_user_id UUID;
+  v_quote RECORD;
+  v_prop RECORD;
+  v_is_admin BOOLEAN;
+BEGIN
+  v_user_id := auth.uid();
+  IF v_user_id IS NULL THEN
+    RAISE EXCEPTION 'NÃ£o autenticado: faÃ§a login para aceitar uma proposta comercial.';
+  END IF;
+
+  v_is_admin := public.is_admin();
+
+  -- Lock no quote_request com FOR UPDATE para evitar race condition
+  SELECT * INTO v_quote
+  FROM public.quote_requests
+  WHERE id = p_quote_request_id
+  FOR UPDATE;
+
+  IF v_quote.id IS NULL THEN
+    RAISE EXCEPTION 'SolicitaÃ§Ã£o de orÃ§amento nÃ£o encontrada.';
+  END IF;
+
+  -- Verifica se o usuÃ¡rio atual Ã© o solicitante ou administrador
+  IF v_quote.user_id != v_user_id AND NOT v_is_admin THEN
+    RAISE EXCEPTION 'Apenas o cliente solicitante pode aceitar uma proposta comercial para este orÃ§amento.';
+  END IF;
+
+  -- Impede aceite se o orÃ§amento jÃ¡ estiver cancelado ou finalizado
+  IF v_quote.status = 'cancelado' THEN
+    RAISE EXCEPTION 'NÃ£o Ã© possÃ­vel aceitar propostas para um pedido de orÃ§amento encerrado/cancelado.';
+  END IF;
+
+  -- Lock na proposta para garantir integridade atÃ´mica
+  SELECT * INTO v_prop
+  FROM public.quote_proposals
+  WHERE id = p_proposal_id
+  FOR UPDATE;
+
+  IF v_prop.id IS NULL THEN
+    RAISE EXCEPTION 'Proposta comercial nÃ£o encontrada.';
+  END IF;
+
+  IF v_prop.quote_request_id != p_quote_request_id THEN
+    RAISE EXCEPTION 'A proposta informada nÃ£o pertence a este orÃ§amento.';
+  END IF;
+
+  IF v_prop.status = 'recusada' THEN
+    RAISE EXCEPTION 'Esta proposta foi recusada anteriormente e nÃ£o pode ser reativada.';
+  END IF;
+
+  -- ExecuÃ§Ã£o atÃ´mica no banco de dados:
+  -- A) Marca a proposta escolhida como 'escolhida'
+  UPDATE public.quote_proposals
+  SET status = 'escolhida', updated_at = NOW()
+  WHERE id = p_proposal_id;
+
+  -- B) Marca todas as demais propostas do mesmo orÃ§amento como 'recusada'
+  UPDATE public.quote_proposals
+  SET status = 'recusada', updated_at = NOW()
+  WHERE quote_request_id = p_quote_request_id AND id != p_proposal_id;
+
+  -- C) Atualiza o status do orÃ§amento para 'escolhido'
+  UPDATE public.quote_requests
+  SET status = 'escolhido', updated_at = NOW()
+  WHERE id = p_quote_request_id;
+
+  RETURN jsonb_build_object(
+    'success', true,
+    'quote_request_id', p_quote_request_id,
+    'proposal_id', p_proposal_id,
+    'proposal_status', 'escolhida',
+    'quote_status', 'escolhido',
+    'business_id', v_prop.business_id,
+    'price', v_prop.price
+  );
+END;
+$$ LANGUAGE plpgsql SECURITY DEFINER SET search_path = public, auth;
+
+REVOKE EXECUTE ON FUNCTION public.accept_quote_proposal(UUID, UUID) FROM PUBLIC;
+REVOKE EXECUTE ON FUNCTION public.accept_quote_proposal(UUID, UUID) FROM anon;
+GRANT EXECUTE ON FUNCTION public.accept_quote_proposal(UUID, UUID) TO authenticated;
+
+
+-- 2. RPC: SUBMISSÃƒO SEGURA DE PROPOSTA COM TRANSIÃ‡ÃƒO DE STATUS
+CREATE OR REPLACE FUNCTION public.submit_quote_proposal(
+  p_quote_request_id UUID,
+  p_business_id UUID,
+  p_price NUMERIC,
+  p_deadline_text TEXT,
+  p_description TEXT
+)
+RETURNS JSONB AS $$
+DECLARE
+  v_user_id UUID;
+  v_biz RECORD;
+  v_quote RECORD;
+  v_proposal_id UUID;
+  v_monthly_count INT;
+BEGIN
+  v_user_id := auth.uid();
+  IF v_user_id IS NULL THEN
+    RAISE EXCEPTION 'NÃ£o autenticado: faÃ§a login para submeter uma proposta.';
+  END IF;
+
+  -- Valida a empresa e proprietÃ¡rio
+  SELECT * INTO v_biz
+  FROM public.businesses
+  WHERE id = p_business_id;
+
+  IF v_biz.id IS NULL THEN
+    RAISE EXCEPTION 'Empresa prestadora nÃ£o encontrada.';
+  END IF;
+
+  IF v_biz.owner_id != v_user_id AND NOT public.is_admin() THEN
+    RAISE EXCEPTION 'VocÃª sÃ³ pode enviar propostas atravÃ©s de empresas das quais Ã© proprietÃ¡rio.';
+  END IF;
+
+  -- Valida o orÃ§amento com lock
+  SELECT * INTO v_quote
+  FROM public.quote_requests
+  WHERE id = p_quote_request_id
+  FOR UPDATE;
+
+  IF v_quote.id IS NULL THEN
+    RAISE EXCEPTION 'OrÃ§amento nÃ£o encontrado.';
+  END IF;
+
+  IF v_quote.status = 'cancelado' THEN
+    RAISE EXCEPTION 'Este pedido de orÃ§amento foi encerrado pelo cliente e nÃ£o recebe mais propostas.';
+  END IF;
+
+  IF v_quote.status IN ('escolhido', 'finalizado') THEN
+    RAISE EXCEPTION 'Este orÃ§amento jÃ¡ foi definido com outro parceiro comercial.';
+  END IF;
+
+  -- OrÃ§amento direcionado a outra empresa especÃ­fica
+  IF v_quote.target_business_id IS NOT NULL AND v_quote.target_business_id != p_business_id THEN
+    RAISE EXCEPTION 'Este orÃ§amento Ã© exclusivo e foi direcionado a outro parceiro.';
+  END IF;
+
+  -- Limite de propostas do plano gratuito (3 propostas/mÃªs)
+  IF COALESCE(v_biz.plan_tier, 'gratis') = 'gratis' AND NOT public.is_admin() THEN
+    SELECT COUNT(*) INTO v_monthly_count
+    FROM public.quote_proposals
+    WHERE business_id = p_business_id
+      AND created_at >= date_trunc('month', NOW());
+
+    IF v_monthly_count >= 3 THEN
+      RAISE EXCEPTION 'Limite de 3 propostas mensais atingido para o Plano Gratuito. FaÃ§a upgrade para o Plano PrÃ³ para enviar propostas ilimitadas.';
+    END IF;
+  END IF;
+
+  -- Insere ou atualiza a proposta
+  INSERT INTO public.quote_proposals (
+    quote_request_id,
+    business_id,
+    price,
+    deadline_text,
+    description,
+    status
+  ) VALUES (
+    p_quote_request_id,
+    p_business_id,
+    p_price,
+    p_deadline_text,
+    p_description,
+    'pendente'
+  )
+  ON CONFLICT (quote_request_id, business_id) DO UPDATE
+  SET price = EXCLUDED.price,
+      deadline_text = EXCLUDED.deadline_text,
+      description = EXCLUDED.description,
+      updated_at = NOW()
+  RETURNING id INTO v_proposal_id;
+
+  -- Transiciona o orÃ§amento para 'propostas_recebidas' se ainda estiver 'aberto'
+  IF v_quote.status = 'aberto' THEN
+    UPDATE public.quote_requests
+    SET status = 'propostas_recebidas', updated_at = NOW()
+    WHERE id = p_quote_request_id;
+  END IF;
+
+  RETURN jsonb_build_object(
+    'success', true,
+    'proposal_id', v_proposal_id,
+    'quote_request_id', p_quote_request_id,
+    'business_id', p_business_id,
+    'status', 'pendente'
+  );
+END;
+$$ LANGUAGE plpgsql SECURITY DEFINER SET search_path = public, auth;
+
+REVOKE EXECUTE ON FUNCTION public.submit_quote_proposal(UUID, UUID, NUMERIC, TEXT, TEXT) FROM PUBLIC;
+REVOKE EXECUTE ON FUNCTION public.submit_quote_proposal(UUID, UUID, NUMERIC, TEXT, TEXT) FROM anon;
+GRANT EXECUTE ON FUNCTION public.submit_quote_proposal(UUID, UUID, NUMERIC, TEXT, TEXT) TO authenticated;
+
+
+-- 3. CORREÃ‡ÃƒO DO DESTAQUE PATROCINADO (STATUS PENDING OBRIGATÃ“RIO, SEM ATIVAÃ‡ÃƒO GRATUITA)
+CREATE OR REPLACE FUNCTION public.initiate_featured_listing(
+  p_business_id UUID,
+  p_days INT,
+  p_offer_id UUID DEFAULT NULL
+)
+RETURNS JSONB AS $$
+DECLARE
+  v_biz_owner UUID;
+  v_daily_rate NUMERIC(10, 2) := 19.90;
+  v_settings_val JSONB;
+  v_total_cost NUMERIC(10, 2);
+  v_listing_id UUID;
+  v_payment_id UUID;
+BEGIN
+  IF auth.uid() IS NULL THEN
+    RAISE EXCEPTION 'NÃ£o autenticado: faÃ§a login para contratar destaque.';
+  END IF;
+
+  SELECT owner_id INTO v_biz_owner
+  FROM public.businesses
+  WHERE id = p_business_id;
+
+  IF v_biz_owner IS NULL OR (v_biz_owner != auth.uid() AND NOT public.is_admin()) THEN
+    RAISE EXCEPTION 'Apenas o proprietÃ¡rio da empresa pode solicitar destaque.';
+  END IF;
+
+  IF p_days < 1 THEN
+    RAISE EXCEPTION 'PerÃ­odo mÃ­nimo de destaque Ã© de 1 dia.';
+  END IF;
+
+  BEGIN
+    SELECT value INTO v_settings_val FROM public.app_settings WHERE key = 'monetization';
+    v_daily_rate := COALESCE((v_settings_val->>'featuredDailyRate')::NUMERIC(10, 2), 19.90);
+  EXCEPTION WHEN OTHERS THEN
+    v_daily_rate := 19.90;
+  END;
+
+  v_total_cost := v_daily_rate * p_days;
+
+  -- 1. Insere o destaque com active = FALSE (NÃƒO ATIVADO ATÃ‰ CONFIRMAÃ‡ÃƒO)
+  INSERT INTO public.featured_listings (
+    business_id,
+    offer_id,
+    start_date,
+    end_date,
+    active,
+    daily_cost
+  ) VALUES (
+    p_business_id,
+    p_offer_id,
+    CURRENT_DATE,
+    CURRENT_DATE + (p_days || ' days')::INTERVAL,
+    false,
+    v_daily_rate
+  ) RETURNING id INTO v_listing_id;
+
+  -- 2. Gera registro financeiro com status PENDING
+  INSERT INTO public.payments (
+    user_id,
+    business_id,
+    amount,
+    currency,
+    status,
+    payment_method,
+    purpose,
+    provider_payment_id
+  ) VALUES (
+    auth.uid(),
+    p_business_id,
+    v_total_cost,
+    'BRL',
+    'PENDING',
+    'pix',
+    'featured_listing',
+    v_listing_id::text
+  ) RETURNING id INTO v_payment_id;
+
+  -- REGRA DE SEGURANÃ‡A: businesses.featured NÃƒO Ã© ativado aqui.
+  -- Apenas a confirmaÃ§Ã£o do pagamento pode ativar o benefÃ­cio.
+
+  RETURN jsonb_build_object(
+    'listing_id', v_listing_id,
+    'payment_id', v_payment_id,
+    'business_id', p_business_id,
+    'days', p_days,
+    'daily_rate', v_daily_rate,
+    'total_cost', v_total_cost,
+    'status', 'PENDING'
+  );
+END;
+$$ LANGUAGE plpgsql SECURITY DEFINER SET search_path = public, auth;
+
+REVOKE EXECUTE ON FUNCTION public.initiate_featured_listing(UUID, INT, UUID) FROM PUBLIC;
+REVOKE EXECUTE ON FUNCTION public.initiate_featured_listing(UUID, INT, UUID) FROM anon;
+GRANT EXECUTE ON FUNCTION public.initiate_featured_listing(UUID, INT, UUID) TO authenticated;
+
+-- Substitui a antiga create_featured_listing para redirecionar para a versÃ£o segura initiate_featured_listing
+CREATE OR REPLACE FUNCTION public.create_featured_listing(
+  p_business_id UUID,
+  p_days INT,
+  p_offer_id UUID DEFAULT NULL
+)
+RETURNS JSONB AS $$
+BEGIN
+  RETURN public.initiate_featured_listing(p_business_id, p_days, p_offer_id);
+END;
+$$ LANGUAGE plpgsql SECURITY DEFINER SET search_path = public, auth;
+
+REVOKE EXECUTE ON FUNCTION public.create_featured_listing(UUID, INT, UUID) FROM PUBLIC;
+REVOKE EXECUTE ON FUNCTION public.create_featured_listing(UUID, INT, UUID) FROM anon;
+GRANT EXECUTE ON FUNCTION public.create_featured_listing(UUID, INT, UUID) TO authenticated;
+
+
+-- 4. RPC: CONFIRMAÃ‡ÃƒO DE DESTAQUE PATROCINADO (RESTRITA A ADMIN OU WEBHOOK)
+CREATE OR REPLACE FUNCTION public.confirm_featured_listing(
+  p_listing_id UUID,
+  p_provider_transaction_id TEXT DEFAULT NULL
+)
+RETURNS JSONB AS $$
+DECLARE
+  v_listing RECORD;
+  v_duration_days INT;
+BEGIN
+  IF NOT public.is_admin() THEN
+    RAISE EXCEPTION 'Apenas administradores ou webhooks autorizados podem ativar destaques.';
+  END IF;
+
+  SELECT * INTO v_listing
+  FROM public.featured_listings
+  WHERE id = p_listing_id;
+
+  IF v_listing.id IS NULL THEN
+    RAISE EXCEPTION 'Destaque patrocinado nÃ£o encontrado.';
+  END IF;
+
+  v_duration_days := GREATEST(1, v_listing.end_date - v_listing.start_date);
+
+  -- 1. Ativa a listagem de destaque a partir da data atual
+  UPDATE public.featured_listings
+  SET active = true,
+      start_date = CURRENT_DATE,
+      end_date = CURRENT_DATE + (v_duration_days || ' days')::INTERVAL
+  WHERE id = p_listing_id;
+
+  -- 2. Transiciona pagamentos vinculados para COMPLETED
+  UPDATE public.payments
+  SET status = 'COMPLETED',
+      updated_at = NOW()
+  WHERE provider_payment_id = p_listing_id::text
+    AND status = 'PENDING';
+
+  -- 3. Ativa o benefÃ­cio na empresa
+  UPDATE public.businesses
+  SET featured = true,
+      updated_at = NOW()
+  WHERE id = v_listing.business_id;
+
+  RETURN jsonb_build_object(
+    'success', true,
+    'listing_id', p_listing_id,
+    'business_id', v_listing.business_id,
+    'status', 'ACTIVE'
+  );
+END;
+$$ LANGUAGE plpgsql SECURITY DEFINER SET search_path = public, auth;
+
+REVOKE EXECUTE ON FUNCTION public.confirm_featured_listing(UUID, TEXT) FROM PUBLIC;
+REVOKE EXECUTE ON FUNCTION public.confirm_featured_listing(UUID, TEXT) FROM anon;
+GRANT EXECUTE ON FUNCTION public.confirm_featured_listing(UUID, TEXT) TO authenticated;
+
+
+-- 5. TRIGGER: TRANSIÃ‡ÃƒO AUTOMÃTICA DO ORÃ‡AMENTO QUANDO UMA PROPOSTA Ã‰ INSERIDA
+CREATE OR REPLACE FUNCTION public.tg_quote_proposals_after_insert()
+RETURNS TRIGGER AS $$
+BEGIN
+  UPDATE public.quote_requests
+  SET status = 'propostas_recebidas', updated_at = NOW()
+  WHERE id = NEW.quote_request_id AND status = 'aberto';
+  RETURN NEW;
+END;
+$$ LANGUAGE plpgsql SECURITY DEFINER SET search_path = public, auth;
+
+DROP TRIGGER IF EXISTS on_proposal_inserted ON public.quote_proposals;
+CREATE TRIGGER on_proposal_inserted
+AFTER INSERT ON public.quote_proposals
+FOR EACH ROW EXECUTE FUNCTION public.tg_quote_proposals_after_insert();
+
+
+-- 6. TRIGGER: MÃQUINA DE ESTADOS DEFENSIVA EM QUOTE_REQUESTS
+CREATE OR REPLACE FUNCTION public.tg_protect_quote_request_status_transitions()
+RETURNS TRIGGER AS $$
+BEGIN
+  -- NÃ£o permitir reabrir um pedido que foi cancelado (exceto admin)
+  IF OLD.status = 'cancelado' AND NEW.status != 'cancelado' THEN
+    IF NOT public.is_admin() THEN
+      RAISE EXCEPTION 'NÃ£o Ã© permitido reabrir uma solicitaÃ§Ã£o de orÃ§amento cancelada.';
+    END IF;
+  END IF;
+
+  -- NÃ£o permitir alterar um pedido que jÃ¡ foi finalizado (exceto admin)
+  IF OLD.status = 'finalizado' AND NEW.status != 'finalizado' THEN
+    IF NOT public.is_admin() THEN
+      RAISE EXCEPTION 'NÃ£o Ã© permitido alterar o status de uma solicitaÃ§Ã£o de orÃ§amento finalizada.';
+    END IF;
+  END IF;
+
+  RETURN NEW;
+END;
+$$ LANGUAGE plpgsql SECURITY DEFINER SET search_path = public, auth;
+
+DROP TRIGGER IF EXISTS trg_protect_quote_request_status ON public.quote_requests;
+CREATE TRIGGER trg_protect_quote_request_status
+BEFORE UPDATE OF status ON public.quote_requests
+FOR EACH ROW EXECUTE FUNCTION public.tg_protect_quote_request_status_transitions();
+
+-- 7. RECARREGAR CACHE DE SCHEMA NO POSTGREST
+NOTIFY pgrst, 'reload schema';
+-- ==============================================================================
+-- EconomizaJa - Migracao 00028: Seguranca Extra do Destaque Patrocinado
+-- Idempotente: pode ser executada multiplas vezes sem efeitos colaterais
+-- ==============================================================================
+
+-- 1. Trigger para validar que featured so pode ser true quando ha destaque ativo pago
+CREATE OR REPLACE FUNCTION public.validate_featured_requires_payment()
+RETURNS TRIGGER AS $$
+DECLARE
+  v_is_admin BOOLEAN;
+  v_has_active_paid_listing BOOLEAN;
+BEGIN
+  IF NEW.featured = OLD.featured OR NEW.featured = false THEN
+    RETURN NEW;
+  END IF;
+
+  v_is_admin := public.is_admin();
+  IF v_is_admin THEN
+    RETURN NEW;
+  END IF;
+
+  SELECT EXISTS (
+    SELECT 1 FROM public.featured_listings fl
+    JOIN public.payments p ON p.provider_payment_id = fl.id::text
+    WHERE fl.business_id = NEW.id
+      AND fl.active = true
+      AND fl.end_date >= CURRENT_DATE
+      AND p.status = 'CONFIRMED'
+  ) INTO v_has_active_paid_listing;
+
+  IF NOT v_has_active_paid_listing THEN
+    RAISE EXCEPTION
+      'SEGURANCA: businesses.featured so pode ser ativado mediante pagamento confirmado de destaque patrocinado.';
+  END IF;
+
+  RETURN NEW;
+END;
+$$ LANGUAGE plpgsql SECURITY INVOKER SET search_path = public, auth;
+
+DROP TRIGGER IF EXISTS trg_validate_featured_payment ON public.businesses;
+CREATE TRIGGER trg_validate_featured_payment
+  BEFORE UPDATE OF featured ON public.businesses
+  FOR EACH ROW
+  EXECUTE FUNCTION public.validate_featured_requires_payment();
+
+-- 2. Audit log de destaques
+DO $$
+BEGIN
+  IF NOT EXISTS (
+    SELECT 1 FROM pg_tables WHERE schemaname = 'public' AND tablename = 'featured_audit_log'
+  ) THEN
+    CREATE TABLE public.featured_audit_log (
+      id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+      business_id UUID REFERENCES public.businesses(id) ON DELETE CASCADE,
+      featured_listing_id UUID REFERENCES public.featured_listings(id) ON DELETE SET NULL,
+      action TEXT NOT NULL CHECK (action IN ('ACTIVATED', 'DEACTIVATED', 'EXPIRED')),
+      performed_by UUID REFERENCES auth.users(id) ON DELETE SET NULL,
+      payment_id UUID REFERENCES public.payments(id) ON DELETE SET NULL,
+      notes TEXT,
+      created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+    );
+    CREATE INDEX idx_featured_audit_business ON public.featured_audit_log(business_id);
+    ALTER TABLE public.featured_audit_log ENABLE ROW LEVEL SECURITY;
+    CREATE POLICY admin_read_featured_audit ON public.featured_audit_log
+      FOR SELECT USING (public.is_admin());
+    RAISE NOTICE 'Tabela featured_audit_log criada.';
+  END IF;
+END;
+$$;
+
+-- 3. Atualiza confirm_featured_listing para registrar audit e ser admin-only
+CREATE OR REPLACE FUNCTION public.confirm_featured_listing(
+  p_listing_id UUID,
+  p_provider_transaction_id TEXT DEFAULT NULL
+)
+RETURNS JSONB AS $$
+DECLARE
+  v_listing RECORD;
+  v_payment_id UUID;
+BEGIN
+  IF NOT public.is_admin() THEN
+    RAISE EXCEPTION 'Acesso negado: apenas administradores podem confirmar pagamentos de destaque patrocinado.';
+  END IF;
+
+  SELECT * INTO v_listing FROM public.featured_listings WHERE id = p_listing_id FOR UPDATE;
+
+  IF v_listing.id IS NULL THEN
+    RAISE EXCEPTION 'Destaque patrocinado nao encontrado: %', p_listing_id;
+  END IF;
+
+  IF v_listing.active = true THEN
+    RAISE EXCEPTION 'Este destaque ja esta ativo.';
+  END IF;
+
+  UPDATE public.featured_listings SET active = true, updated_at = NOW() WHERE id = p_listing_id;
+  UPDATE public.businesses SET featured = true, updated_at = NOW() WHERE id = v_listing.business_id;
+
+  UPDATE public.payments
+  SET status = 'CONFIRMED', provider_payment_id = COALESCE(p_provider_transaction_id, provider_payment_id), updated_at = NOW()
+  WHERE provider_payment_id = p_listing_id::text AND status = 'PENDING'
+  RETURNING id INTO v_payment_id;
+
+  INSERT INTO public.featured_audit_log (business_id, featured_listing_id, action, performed_by, payment_id, notes)
+  VALUES (v_listing.business_id, p_listing_id, 'ACTIVATED', auth.uid(), v_payment_id,
+    COALESCE('Confirmado via ' || p_provider_transaction_id, 'Confirmado manualmente pelo administrador'));
+
+  RETURN jsonb_build_object(
+    'success', true, 'listing_id', p_listing_id,
+    'business_id', v_listing.business_id, 'payment_id', v_payment_id,
+    'active_until', v_listing.end_date,
+    'message', 'Destaque ativado com sucesso apos confirmacao de pagamento.'
+  );
+END;
+$$ LANGUAGE plpgsql SECURITY DEFINER SET search_path = public, auth;
+
+REVOKE EXECUTE ON FUNCTION public.confirm_featured_listing(UUID, TEXT) FROM PUBLIC;
+REVOKE EXECUTE ON FUNCTION public.confirm_featured_listing(UUID, TEXT) FROM anon;
+GRANT EXECUTE ON FUNCTION public.confirm_featured_listing(UUID, TEXT) TO authenticated;
