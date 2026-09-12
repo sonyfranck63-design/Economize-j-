@@ -24,6 +24,14 @@ import { authService, AuthUserProfile } from '../services/authService';
 import { dataService } from '../services/dataService';
 import { getSmartImage, isInvalidOrDeadImageUrl } from '../utils/imageUtils';
 import { getDeletedQuoteIds, markQuoteAsDeletedLocally } from '../utils/quoteStorage';
+import {
+  getLocalBusinesses,
+  saveLocalBusiness,
+  getLocalOffers,
+  saveLocalOffer,
+  getLocalQuoteRequests,
+  saveLocalQuoteRequest,
+} from '../utils/localDataStorage';
 
 export type PublicPageRoute = 'app' | 'privacy' | 'terms' | 'delete_account';
 
@@ -131,9 +139,12 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
   });
 
   // Auth
-  const [currentUser, setCurrentUser] = useState<AuthUserProfile | null>(null);
+  const [currentUser, setCurrentUser] = useState<AuthUserProfile | null>(() => authService.getInitialUser());
   const [isAuthModalOpen, setIsAuthModalOpen] = useState(false);
-  const [userRole, setUserRole] = useState<UserRole>('customer');
+  const [userRole, setUserRole] = useState<UserRole>(() => {
+    const initial = authService.getInitialUser();
+    return initial?.role || 'customer';
+  });
 
   // Sync userRole with currentUser
   useEffect(() => {
@@ -145,9 +156,15 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
   }, [currentUser]);
 
   // Persistence State
-  const [businesses, setBusinesses] = useState<Business[]>([]);
-  const [offers, setOffers] = useState<Offer[]>([]);
-  const [quoteRequests, setQuoteRequests] = useState<QuoteRequest[]>([]);
+  const [businesses, setBusinesses] = useState<Business[]>(() => {
+    return isSupabaseConfigured ? [] : getLocalBusinesses();
+  });
+  const [offers, setOffers] = useState<Offer[]>(() => {
+    return isSupabaseConfigured ? [] : getLocalOffers();
+  });
+  const [quoteRequests, setQuoteRequests] = useState<QuoteRequest[]>(() => {
+    return isSupabaseConfigured ? [] : getLocalQuoteRequests();
+  });
 
   const [reviews, setReviews] = useState<Review[]>(() => {
     return isSupabaseConfigured ? [] : INITIAL_REVIEWS;
@@ -212,11 +229,14 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     };
   }, []);
 
-  // Fetch from Supabase when configured
+  // Fetch from Supabase when configured, or load local defaults
   useEffect(() => {
     async function loadBackendData() {
       if (!isSupabaseConfigured) {
         setIsDatabaseConnected(false);
+        setBusinesses(getLocalBusinesses());
+        setOffers(getLocalOffers());
+        setQuoteRequests(getLocalQuoteRequests());
         return;
       }
 
@@ -230,8 +250,18 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
           authService.getCurrentProfile(),
         ]);
 
-        if (bizList && bizList.length > 0) setBusinesses(bizList);
-        if (offList && offList.length > 0) setOffers(offList);
+        if (bizList && bizList.length > 0) {
+          setBusinesses(bizList);
+        } else {
+          setBusinesses(getLocalBusinesses());
+        }
+
+        if (offList && offList.length > 0) {
+          setOffers(offList);
+        } else {
+          setOffers(getLocalOffers());
+        }
+
         if (settings) setMonetization(settings);
 
         const deletedIds = getDeletedQuoteIds();
@@ -254,14 +284,18 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
 
           // Sincroniza todas as cotações: direcionadas às empresas do usuário + marketplace + cotações pessoais
           const allQuotes = await dataService.syncAllQuoteRequests(userProfile.id, myBizIds);
-          setQuoteRequests(allQuotes);
+          setQuoteRequests(allQuotes && allQuotes.length > 0 ? allQuotes : getLocalQuoteRequests());
         } else {
-          setQuoteRequests(initialCleanQuotes);
+          setQuoteRequests(initialCleanQuotes.length > 0 ? initialCleanQuotes : getLocalQuoteRequests());
         }
 
         setIsDatabaseConnected(true);
       } catch (err) {
-        console.error('Falha ao sincronizar com backend Supabase:', err);
+        console.warn('Falha ao sincronizar com backend Supabase. Ativando modo local resiliente:', err);
+        setIsDatabaseConnected(false);
+        setBusinesses(getLocalBusinesses());
+        setOffers(getLocalOffers());
+        setQuoteRequests(getLocalQuoteRequests());
       } finally {
         setIsLoadingData(false);
       }
@@ -458,6 +492,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       proposals: [],
     };
 
+    saveLocalQuoteRequest(newQuote);
     setQuoteRequests((prev) => [newQuote, ...prev]);
 
     setNotifications((prev) => [
@@ -731,6 +766,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       viewsCount: 1,
       claimsCount: 0,
     };
+    saveLocalOffer(newOffer);
     setOffers((prev) => [newOffer, ...prev]);
 
     if (isSupabaseConfigured) {
@@ -776,6 +812,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       leadsReceivedCount: 0,
     };
 
+    saveLocalBusiness(newBusiness);
     setBusinesses((prev) => [newBusiness, ...prev]);
   };
 
@@ -969,7 +1006,11 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     setCurrentUser(null);
     setUserRole('customer');
     setFavorites({ businessIds: [], offerIds: [] });
-    setQuoteRequests([]);
+    if (!isSupabaseConfigured) {
+      setQuoteRequests(getLocalQuoteRequests());
+    } else {
+      setQuoteRequests([]);
+    }
     setNotifications([]);
     setActiveTab('home');
   };
