@@ -84,7 +84,7 @@ export const dataService = {
       rating: Number(b.rating) || 5,
       reviewCount: b.review_count || 0,
       verified: Boolean(b.verified),
-      featured: activeFeaturedMap.has(b.id) || Boolean(b.featured && activeFeaturedMap.size === 0),
+      featured: activeFeaturedMap.has(b.id),
       featuredUntil: activeFeaturedMap.get(b.id),
       active: b.active !== false,
       openNow: true,
@@ -144,18 +144,26 @@ export const dataService = {
       const userName = authData.user.user_metadata?.full_name || business.ownerName || business.name || 'Parceiro';
 
       // Inserção com role 'customer' para garantir compatibilidade com triggers de role security
+      // Utiliza apenas colunas existentes no schema do banco (id, email, full_name, role, city, state)
+      const profilePayload: {
+        id: string;
+        email: string;
+        full_name: string;
+        role: string;
+        city: string;
+        state: string;
+      } = {
+        id: authData.user.id,
+        email: userEmail,
+        full_name: userName,
+        role: 'customer',
+        city: business.city || 'São Paulo',
+        state: business.state || 'SP',
+      };
+
       const { error: insertProfileErr } = await supabase
         .from('profiles')
-        .insert({
-          id: authData.user.id,
-          email: userEmail,
-          full_name: userName,
-          role: 'customer',
-          city: business.city || 'São Paulo',
-          state: business.state || 'SP',
-          phone: business.phone || '',
-          neighborhood: business.neighborhood || 'Centro',
-        });
+        .insert(profilePayload);
 
       if (insertProfileErr) {
         console.error('Erro ao auto-criar perfil para vincular empresa:', insertProfileErr);
@@ -231,10 +239,13 @@ export const dataService = {
     if (error) throw new Error(error.message);
   },
 
-  async toggleBusinessFeatured(id: string, featured: boolean): Promise<void> {
+  async toggleBusinessFeatured(id: string, featured: boolean, days = 7, notes = 'Ativação administrativa manual'): Promise<void> {
     if (!isSupabaseConfigured || !supabase) return;
-    const { error } = await supabase.from('businesses').update({ featured }).eq('id', id);
-    if (error) throw new Error(error.message);
+    if (featured) {
+      await this.adminGrantFeaturedHighlight(id, days, notes);
+    } else {
+      await this.adminRemoveFeaturedHighlight(id);
+    }
   },
 
   async deleteBusiness(id: string): Promise<void> {
@@ -1190,6 +1201,24 @@ export const dataService = {
     });
     if (error) throw new Error(error.message);
     return data;
+  },
+
+  async adminGrantFeaturedHighlight(businessId: string, days: number, reason = 'Ativação Manual pelo Administrador'): Promise<any> {
+    if (!isSupabaseConfigured || !supabase) throw new Error('Supabase não configurado');
+    const initRes = await this.initiateFeaturedListing(businessId, days);
+    const listingId = initRes?.listing_id || initRes?.id;
+    if (!listingId) {
+      throw new Error('Não foi possível gerar a entrada de destaque no banco de dados.');
+    }
+    return this.confirmFeaturedListing(listingId, `MANUAL_ADMIN: ${reason}`);
+  },
+
+  async adminRemoveFeaturedHighlight(businessId: string): Promise<void> {
+    if (!isSupabaseConfigured || !supabase) return;
+    await Promise.all([
+      supabase.from('featured_listings').update({ active: false }).eq('business_id', businessId),
+      supabase.from('businesses').update({ featured: false }).eq('id', businessId),
+    ]);
   },
 
   async purchaseLead(leadId: string, businessId: string): Promise<any> {

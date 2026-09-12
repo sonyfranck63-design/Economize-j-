@@ -62,6 +62,27 @@ export const AdminPortalView: React.FC = () => {
   const [isLoadingPending, setIsLoadingPending] = useState(false);
   const [processingId, setProcessingId] = useState<string | null>(null);
 
+  // Estados do Modal de Destaque Administrativo (Auditoria Real)
+  const [highlightTargetBiz, setHighlightTargetBiz] = useState<any | null>(null);
+  const [highlightDays, setHighlightDays] = useState<number>(7);
+  const [highlightNotes, setHighlightNotes] = useState<string>('PIX conferido pelo administrador');
+  const [isSubmittingHighlight, setIsSubmittingHighlight] = useState<boolean>(false);
+
+  const handleConfirmAdminHighlight = async () => {
+    if (!highlightTargetBiz) return;
+    setIsSubmittingHighlight(true);
+    try {
+      await toggleBusinessFeatured(highlightTargetBiz.id, highlightDays, highlightNotes);
+      alert(`Destaque para a empresa "${highlightTargetBiz.name}" ativado com sucesso por ${highlightDays} dias!`);
+      setHighlightTargetBiz(null);
+      await fetchPendingMonetization();
+    } catch (err: any) {
+      alert(`Erro ao ativar destaque: ${err.message}`);
+    } finally {
+      setIsSubmittingHighlight(false);
+    }
+  };
+
   const fetchPendingMonetization = async () => {
     setIsLoadingPending(true);
     try {
@@ -365,8 +386,31 @@ export const AdminPortalView: React.FC = () => {
                     {b.verified ? '✓ Verificada' : 'Não Verificada'}
                   </button>
 
-                  {/* REMOVIDO: botão "Tornar Destaque" que bypassa pagamento.
-                      Para ativar destaque, use a aba Cobranças & Assinaturas → Confirmar pagamento PIX. */}
+                  {b.featured ? (
+                    <button
+                      onClick={async () => {
+                        if (window.confirm(`Deseja revogar o destaque da empresa "${b.name}"?`)) {
+                          await toggleBusinessFeatured(b.id, 0, 'Destaque revogado pelo administrador');
+                        }
+                      }}
+                      className="px-3 py-1.5 rounded-xl bg-amber-100 hover:bg-amber-200 text-amber-900 border border-amber-300 text-xs font-bold transition flex items-center gap-1"
+                      title="Revogar destaque patrocinado"
+                    >
+                      ⭐ Revogar Destaque
+                    </button>
+                  ) : (
+                    <button
+                      onClick={() => {
+                        setHighlightTargetBiz(b);
+                        setHighlightDays(7);
+                        setHighlightNotes('PIX confirmado manualmente pelo administrador');
+                      }}
+                      className="px-3 py-1.5 rounded-xl bg-slate-100 hover:bg-amber-50 hover:text-amber-800 hover:border-amber-300 text-slate-700 border border-slate-200 text-xs font-bold transition flex items-center gap-1"
+                      title="Ativar destaque após confirmação de pagamento PIX"
+                    >
+                      ⭐ Destacar (PIX)
+                    </button>
+                  )}
 
                   <button
                     onClick={() => {
@@ -900,6 +944,101 @@ export const AdminPortalView: React.FC = () => {
                   Banners regionais e parcerias com fornecedores de peças e insumos comissionados.
                 </p>
               </div>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* MODAL DE ATIVAÇÃO DE DESTAQUE PATROCINADO (AUDITORIA REAL) */}
+      {highlightTargetBiz && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-950/60 backdrop-blur-xs p-4 animate-in fade-in duration-200">
+          <div className="bg-white rounded-2xl shadow-2xl max-w-md w-full p-6 space-y-5 border border-slate-100">
+            <div className="flex items-center justify-between border-b border-slate-100 pb-3">
+              <div className="flex items-center gap-2">
+                <span className="p-2 bg-amber-100 text-amber-800 rounded-xl">⭐</span>
+                <div>
+                  <h3 className="font-bold text-base text-slate-900">Ativar Destaque Patrocinado</h3>
+                  <p className="text-xs text-slate-500">Confirmação manual com registro auditado</p>
+                </div>
+              </div>
+              <button
+                onClick={() => setHighlightTargetBiz(null)}
+                className="p-1 rounded-lg text-slate-400 hover:text-slate-600 hover:bg-slate-100 transition"
+              >
+                ✕
+              </button>
+            </div>
+
+            <div className="bg-slate-50 p-3.5 rounded-xl border border-slate-100 text-xs space-y-1">
+              <p className="font-bold text-slate-800">Empresa: <span className="font-normal text-slate-600">{highlightTargetBiz.name}</span></p>
+              <p className="font-bold text-slate-800">Local: <span className="font-normal text-slate-600">{highlightTargetBiz.neighborhood}, {highlightTargetBiz.city} - {highlightTargetBiz.state}</span></p>
+              <p className="font-bold text-slate-800">WhatsApp: <span className="font-normal text-slate-600">{highlightTargetBiz.whatsapp}</span></p>
+            </div>
+
+            <div className="space-y-2">
+              <label className="text-xs font-bold text-slate-700">Duração do Destaque:</label>
+              <div className="grid grid-cols-3 gap-2">
+                {[7, 15, 30].map((d) => (
+                  <button
+                    key={d}
+                    type="button"
+                    onClick={() => setHighlightDays(d)}
+                    className={`py-2 px-3 rounded-xl text-xs font-bold border transition ${
+                      highlightDays === d
+                        ? 'bg-amber-500 text-slate-950 border-amber-500 shadow-xs'
+                        : 'bg-white text-slate-700 border-slate-200 hover:bg-slate-50'
+                    }`}
+                  >
+                    {d} Dias
+                  </button>
+                ))}
+              </div>
+            </div>
+
+            <div className="p-3 bg-amber-50/70 border border-amber-200/80 rounded-xl text-xs flex items-center justify-between">
+              <div>
+                <span className="text-slate-600">Taxa diária: </span>
+                <strong className="text-slate-900">R$ {Number(monetization.featuredDailyRate).toFixed(2)}/dia</strong>
+              </div>
+              <div className="text-right">
+                <span className="text-slate-600">Valor Total: </span>
+                <strong className="text-emerald-700 text-sm font-extrabold">
+                  R$ {(highlightDays * Number(monetization.featuredDailyRate)).toFixed(2)}
+                </strong>
+              </div>
+            </div>
+
+            <div className="space-y-1.5">
+              <label className="text-xs font-bold text-slate-700">Comprovante / Registro da Auditoria:</label>
+              <input
+                type="text"
+                value={highlightNotes}
+                onChange={(e) => setHighlightNotes(e.target.value)}
+                placeholder="Ex.: Comprovante PIX Banco Inter - Transação #12345"
+                className="w-full text-xs px-3 py-2 rounded-xl border border-slate-200 focus:outline-none focus:ring-2 focus:ring-amber-500"
+              />
+              <p className="text-[10px] text-slate-500">
+                Esta ação grava registros imutáveis em featured_listings, payments e featured_audit_log.
+              </p>
+            </div>
+
+            <div className="flex items-center justify-end gap-2 pt-2 border-t border-slate-100">
+              <button
+                type="button"
+                onClick={() => setHighlightTargetBiz(null)}
+                disabled={isSubmittingHighlight}
+                className="px-4 py-2 text-xs font-bold text-slate-600 hover:bg-slate-100 rounded-xl transition"
+              >
+                Cancelar
+              </button>
+              <button
+                type="button"
+                onClick={handleConfirmAdminHighlight}
+                disabled={isSubmittingHighlight}
+                className="px-4 py-2 text-xs font-bold bg-amber-500 hover:bg-amber-600 text-slate-950 rounded-xl transition shadow-xs flex items-center gap-1.5 disabled:opacity-50"
+              >
+                {isSubmittingHighlight ? 'Processando...' : 'Confirmar & Ativar Destaque'}
+              </button>
             </div>
           </div>
         </div>

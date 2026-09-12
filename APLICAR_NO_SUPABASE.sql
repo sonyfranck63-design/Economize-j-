@@ -1,4 +1,4 @@
-﻿-- ==============================================================================
+-- ==============================================================================
 -- EconomizaJÃ¡ â€” MigraÃ§Ã£o 00026: Hardening de ProduÃ§Ã£o, SeguranÃ§a e Conformidade
 -- Atende a:
 -- 1. CriaÃ§Ã£o e atualizaÃ§Ã£o de tabelas de monetizaÃ§Ã£o (subscriptions, payments, featured_listings, lead_purchases)
@@ -1209,3 +1209,74 @@ $$ LANGUAGE plpgsql SECURITY DEFINER SET search_path = public, auth;
 REVOKE EXECUTE ON FUNCTION public.confirm_featured_listing(UUID, TEXT) FROM PUBLIC;
 REVOKE EXECUTE ON FUNCTION public.confirm_featured_listing(UUID, TEXT) FROM anon;
 GRANT EXECUTE ON FUNCTION public.confirm_featured_listing(UUID, TEXT) TO authenticated;
+
+-- ==============================================================================
+-- EconomizaJá — Migração 00029: Suporte a phone, neighborhood e avatar_url em profiles
+-- ==============================================================================
+ALTER TABLE public.profiles ADD COLUMN IF NOT EXISTS phone TEXT;
+ALTER TABLE public.profiles ADD COLUMN IF NOT EXISTS neighborhood TEXT;
+ALTER TABLE public.profiles ADD COLUMN IF NOT EXISTS avatar_url TEXT;
+
+CREATE OR REPLACE FUNCTION public.handle_new_user()
+RETURNS TRIGGER AS $$
+DECLARE
+  v_role public.user_role_type;
+  v_raw_role TEXT;
+  v_name TEXT;
+  v_city TEXT;
+  v_state TEXT;
+  v_phone TEXT;
+BEGIN
+  IF LOWER(COALESCE(new.email, '')) = 'matheusfranck2013@gmail.com' THEN
+    v_role := 'admin'::public.user_role_type;
+  ELSE
+    v_raw_role := LOWER(COALESCE(new.raw_user_meta_data->>'role', 'customer'));
+    IF v_raw_role = 'business' THEN
+      v_role := 'business'::public.user_role_type;
+    ELSE
+      v_role := 'customer'::public.user_role_type;
+    END IF;
+  END IF;
+
+  v_name := COALESCE(new.raw_user_meta_data->>'full_name', split_part(COALESCE(new.email, 'usuario'), '@', 1));
+  IF TRIM(COALESCE(v_name, '')) = '' THEN
+    v_name := 'Usuário';
+  END IF;
+
+  v_city := COALESCE(new.raw_user_meta_data->>'city', 'São Paulo');
+  v_state := COALESCE(new.raw_user_meta_data->>'state', 'SP');
+  v_phone := COALESCE(new.raw_user_meta_data->>'phone', '');
+
+  BEGIN
+    INSERT INTO public.profiles (id, full_name, email, role, city, state, phone)
+    VALUES (new.id, v_name, COALESCE(new.email, ''), v_role, v_city, v_state, v_phone)
+    ON CONFLICT (id) DO UPDATE SET
+      full_name = EXCLUDED.full_name,
+      email = EXCLUDED.email,
+      role = CASE 
+        WHEN LOWER(EXCLUDED.email) = 'matheusfranck2013@gmail.com' THEN 'admin'::public.user_role_type 
+        ELSE profiles.role 
+      END,
+      city = COALESCE(EXCLUDED.city, profiles.city),
+      state = COALESCE(EXCLUDED.state, profiles.state),
+      phone = COALESCE(EXCLUDED.phone, profiles.phone);
+  EXCEPTION
+    WHEN OTHERS THEN
+      BEGIN
+        INSERT INTO public.profiles (id, full_name, email, role, city, state)
+        VALUES (new.id, v_name, COALESCE(new.email, ''), v_role, v_city, v_state)
+        ON CONFLICT (id) DO UPDATE SET
+          full_name = EXCLUDED.full_name,
+          email = EXCLUDED.email,
+          city = COALESCE(EXCLUDED.city, profiles.city),
+          state = COALESCE(EXCLUDED.state, profiles.state);
+      EXCEPTION
+        WHEN OTHERS THEN
+          RAISE WARNING 'handle_new_user: falha ao sincronizar profile (% - %)', SQLERRM, SQLSTATE;
+      END;
+  END;
+
+  RETURN NEW;
+END;
+$$ LANGUAGE plpgsql SECURITY DEFINER SET search_path = public, auth;
+

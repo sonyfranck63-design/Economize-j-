@@ -209,6 +209,27 @@ export const authService = {
         });
 
         if (!error && data.user) {
+          // Garante a persistência real no banco de dados na tabela public.profiles
+          // usando as colunas existentes no schema do Supabase
+          try {
+            const { error: profileSyncErr } = await supabase.from('profiles').upsert(
+              {
+                id: data.user.id,
+                email: cleanEmail,
+                full_name: params.fullName || cleanEmail.split('@')[0],
+                role: signupRole === 'admin' ? 'customer' : signupRole,
+                city: params.city || 'São Paulo',
+                state: params.state || 'SP',
+              },
+              { onConflict: 'id' }
+            );
+            if (profileSyncErr) {
+              console.warn('Aviso na sincronização direta de profiles pós-signup:', profileSyncErr.message);
+            }
+          } catch (syncErr) {
+            console.warn('Erro ao garantir profile no banco:', syncErr);
+          }
+
           const profile: AuthUserProfile = {
             id: data.user.id,
             email: params.email,
@@ -222,14 +243,16 @@ export const authService = {
           saveLocalUser(profile);
           return profile;
         } else if (error) {
-          console.warn('Erro retornado pelo Supabase signUp:', error.message);
+          console.error('Erro retornado pelo Supabase signUp:', error.message);
+          throw new Error(error.message || 'Erro ao realizar cadastro no servidor.');
         }
       } catch (networkErr: any) {
-        console.warn('Falha de rede com Supabase no cadastro:', networkErr?.message);
+        console.error('Falha no cadastro com Supabase:', networkErr?.message);
+        throw new Error(networkErr?.message || 'Falha de comunicação com o servidor de autenticação.');
       }
     }
 
-    // 2. Modo Local / Fallback Resiliente
+    // 2. Modo Offline (apenas se Supabase não estiver configurado no .env)
     const localProfile: AuthUserProfile = {
       id: `local-u-${Date.now()}`,
       email: cleanEmail,

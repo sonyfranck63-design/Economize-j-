@@ -89,7 +89,7 @@ interface AppContextType {
   updateMonetization: (settings: AdminMonetizationSettings) => Promise<void>;
   toggleBusinessActive: (businessId: string) => void;
   toggleBusinessVerified: (businessId: string) => void;
-  toggleBusinessFeatured: (businessId: string) => void;
+  toggleBusinessFeatured: (businessId: string, days?: number, notes?: string) => Promise<void>;
   removeOffer: (offerId: string) => void;
   deleteBusiness: (businessId: string) => void;
   upgradeBusinessPlan: (businessId: string, planTier: 'free' | 'pro' | 'premium') => void;
@@ -865,18 +865,22 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     }
   };
 
-  const toggleBusinessFeatured = async (businessId: string) => {
-    const business = businesses.find(b => b.id === businessId);
+  const toggleBusinessFeatured = async (businessId: string, days = 7, notes?: string) => {
+    const business = businesses.find((b) => b.id === businessId);
     if (!business) return;
     const newFeatured = !business.featured;
 
+    // Atualização otimista
     setBusinesses((prev) =>
       prev.map((b) => (b.id === businessId ? { ...b, featured: newFeatured } : b))
     );
 
     if (isSupabaseConfigured) {
       try {
-        await dataService.toggleBusinessFeatured(businessId, newFeatured);
+        await dataService.toggleBusinessFeatured(businessId, newFeatured, days, notes);
+        // Recarrega lista oficial de empresas para refletir a nova vigência com precisão
+        const refreshed = await dataService.getBusinesses(undefined, undefined, true);
+        if (refreshed) setBusinesses(refreshed);
       } catch (err) {
         console.error('Erro ao destacar empresa:', err);
         // Rollback on error
@@ -884,6 +888,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
           prev.map((b) => (b.id === businessId ? { ...b, featured: !newFeatured } : b))
         );
         alert(`Não foi possível alterar destaque: ${(err as Error).message}`);
+        throw err;
       }
     }
   };
