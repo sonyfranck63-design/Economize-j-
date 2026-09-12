@@ -86,7 +86,15 @@ export const HomeView: React.FC = () => {
     setActiveTab('search');
   };
 
-  const featuredBusinesses = businesses.filter((b) => b.featured && b.active !== false);
+  const featuredBusinesses = businesses
+    .filter((b) => b.featured && b.active !== false)
+    .sort((a, b) => {
+      const aInCity = (a.city || '').toLowerCase().includes((currentLocation.city || '').toLowerCase());
+      const bInCity = (b.city || '').toLowerCase().includes((currentLocation.city || '').toLowerCase());
+      if (aInCity && !bInCity) return -1;
+      if (!aInCity && bInCity) return 1;
+      return (b.rating || 0) - (a.rating || 0);
+    });
   const activeOffers = offers.slice(0, 4);
 
   return (
@@ -241,9 +249,6 @@ export const HomeView: React.FC = () => {
           <div>
             <div className="flex items-center gap-2">
               <h2 className="text-xl font-bold text-slate-800">Ofertas Perto de Você</h2>
-              <span className="text-[10px] bg-slate-100 text-slate-600 font-bold px-2 py-0.5 rounded-md">
-                DADOS DE DEMONSTRAÇÃO
-              </span>
             </div>
             <p className="text-xs text-slate-500">Promoções cadastradas por empresas locais de {currentLocation.city}</p>
           </div>
@@ -353,67 +358,85 @@ export const HomeView: React.FC = () => {
           </button>
         </div>
 
-        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-          {featuredBusinesses.map((biz) => (
-            <div
-              key={biz.id}
-              className="rounded-2xl border border-slate-100 bg-white p-5 shadow-sm hover:shadow-md transition flex flex-col sm:flex-row items-start sm:items-center gap-4"
-            >
-              <BusinessAvatar
-                src={biz.logo}
-                name={biz.name}
-                className="w-16 h-16 rounded-2xl border border-slate-100"
-              />
+        {featuredBusinesses.length > 0 ? (
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+            {featuredBusinesses.map((biz) => (
+              <div
+                key={biz.id}
+                className="rounded-2xl border border-slate-100 bg-white p-5 shadow-sm hover:shadow-md transition flex flex-col sm:flex-row items-start sm:items-center gap-4"
+              >
+                <BusinessAvatar
+                  src={biz.logo}
+                  name={biz.name}
+                  className="w-16 h-16 rounded-2xl border border-slate-100"
+                />
 
-              <div className="flex-1 min-w-0 space-y-1">
-                <div className="flex items-center gap-2">
-                  <span className="text-[10px] font-bold uppercase bg-emerald-100 text-emerald-700 px-2 py-0.5 rounded-md">
-                    DESTAQUE
-                  </span>
-                  {biz.verified && (
-                    <span className="flex items-center gap-0.5 text-[10px] text-emerald-600 font-semibold">
-                      <ShieldCheck className="w-3.5 h-3.5" />
-                      Verificada
+                <div className="flex-1 min-w-0 space-y-1">
+                  <div className="flex items-center gap-2">
+                    <span className="text-[10px] font-bold uppercase bg-emerald-100 text-emerald-700 px-2 py-0.5 rounded-md">
+                      DESTAQUE
                     </span>
-                  )}
+                    {biz.verified && (
+                      <span className="flex items-center gap-0.5 text-[10px] text-emerald-600 font-semibold">
+                        <ShieldCheck className="w-3.5 h-3.5" />
+                        Verificada
+                      </span>
+                    )}
+                  </div>
+
+                  <h3 className="font-bold text-base text-slate-900 truncate">{biz.name}</h3>
+                  <p className="text-xs text-slate-500 line-clamp-1">{biz.description}</p>
+
+                  <div className="flex items-center gap-3 text-xs pt-1">
+                    <span className="flex items-center gap-1 font-bold text-slate-800">
+                      <Star className="w-3.5 h-3.5 fill-amber-400 text-amber-400" />
+                      {biz.rating} <span className="text-slate-400 font-normal">({biz.reviewCount})</span>
+                    </span>
+                    <span className="text-slate-200">•</span>
+                    <span className="flex items-center gap-1 text-slate-600 font-medium">
+                      <MapPin className="w-3.5 h-3.5 text-slate-400" />
+                      {biz.neighborhood} (~{biz.distanceKm} km)
+                    </span>
+                  </div>
                 </div>
 
-                <h3 className="font-bold text-base text-slate-900 truncate">{biz.name}</h3>
-                <p className="text-xs text-slate-500 line-clamp-1">{biz.description}</p>
-
-                <div className="flex items-center gap-3 text-xs pt-1">
-                  <span className="flex items-center gap-1 font-bold text-slate-800">
-                    <Star className="w-3.5 h-3.5 fill-amber-400 text-amber-400" />
-                    {biz.rating} <span className="text-slate-400 font-normal">({biz.reviewCount})</span>
-                  </span>
-                  <span className="text-slate-200">•</span>
-                  <span className="flex items-center gap-1 text-slate-600 font-medium">
-                    <MapPin className="w-3.5 h-3.5 text-slate-400" />
-                    {biz.neighborhood} (~{biz.distanceKm} km)
-                  </span>
+                <div className="flex sm:flex-col gap-2 w-full sm:w-auto shrink-0 pt-2 sm:pt-0">
+                  <button
+                    onClick={() => setSelectedBusinessId(biz.id)}
+                    className="flex-1 sm:flex-none px-4 py-2 rounded-xl bg-slate-900 hover:bg-slate-800 text-white text-xs font-bold transition text-center"
+                  >
+                    Ver Perfil
+                  </button>
+                  <button
+                    onClick={() => {
+                      setQuoteCategoryPreset(biz.categoryId);
+                      setIsQuoteModalOpen(true);
+                    }}
+                    className="flex-1 sm:flex-none px-4 py-2 rounded-xl border border-slate-200 hover:bg-slate-50 text-slate-700 text-xs font-semibold transition text-center"
+                  >
+                    Cotar
+                  </button>
                 </div>
               </div>
-
-              <div className="flex sm:flex-col gap-2 w-full sm:w-auto shrink-0 pt-2 sm:pt-0">
-                <button
-                  onClick={() => setSelectedBusinessId(biz.id)}
-                  className="flex-1 sm:flex-none px-4 py-2 rounded-xl bg-slate-900 hover:bg-slate-800 text-white text-xs font-bold transition text-center"
-                >
-                  Ver Perfil
-                </button>
-                <button
-                  onClick={() => {
-                    setQuoteCategoryPreset(biz.categoryId);
-                    setIsQuoteModalOpen(true);
-                  }}
-                  className="flex-1 sm:flex-none px-4 py-2 rounded-xl border border-slate-200 hover:bg-slate-50 text-slate-700 text-xs font-semibold transition text-center"
-                >
-                  Cotar
-                </button>
-              </div>
-            </div>
-          ))}
-        </div>
+            ))}
+          </div>
+        ) : (
+          <div className="rounded-2xl border border-dashed border-slate-200 bg-white p-6 text-center space-y-2">
+            <p className="text-sm font-semibold text-slate-700">
+              Nenhuma empresa em destaque na região de {currentLocation.city} no momento.
+            </p>
+            <p className="text-xs text-slate-400">
+              Todas as empresas e profissionais cadastrados estão disponíveis na busca completa.
+            </p>
+            <button
+              onClick={() => setActiveTab('search')}
+              className="inline-flex items-center gap-1.5 px-4 py-2 mt-1 rounded-xl bg-slate-100 hover:bg-slate-200 text-slate-700 text-xs font-bold transition"
+            >
+              <Search className="w-3.5 h-3.5 text-slate-500" />
+              <span>Explorar todas as empresas</span>
+            </button>
+          </div>
+        )}
       </section>
 
       {/* Solicitações de Orçamento Recentes (Comparação Transparente) */}

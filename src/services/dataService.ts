@@ -52,8 +52,9 @@ export const dataService = {
       const todayStr = new Date().toISOString().split('T')[0];
       const { data: featuredData } = await supabase
         .from('featured_listings')
-        .select('business_id, end_date')
+        .select('business_id, start_date, end_date')
         .eq('active', true)
+        .lte('start_date', todayStr)
         .gte('end_date', todayStr);
       if (featuredData) {
         featuredData.forEach((f: any) => {
@@ -812,10 +813,60 @@ export const dataService = {
       throw new Error('Sua sessão expirou. Faça login novamente para solicitar um orçamento.');
     }
 
+    const realUserId = authData.user.id;
+    if (!realUserId || realUserId.startsWith('local-u-')) {
+      throw new Error('Sessão local inválida. É necessário autenticar com uma conta real para solicitar orçamentos.');
+    }
+
+    // Garante que o registro em public.profiles existe para o user_id antes de vincular à cotação,
+    // eliminando a violação da foreign key quote_requests_user_id_fkey.
+    try {
+      const { data: existingProfile } = await supabase
+        .from('profiles')
+        .select('id, role')
+        .eq('id', realUserId)
+        .maybeSingle();
+
+      if (!existingProfile) {
+        const userEmail = authData.user.email || quote.userEmail || `${realUserId}@economizaja.app`;
+        const userName = authData.user.user_metadata?.full_name || quote.userName || 'Cliente';
+
+        const profilePayload: {
+          id: string;
+          email: string;
+          full_name: string;
+          role: string;
+          city: string;
+          state: string;
+          phone?: string;
+          neighborhood?: string;
+        } = {
+          id: realUserId,
+          email: userEmail,
+          full_name: userName,
+          role: 'customer',
+          city: quote.city || 'São Paulo',
+          state: quote.state || 'SP',
+          phone: quote.userPhone || undefined,
+          neighborhood: quote.neighborhood || undefined,
+        };
+
+        const { error: insertProfileErr } = await supabase
+          .from('profiles')
+          .upsert(profilePayload, { onConflict: 'id' });
+
+        if (insertProfileErr) {
+          console.warn('Aviso ao auto-provisionar perfil em public.profiles:', insertProfileErr.message);
+        }
+      }
+    } catch (profErr) {
+      console.warn('Exceção defensiva ao verificar perfil para cotação:', profErr);
+    }
+
     const { data, error } = await supabase
       .from('quote_requests')
       .insert({
-        user_id: authData.user.id,
+        user_id: realUserId,
         target_business_id: quote.targetBusinessId || null,
         user_name: quote.userName,
         user_phone: quote.userPhone,

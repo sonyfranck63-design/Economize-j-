@@ -133,7 +133,7 @@ export const Footer: React.FC = () => {
         </div>
 
         <div className="mt-8 pt-6 border-t border-slate-800 flex flex-col sm:flex-row items-center justify-between gap-3 text-xs text-slate-500">
-          <p>© {new Date().getFullYear()} EconomizaJá. Todos os direitos reservados. Dados para fins de demonstração.</p>
+          <p>© {new Date().getFullYear()} EconomizaJá. Todos os direitos reservados.</p>
           <div className="flex items-center gap-4">
             <span className="flex items-center gap-1">
               <Lock className="w-3.5 h-3.5 text-emerald-400" />

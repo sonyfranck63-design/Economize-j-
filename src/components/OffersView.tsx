@@ -33,9 +33,6 @@ export const OffersView: React.FC = () => {
           <div>
             <div className="flex items-center gap-2">
               <h2 className="text-2xl font-bold text-slate-900">Ofertas Perto de Você</h2>
-              <span className="text-[10px] bg-slate-100 text-slate-600 font-bold px-2 py-0.5 rounded-md">
-                DADOS DE DEMONSTRAÇÃO
-              </span>
             </div>
             <p className="text-xs text-slate-500 mt-0.5">
               Promoções reais e pontuais cadastradas pelas empresas da região de <strong>{currentLocation.city}</strong>

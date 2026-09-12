@@ -36,7 +36,7 @@ export const Header: React.FC = () => {
   const unreadCount = notifications.filter((n) => !(n.read || false)).length;
 
   return (
-    <header className="sticky top-0 z-40 bg-white/95 backdrop-blur-md border-b border-slate-200 shadow-xs">
+    <header className="sticky top-0 z-40 bg-white/95 backdrop-blur-md border-b border-slate-200 shadow-xs pt-safe">
       {/* Banner de Modo de Demonstração — visível para TODOS quando banco não está configurado */}
       {!isDatabaseConnected && (
         <div className="text-xs px-3 py-1.5 text-center font-medium flex items-center justify-center gap-1.5 bg-amber-50 border-b border-amber-200 text-amber-800">

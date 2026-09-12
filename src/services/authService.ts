@@ -82,6 +82,12 @@ export const authService = {
       if (raw) {
         const parsed = JSON.parse(raw);
         if (parsed && parsed.email) {
+          // Se o Supabase estiver configurado e o usuário salvo tiver id que começa com 'local-u-',
+          // limpa a sessão antiga inválida para evitar violação de foreign keys no banco
+          if (isSupabaseConfigured && parsed.id && String(parsed.id).startsWith('local-u-')) {
+            localStorage.removeItem(AUTH_STORAGE_KEY);
+            return null;
+          }
           // Garante que o email do administrador mestre sempre tenha role 'admin'
           if (ADMIN_EMAILS.includes(parsed.email.toLowerCase().trim())) {
             parsed.role = 'admin';
@@ -152,19 +158,43 @@ export const authService = {
             console.warn('Aviso ao consultar tabela profiles:', profileCatchErr);
           }
 
-          // Fallback usando metadados do auth.user
+          // Fallback resiliente usando metadados do auth.user:
+          // Se o usuário está autenticado no Supabase mas a linha em public.profiles ainda não existe,
+          // auto-provisiona o perfil no Supabase de forma segura e idempotente.
           const assignedRole: UserRole = isAdminEmail
             ? 'admin'
             : (user.user_metadata?.role === 'business' ? 'business' : 'customer');
 
+          const safeFullName = user.user_metadata?.full_name || user.email?.split('@')[0] || 'Usuário';
+          const safeCity = user.user_metadata?.city || 'São Paulo';
+          const safeState = user.user_metadata?.state || 'SP';
+          const safePhone = user.user_metadata?.phone || null;
+
+          try {
+            await supabase.from('profiles').upsert(
+              {
+                id: user.id,
+                email: user.email || '',
+                full_name: safeFullName,
+                role: assignedRole === 'admin' ? 'customer' : assignedRole,
+                city: safeCity,
+                state: safeState,
+                phone: safePhone,
+              },
+              { onConflict: 'id' }
+            );
+          } catch (autoProvErr) {
+            console.warn('Aviso ao auto-provisionar perfil durante getCurrentProfile:', autoProvErr);
+          }
+
           const authProfile: AuthUserProfile = {
             id: user.id,
             email: user.email || '',
-            fullName: user.user_metadata?.full_name || user.email?.split('@')[0] || 'Usuário',
+            fullName: safeFullName,
             role: assignedRole,
-            city: user.user_metadata?.city || '',
-            state: user.user_metadata?.state || 'SP',
-            phone: user.user_metadata?.phone,
+            city: safeCity,
+            state: safeState,
+            phone: safePhone || undefined,
           };
           this.persistCurrentUser(authProfile);
           return authProfile;
@@ -252,7 +282,11 @@ export const authService = {
       }
     }
 
-    // 2. Modo Offline (apenas se Supabase não estiver configurado no .env)
+    // 2. Modo Offline (estritamente bloqueado quando Supabase está configurado)
+    if (isSupabaseConfigured) {
+      throw new Error('Não foi possível realizar o cadastro no Supabase. Verifique sua conexão e tente novamente.');
+    }
+
     const localProfile: AuthUserProfile = {
       id: `local-u-${Date.now()}`,
       email: cleanEmail,
