@@ -132,6 +132,34 @@ export const dataService = {
       ? business.logo
       : getSmartImage(business.categoryId, business.name);
 
+    // Garante previamente que o usuário autenticado possui registro na tabela public.profiles
+    // para evitar a violação da foreign key businesses_owner_id_fkey
+    try {
+      const { data: existingProfile } = await supabase
+        .from('profiles')
+        .select('id')
+        .eq('id', authData.user.id)
+        .maybeSingle();
+
+      if (!existingProfile) {
+        await supabase.from('profiles').upsert(
+          {
+            id: authData.user.id,
+            email: authData.user.email || '',
+            full_name: authData.user.user_metadata?.full_name || business.ownerName || business.name,
+            role: 'business',
+            city: business.city || 'São Paulo',
+            state: business.state || 'SP',
+            phone: business.phone || '',
+            updated_at: new Date().toISOString(),
+          },
+          { onConflict: 'id' }
+        );
+      }
+    } catch (syncErr) {
+      console.warn('Tentativa de sincronizar profile pré-cadastro de empresa:', syncErr);
+    }
+
     const { data, error } = await supabase
       .from('businesses')
       .insert({
@@ -160,6 +188,9 @@ export const dataService = {
 
     if (error) {
       console.error('Erro ao inserir empresa no Supabase:', error);
+      if (error.message?.includes('businesses_owner_id_fkey')) {
+        throw new Error('Não foi possível vincular a empresa ao seu perfil de usuário. Certifique-se de estar autenticado com uma conta válida.');
+      }
       throw new Error(error.message || 'Erro ao persistir empresa no banco de dados');
     }
 
