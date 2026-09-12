@@ -37,28 +37,28 @@ export const Header: React.FC = () => {
 
   return (
     <header className="sticky top-0 z-40 bg-white/95 backdrop-blur-md border-b border-slate-200 shadow-xs">
-      {/* Infrastructure Status Banner — restrito exclusivamente a administradores para diagnóstico */}
-      {currentUser?.role === 'admin' && (
-        <div className={`text-xs px-3 py-1 text-center font-medium flex items-center justify-center gap-1.5 transition ${
-          isDatabaseConnected 
-            ? 'bg-emerald-900 text-emerald-100 border-b border-emerald-800' 
-            : 'bg-slate-900 text-slate-300 border-b border-slate-800'
-        }`}>
-          {isDatabaseConnected ? (
-            <>
-              <span className="w-2 h-2 rounded-full bg-emerald-400 animate-ping shrink-0" />
-              <span>
-                <strong className="text-white">CONEXÃO ATIVA:</strong> Banco de Dados Supabase Conectado • PostgreSQL em Produção
+      {/* Banner de Modo de Demonstração — visível para TODOS quando banco não está configurado */}
+      {!isDatabaseConnected && (
+        <div className="text-xs px-3 py-1.5 text-center font-medium flex items-center justify-center gap-1.5 bg-amber-50 border-b border-amber-200 text-amber-800">
+          <Info className="w-3.5 h-3.5 text-amber-600 shrink-0" />
+          <span>
+            <strong>Modo de Demonstração</strong> — Os dados exibidos são fictícios para fins ilustrativos.
+            {currentUser?.role === 'admin' && (
+              <span className="ml-1 text-amber-700">
+                Configure <code className="bg-amber-100 px-1 rounded">VITE_SUPABASE_URL</code> e <code className="bg-amber-100 px-1 rounded">VITE_SUPABASE_ANON_KEY</code> no <code className="bg-amber-100 px-1 rounded">.env</code> para ativar dados reais.
               </span>
-            </>
-          ) : (
-            <>
-              <Info className="w-3.5 h-3.5 text-amber-400 shrink-0" />
-              <span>
-                <strong className="text-white">ECONOMIZAJÁ:</strong> Configure <code>VITE_SUPABASE_URL</code> no arquivo <code>.env</code> para sincronização instantânea em nuvem.
-              </span>
-            </>
-          )}
+            )}
+          </span>
+        </div>
+      )}
+
+      {/* Banner de Conexão Ativa — apenas para administradores */}
+      {isDatabaseConnected && currentUser?.role === 'admin' && (
+        <div className="text-xs px-3 py-1 text-center font-medium flex items-center justify-center gap-1.5 bg-emerald-900 text-emerald-100 border-b border-emerald-800">
+          <span className="w-2 h-2 rounded-full bg-emerald-400 animate-ping shrink-0" />
+          <span>
+            <strong className="text-white">CONEXÃO ATIVA:</strong> Banco de Dados Supabase Conectado • PostgreSQL em Produção
+          </span>
         </div>
       )}
 

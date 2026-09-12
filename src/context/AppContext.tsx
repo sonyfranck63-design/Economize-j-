@@ -13,12 +13,11 @@ import {
   UserRole,
 } from '../types';
 import {
-  INITIAL_BUSINESSES,
-  INITIAL_OFFERS,
-  INITIAL_QUOTE_REQUESTS,
-  INITIAL_REVIEWS,
   INITIAL_MONETIZATION,
 } from '../data/mockData';
+// ATENÇÃO: INITIAL_BUSINESSES, INITIAL_OFFERS, INITIAL_QUOTE_REQUESTS e INITIAL_REVIEWS
+// foram REMOVIDOS intencionalmente deste contexto. Dados de demonstração NÃO devem ser
+// exibidos para clientes reais. O app usa apenas dados reais do Supabase ou lista vazia.
 import { supabase, isSupabaseConfigured } from '../lib/supabase';
 import { authService, AuthUserProfile } from '../services/authService';
 import { dataService } from '../services/dataService';
@@ -156,19 +155,12 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
   }, [currentUser]);
 
   // Persistence State
-  const [businesses, setBusinesses] = useState<Business[]>(() => {
-    return isSupabaseConfigured ? [] : getLocalBusinesses();
-  });
-  const [offers, setOffers] = useState<Offer[]>(() => {
-    return isSupabaseConfigured ? [] : getLocalOffers();
-  });
-  const [quoteRequests, setQuoteRequests] = useState<QuoteRequest[]>(() => {
-    return isSupabaseConfigured ? [] : getLocalQuoteRequests();
-  });
-
-  const [reviews, setReviews] = useState<Review[]>(() => {
-    return isSupabaseConfigured ? [] : INITIAL_REVIEWS;
-  });
+  // PRODUÇÃO: Inicia sempre vazio — dados reais são carregados do Supabase
+  // Se Supabase não configurado, permanece vazio com isDatabaseConnected=false
+  const [businesses, setBusinesses] = useState<Business[]>([]);
+  const [offers, setOffers] = useState<Offer[]>([]);
+  const [quoteRequests, setQuoteRequests] = useState<QuoteRequest[]>([]);
+  const [reviews, setReviews] = useState<Review[]>([]);
 
   const [priceAlerts, setPriceAlerts] = useState<PriceAlert[]>([]);
   const [favorites, setFavorites] = useState<{ businessIds: string[]; offerIds: string[] }>({
@@ -229,14 +221,15 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     };
   }, []);
 
-  // Fetch from Supabase when configured, or load local defaults
+  // Carrega dados reais do Supabase ao inicializar
+  // REGRA: Quando Supabase está configurado, NUNCA usa dados de demonstração como fallback.
+  // Lista vazia é preferível a dados falsos para clientes reais.
   useEffect(() => {
     async function loadBackendData() {
       if (!isSupabaseConfigured) {
+        // Supabase não configurado: mantém listas vazias, exibe aviso de configuração
         setIsDatabaseConnected(false);
-        setBusinesses(getLocalBusinesses());
-        setOffers(getLocalOffers());
-        setQuoteRequests(getLocalQuoteRequests());
+        setIsLoadingData(false);
         return;
       }
 
@@ -250,22 +243,16 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
           authService.getCurrentProfile(),
         ]);
 
-        if (bizList && bizList.length > 0) {
-          setBusinesses(bizList);
-        } else {
-          setBusinesses(getLocalBusinesses());
-        }
-
-        if (offList && offList.length > 0) {
-          setOffers(offList);
-        } else {
-          setOffers(getLocalOffers());
-        }
+        // PRODUÇÃO: Usa apenas dados reais do Supabase (pode ser lista vazia)
+        setBusinesses(bizList || []);
+        setOffers(offList || []);
 
         if (settings) setMonetization(settings);
 
         const deletedIds = getDeletedQuoteIds();
-        const initialCleanQuotes = (quoteList || []).filter((q) => !deletedIds.has(q.id) && q.status !== 'cancelado');
+        const initialCleanQuotes = (quoteList || []).filter(
+          (q) => !deletedIds.has(q.id) && q.status !== 'cancelado'
+        );
 
         if (userProfile) {
           setCurrentUser(userProfile);
@@ -284,18 +271,20 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
 
           // Sincroniza todas as cotações: direcionadas às empresas do usuário + marketplace + cotações pessoais
           const allQuotes = await dataService.syncAllQuoteRequests(userProfile.id, myBizIds);
-          setQuoteRequests(allQuotes && allQuotes.length > 0 ? allQuotes : getLocalQuoteRequests());
+          setQuoteRequests(allQuotes || []);
         } else {
-          setQuoteRequests(initialCleanQuotes.length > 0 ? initialCleanQuotes : getLocalQuoteRequests());
+          setQuoteRequests(initialCleanQuotes);
         }
 
         setIsDatabaseConnected(true);
       } catch (err) {
-        console.warn('Falha ao sincronizar com backend Supabase. Ativando modo local resiliente:', err);
+        console.warn('Falha ao sincronizar com backend Supabase:', err);
+        // Em caso de falha de rede, mantém listas vazias e marca banco como desconectado
+        // NÃO injeta dados fake como fallback
         setIsDatabaseConnected(false);
-        setBusinesses(getLocalBusinesses());
-        setOffers(getLocalOffers());
-        setQuoteRequests(getLocalQuoteRequests());
+        setBusinesses([]);
+        setOffers([]);
+        setQuoteRequests([]);
       } finally {
         setIsLoadingData(false);
       }
@@ -323,7 +312,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
 
     // Sincroniza unificadamente: orçamentos direcionados às empresas do usuário, oportunidades da região e cotações do cliente
     dataService.syncAllQuoteRequests(currentUser.id, myBizIds).then((allQuotes) => {
-      setQuoteRequests(allQuotes);
+      setQuoteRequests(allQuotes || []);
     });
   }, [currentUser?.id, currentUser?.role, businesses.length]);
 

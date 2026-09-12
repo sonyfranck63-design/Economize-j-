@@ -277,7 +277,8 @@ export const authService = {
       }
     }
 
-    // 2. Modo Local / Fallback Resiliente
+    // 2. Modo Local / Fallback Resiliente — SOMENTE quando Supabase está offline/inacessível
+    // NUNCA deve ser ativado quando Supabase está configurado e respondendo normalmente
     const localUsers = getStoredLocalUsers();
     const foundUser = localUsers.find(u => u.email.toLowerCase() === cleanEmail);
 
@@ -290,7 +291,12 @@ export const authService = {
       return activeUser;
     }
 
-    // Se o usuário não estava cadastrado previamente no modo local, cria perfil instantâneo
+    // Se Supabase está configurado mas offline, permite apenas usuários já cadastrados localmente
+    if (isSupabaseConfigured) {
+      throw new Error('Não foi possível conectar ao servidor de autenticação. Verifique sua conexão com a internet e tente novamente.');
+    }
+
+    // Apenas em modo de desenvolvimento/demonstração (sem Supabase), permite acesso sem senha
     const newLocalUser: AuthUserProfile = {
       id: `local-u-${Date.now()}`,
       email: cleanEmail,
@@ -302,6 +308,7 @@ export const authService = {
     saveLocalUser(newLocalUser);
     this.persistCurrentUser(newLocalUser);
     return newLocalUser;
+
   },
 
   async signOut() {

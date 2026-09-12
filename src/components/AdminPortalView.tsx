@@ -280,10 +280,26 @@ export const AdminPortalView: React.FC = () => {
       {adminTab === 'empresas' && (
         <div className="bg-white rounded-2xl p-6 border border-slate-100 shadow-sm space-y-4">
           <div className="flex items-center justify-between">
-            <h3 className="text-base font-bold text-slate-900">Gerenciar Parceiros & Moderação</h3>
+            <h3 className="text-base font-bold text-slate-900">Gerenciar Parceiros &amp; Moderação</h3>
+
             <span className="text-xs text-slate-500">
-              Ative selos de verificação ou destaque pago conforme contratado
+              Ative selos de verificação. Destaques pagos são gerenciados na aba <strong>Cobranças</strong>
             </span>
+          </div>
+
+          {/* AVISO CRÍTICO: Sobre o fluxo de destaque */}
+          <div className="flex items-start gap-2.5 bg-amber-50 border border-amber-200 rounded-xl p-3.5 text-xs">
+            <AlertTriangle className="w-4 h-4 text-amber-600 mt-0.5 flex-shrink-0" />
+            <div className="text-amber-800">
+              <strong>Atenção — Fluxo de Destaque Pago:</strong> Para ativar o destaque de uma empresa, vá para a aba{' '}
+              <button
+                onClick={() => setAdminTab('assinaturas')}
+                className="underline font-bold text-amber-900 hover:text-amber-700"
+              >
+                Cobranças &amp; Assinaturas
+              </button>{' '}
+              e confirme o pagamento pendente recebido via PIX. O destaque só é ativado após confirmação real do pagamento.
+            </div>
           </div>
 
           {businesses.length === 0 ? (
@@ -311,6 +327,13 @@ export const AdminPortalView: React.FC = () => {
                       <span className="text-[10px] uppercase font-bold bg-slate-100 text-slate-700 px-2 py-0.5 rounded-md">
                         Plano: {b.plan || b.planTier || 'gratis'}
                       </span>
+                      {/* Destaque: somente indicador visual — ativação é feita via pagamento confirmado */}
+                      {b.featured && (
+                        <span className="text-[10px] uppercase font-bold bg-amber-100 text-amber-800 px-2 py-0.5 rounded-md border border-amber-200 flex items-center gap-1">
+                          ⭐ Destaque Ativo
+                          {b.featuredUntil && <span className="text-amber-600">até {b.featuredUntil}</span>}
+                        </span>
+                      )}
                     </div>
                     <p className="text-xs text-slate-500">
                       {b.subcategory} • {b.neighborhood}, {b.city} • WhatsApp: {b.whatsapp}
@@ -342,16 +365,8 @@ export const AdminPortalView: React.FC = () => {
                     {b.verified ? '✓ Verificada' : 'Não Verificada'}
                   </button>
 
-                  <button
-                    onClick={() => toggleBusinessFeatured(b.id)}
-                    className={`px-3 py-1.5 rounded-xl text-xs font-bold transition ${
-                      b.featured
-                        ? 'bg-amber-50 text-amber-800 border border-amber-200 hover:bg-amber-100'
-                        : 'bg-slate-100 text-slate-600 hover:bg-slate-200'
-                    }`}
-                  >
-                    {b.featured ? '⭐ Destaque Ativo' : 'Tornar Destaque'}
-                  </button>
+                  {/* REMOVIDO: botão "Tornar Destaque" que bypassa pagamento.
+                      Para ativar destaque, use a aba Cobranças & Assinaturas → Confirmar pagamento PIX. */}
 
                   <button
                     onClick={() => {
