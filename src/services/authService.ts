@@ -402,7 +402,7 @@ export const authService = {
     }
   },
 
-  async deleteAccount(userId: string) {
+  async deleteAccount(userId: string): Promise<void> {
     this.persistCurrentUser(null);
 
     // Remove das contas locais
@@ -418,15 +418,18 @@ export const authService = {
     }
 
     try {
-      await supabase.rpc('delete_own_account');
-    } catch {
-      // Ignora erro
+      const { error: rpcErr } = await supabase.rpc('delete_own_account');
+      if (rpcErr) {
+        console.warn('Aviso da RPC delete_own_account:', rpcErr.message);
+      }
+    } catch (rpcCatch) {
+      console.warn('Exceção ao chamar RPC delete_own_account:', rpcCatch);
     }
 
     try {
       await supabase.auth.signOut();
-    } catch {
-      // Ignora erro
+    } catch (signOutErr) {
+      console.warn('Aviso ao encerrar sessão no Supabase após exclusão:', signOutErr);
     }
   },
 };

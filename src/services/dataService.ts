@@ -469,6 +469,9 @@ export const dataService = {
       .from('quote_requests')
       .select(`
         *,
+        profiles:user_id (
+          full_name
+        ),
         quote_proposals (
           id,
           quote_request_id,
@@ -503,7 +506,8 @@ export const dataService = {
       id: qr.id,
       userId: qr.user_id,
       targetBusinessId: qr.target_business_id,
-      userName: qr.user_name,
+      // Prioriza o nome real e atualizado do perfil do solicitante
+      userName: (qr as any).profiles?.full_name || qr.user_name || 'Cliente Consumidor',
       userPhone: qr.user_phone,
       userEmail: qr.user_email,
       city: qr.city,
@@ -638,6 +642,9 @@ export const dataService = {
       .from('quote_requests')
       .select(`
         *,
+        profiles:user_id (
+          full_name
+        ),
         quote_proposals (
           id,
           quote_request_id,
@@ -669,7 +676,8 @@ export const dataService = {
         id: qr.id,
         userId: qr.user_id,
         targetBusinessId: qr.target_business_id,
-        userName: qr.user_name,
+        // Prioriza o nome real e atualizado do perfil do solicitante; fallback para o gravado na cotação
+        userName: (qr as any).profiles?.full_name || qr.user_name || 'Cliente Consumidor',
         userPhone: qr.user_phone,
         userEmail: qr.user_email,
         city: qr.city,
@@ -822,16 +830,20 @@ export const dataService = {
 
     // Garante que o registro em public.profiles existe para o user_id antes de vincular à cotação,
     // eliminando a violação da foreign key quote_requests_user_id_fkey.
+    let resolvedUserName = quote.userName;
     try {
       const { data: existingProfile } = await supabase
         .from('profiles')
-        .select('id, role')
+        .select('id, role, full_name')
         .eq('id', realUserId)
         .maybeSingle();
 
-      if (!existingProfile) {
+      if (existingProfile?.full_name) {
+        resolvedUserName = existingProfile.full_name;
+      } else {
         const userEmail = authData.user.email || quote.userEmail || `${realUserId}@economizaja.app`;
-        const userName = authData.user.user_metadata?.full_name || quote.userName || 'Cliente';
+        const userName = authData.user.user_metadata?.full_name || quote.userName || 'Cliente Consumidor';
+        resolvedUserName = userName;
 
         const profilePayload: {
           id: string;
@@ -870,7 +882,7 @@ export const dataService = {
       .insert({
         user_id: realUserId,
         target_business_id: quote.targetBusinessId || null,
-        user_name: quote.userName,
+        user_name: resolvedUserName,
         user_phone: quote.userPhone,
         user_email: quote.userEmail,
         city: quote.city,

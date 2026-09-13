@@ -25,6 +25,8 @@ export const QuotesView: React.FC = () => {
     setIsQuoteModalOpen,
     cancelQuoteRequest,
     deleteQuoteRequest,
+    currentUser,
+    setPublicRoute,
   } = useApp();
 
   const [activeTab, setActiveTab] = useState<TabFilter>('all');
@@ -101,13 +103,26 @@ export const QuotesView: React.FC = () => {
           </p>
         </div>
 
-        <button
-          onClick={() => setIsQuoteModalOpen(true)}
-          className="px-5 py-3 rounded-xl bg-emerald-600 hover:bg-emerald-700 text-white font-bold text-xs shadow-md shadow-emerald-600/20 transition flex items-center justify-center gap-2 shrink-0 active:scale-95"
-        >
-          <PlusCircle className="w-4 h-4" />
-          <span>PEDIR NOVO ORÇAMENTO</span>
-        </button>
+        <div className="flex items-center gap-2 shrink-0">
+          {currentUser && (
+            <button
+              onClick={() => setPublicRoute('delete_account')}
+              className="px-3.5 py-3 rounded-xl border border-slate-200 hover:border-rose-200 hover:bg-rose-50 text-slate-500 hover:text-rose-700 font-semibold text-xs transition flex items-center gap-1.5"
+              title="Solicitar eliminação dos meus dados e cadastro (LGPD Art. 18)"
+            >
+              <Trash2 className="w-3.5 h-3.5 text-slate-400 group-hover:text-rose-600" />
+              <span className="hidden sm:inline">Excluir Conta</span>
+            </button>
+          )}
+
+          <button
+            onClick={() => setIsQuoteModalOpen(true)}
+            className="px-5 py-3 rounded-xl bg-emerald-600 hover:bg-emerald-700 text-white font-bold text-xs shadow-md shadow-emerald-600/20 transition flex items-center justify-center gap-2 shrink-0 active:scale-95"
+          >
+            <PlusCircle className="w-4 h-4" />
+            <span>PEDIR NOVO ORÇAMENTO</span>
+          </button>
+        </div>
       </div>
 
       {/* Tabs / Filtros */}

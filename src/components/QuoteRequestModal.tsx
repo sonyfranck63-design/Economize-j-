@@ -41,12 +41,18 @@ export const QuoteRequestModal: React.FC = () => {
     }
   }, [quoteCategoryPreset]);
 
+  // Atualiza com estrita precisão os dados do solicitante baseado no usuário autenticado atual
   useEffect(() => {
-    if (currentUser) {
-      if (currentUser.fullName && !userName) setUserName(currentUser.fullName);
-      if (currentUser.phone && !userPhone) setUserPhone(currentUser.phone);
+    if (isQuoteModalOpen) {
+      if (currentUser) {
+        setUserName(currentUser.fullName || '');
+        setUserPhone(currentUser.phone || '');
+      } else {
+        setUserName('');
+        setUserPhone('');
+      }
     }
-  }, [currentUser]);
+  }, [isQuoteModalOpen, currentUser?.id, currentUser?.fullName]);
 
   const handleClose = () => {
     setIsQuoteModalOpen(false);
