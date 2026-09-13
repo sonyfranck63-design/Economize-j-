@@ -1389,7 +1389,7 @@ export const dataService = {
     // Confirma o pagamento pendente correspondente
     await supabase
       .from('payments')
-      .update({ status: 'CONFIRMED', provider_payment_id: providerTransactionId || listingId })
+      .update({ status: 'COMPLETED', provider_payment_id: providerTransactionId || listingId })
       .eq('provider_payment_id', listingId);
 
     // Limpa quaisquer outras solicitações duplicadas pendentes da mesma empresa
