@@ -831,6 +831,14 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     if (isSupabaseConfigured) {
       try {
         await dataService.toggleBusinessVerified(businessId, newVerified);
+        // Registrar acao no log de auditoria
+        dataService.logAdminAction(
+          newVerified ? 'EMPRESA_VERIFICADA' : 'EMPRESA_VERIFICACAO_REMOVIDA',
+          'business',
+          businessId,
+          business.name,
+          `Verificado: ${newVerified}`
+        );
       } catch (err) {
         console.error('Erro ao verificar empresa:', err);
         // Rollback on error
@@ -854,6 +862,13 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     if (isSupabaseConfigured) {
       try {
         await dataService.toggleBusinessActive(businessId, newActive);
+        // Registrar acao no log de auditoria
+        dataService.logAdminAction(
+          newActive ? 'EMPRESA_ATIVADA' : 'EMPRESA_SUSPENSA',
+          'business',
+          businessId,
+          business.name
+        );
       } catch (err) {
         console.error('Erro ao alterar status da empresa:', err);
         // Rollback on error
@@ -878,6 +893,14 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     if (isSupabaseConfigured) {
       try {
         await dataService.toggleBusinessFeatured(businessId, newFeatured, days, notes);
+        // Registrar acao no log de auditoria
+        dataService.logAdminAction(
+          newFeatured ? 'DESTAQUE_ATIVADO' : 'DESTAQUE_REVOGADO',
+          'featured',
+          businessId,
+          business.name,
+          notes || (newFeatured ? `Destaque por ${days} dias` : 'Destaque removido pelo admin')
+        );
         // Recarrega lista oficial de empresas para refletir a nova vigência com precisão
         const refreshed = await dataService.getBusinesses(undefined, undefined, true);
         if (refreshed) setBusinesses(refreshed);
@@ -894,11 +917,19 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
   };
 
   const removeOffer = async (offerId: string) => {
+    const offerToRemove = offers.find((o) => o.id === offerId);
     const previous = [...offers];
     setOffers((prev) => prev.filter((o) => o.id !== offerId));
     if (isSupabaseConfigured) {
       try {
         await dataService.deleteOffer(offerId);
+        // Registrar acao no log de auditoria
+        dataService.logAdminAction(
+          'OFERTA_REMOVIDA',
+          'offer',
+          offerId,
+          offerToRemove?.title || 'Oferta'
+        );
       } catch (err) {
         console.error('Erro ao excluir oferta do Supabase:', err);
         setOffers(previous);

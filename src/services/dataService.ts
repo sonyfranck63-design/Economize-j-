@@ -540,9 +540,10 @@ export const dataService = {
     if (!isSupabaseConfigured || !supabase) return [];
 
     // Consulta a view segura onde telefone e e-mail são protegidos/mascarados para empresas
+    // JOIN com profiles para obter o nome real do solicitante
     const { data, error } = await supabase
       .from('secure_leads_view')
-      .select('*')
+      .select('*, profiles:user_id ( full_name )')
       .order('created_at', { ascending: false })
       .limit(100);
 
@@ -607,7 +608,8 @@ export const dataService = {
       id: qr.id,
       userId: qr.user_id,
       targetBusinessId: qr.target_business_id,
-      userName: qr.user_name,
+      // Prioriza o nome real do perfil; cai para user_name salvo como fallback
+      userName: (qr as any).profiles?.full_name || qr.user_name,
       userPhone: qr.user_phone,
       userEmail: qr.user_email,
       city: qr.city,
@@ -1332,5 +1334,73 @@ export const dataService = {
       featuredListings: featRes.data || [],
       payments: payRes.data || [],
     };
+  },
+
+  // ==========================================
+  // ADMIN AUDIT LOGS
+  // ==========================================
+
+  /**
+   * Registra uma ação administrativa no log de auditoria via RPC.
+   * Falha silenciosamente para não quebrar o fluxo principal.
+   */
+  async logAdminAction(
+    action: string,
+    entityType: 'business' | 'offer' | 'quote' | 'featured' | 'subscription',
+    entityId?: string,
+    entityName?: string,
+    notes?: string
+  ): Promise<void> {
+    if (!isSupabaseConfigured || !supabase) return;
+    try {
+      await supabase.rpc('log_admin_action', {
+        p_action: action,
+        p_entity_type: entityType,
+        p_entity_id: entityId || null,
+        p_entity_name: entityName || null,
+        p_notes: notes || null,
+      });
+    } catch (err) {
+      // Log silencioso — não deve bloquear a ação principal
+      console.warn('[AdminAudit] Falha ao registrar log de ação:', err);
+    }
+  },
+
+  /**
+   * Retorna os logs de ações administrativas para exibição no painel.
+   */
+  async getAdminActionLogs(limit = 100): Promise<{
+    id: string;
+    action: string;
+    entityType: string;
+    entityId: string | null;
+    entityName: string | null;
+    notes: string | null;
+    performedBy: string | null;
+    performerName: string;
+    createdAt: string;
+  }[]> {
+    if (!isSupabaseConfigured || !supabase) return [];
+    try {
+      const { data, error } = await supabase.rpc('get_admin_action_logs', { p_limit: limit });
+      if (error || !data) {
+        console.warn('Aviso ao buscar logs de auditoria:', error?.message);
+        return [];
+      }
+      return (data as any[]).map((r) => ({
+        id: r.id,
+        action: r.action,
+        entityType: r.entity_type,
+        entityId: r.entity_id || null,
+        entityName: r.entity_name || null,
+        notes: r.notes || null,
+        performedBy: r.performed_by || null,
+        performerName: r.performer_name || 'Admin',
+        createdAt: r.created_at,
+      }));
+    } catch (err) {
+      console.warn('[AdminAudit] Erro ao carregar logs:', err);
+      return [];
+    }
   },
 };

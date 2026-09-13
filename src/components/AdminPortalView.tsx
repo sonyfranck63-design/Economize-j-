@@ -23,6 +23,9 @@ import {
   ExternalLink,
   Info,
   Clock,
+  Activity,
+  RefreshCw,
+  User,
 } from 'lucide-react';
 import { dataService } from '../services/dataService';
 
@@ -51,7 +54,11 @@ export const AdminPortalView: React.FC = () => {
     );
   }
 
-  const [adminTab, setAdminTab] = useState<'empresas' | 'ofertas' | 'leads' | 'assinaturas' | 'monetizacao'>('empresas');
+  const [adminTab, setAdminTab] = useState<'empresas' | 'ofertas' | 'leads' | 'assinaturas' | 'monetizacao' | 'auditoria'>('empresas');
+
+  // Estado dos logs de auditoria
+  const [auditLogs, setAuditLogs] = useState<any[]>([]);
+  const [isLoadingAudit, setIsLoadingAudit] = useState(false);
 
   // Pending monetization state
   const [pendingItems, setPendingItems] = useState<{
@@ -98,6 +105,24 @@ export const AdminPortalView: React.FC = () => {
   React.useEffect(() => {
     fetchPendingMonetization();
   }, []);
+
+  const fetchAuditLogs = async () => {
+    setIsLoadingAudit(true);
+    try {
+      const logs = await dataService.getAdminActionLogs(150);
+      setAuditLogs(logs);
+    } catch (e) {
+      console.warn('Erro ao carregar logs de auditoria:', e);
+    } finally {
+      setIsLoadingAudit(false);
+    }
+  };
+
+  React.useEffect(() => {
+    if (adminTab === 'auditoria' && auditLogs.length === 0) {
+      fetchAuditLogs();
+    }
+  }, [adminTab]);
 
   const handleApproveSubscription = async (subId: string) => {
     if (!confirm('Deseja confirmar o pagamento e ATIVAR esta assinatura?')) return;
@@ -293,6 +318,15 @@ export const AdminPortalView: React.FC = () => {
             }`}
           >
             Estratégia de Monetização Real
+          </button>
+          <button
+            onClick={() => setAdminTab('auditoria')}
+            className={`px-3.5 py-2 rounded-xl font-bold transition whitespace-nowrap flex items-center gap-1.5 ${
+              adminTab === 'auditoria' ? 'bg-white text-slate-900' : 'text-slate-300 hover:bg-slate-800'
+            }`}
+          >
+            <Activity className="w-3.5 h-3.5 text-emerald-400" />
+            <span>Auditoria de Ações</span>
           </button>
         </div>
       </div>
@@ -946,6 +980,95 @@ export const AdminPortalView: React.FC = () => {
               </div>
             </div>
           </div>
+        </div>
+      )}
+
+      {/* TAB: AUDITORIA DE AÇÕES ADMINISTRATIVAS */}
+      {adminTab === 'auditoria' && (
+        <div className="bg-white rounded-2xl p-6 border border-slate-100 shadow-sm space-y-4">
+          <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 border-b border-slate-100 pb-4">
+            <div>
+              <h3 className="text-lg font-bold text-slate-900 flex items-center gap-2">
+                <Activity className="w-5 h-5 text-emerald-600" />
+                <span>Log de Ações Administrativas</span>
+              </h3>
+              <p className="text-xs text-slate-500 mt-0.5">
+                Registro imutável de todas as ações realizadas pelos administradores no sistema
+              </p>
+            </div>
+            <button
+              onClick={fetchAuditLogs}
+              disabled={isLoadingAudit}
+              className="px-3 py-1.5 rounded-xl border border-slate-200 hover:bg-slate-50 text-slate-700 text-xs font-bold transition flex items-center gap-1.5 self-start sm:self-auto"
+            >
+              <RefreshCw className={`w-3.5 h-3.5 ${isLoadingAudit ? 'animate-spin' : ''}`} />
+              <span>{isLoadingAudit ? 'Atualizando...' : 'Atualizar'}</span>
+            </button>
+          </div>
+
+          {isLoadingAudit ? (
+            <div className="py-12 flex flex-col items-center justify-center text-slate-400 text-sm gap-2">
+              <RefreshCw className="w-6 h-6 animate-spin" />
+              <span>Carregando logs...</span>
+            </div>
+          ) : auditLogs.length === 0 ? (
+            <div className="py-12 flex flex-col items-center justify-center text-center bg-slate-50 rounded-xl border border-dashed border-slate-200">
+              <Activity className="w-8 h-8 text-slate-400 mb-3" />
+              <h4 className="text-sm font-bold text-slate-900">Nenhuma ação registrada ainda</h4>
+              <p className="text-xs text-slate-500 max-w-md mt-1">
+                As ações administrativas (verificar empresa, ativar destaque, remover oferta etc.) aparecerão aqui automaticamente.
+              </p>
+            </div>
+          ) : (
+            <div className="divide-y divide-slate-100">
+              {auditLogs.map((log) => {
+                const actionColors: Record<string, string> = {
+                  EMPRESA_ATIVADA: 'bg-emerald-100 text-emerald-800',
+                  EMPRESA_SUSPENSA: 'bg-rose-100 text-rose-800',
+                  EMPRESA_VERIFICADA: 'bg-sky-100 text-sky-800',
+                  EMPRESA_VERIFICACAO_REMOVIDA: 'bg-slate-100 text-slate-700',
+                  DESTAQUE_ATIVADO: 'bg-amber-100 text-amber-800',
+                  DESTAQUE_REVOGADO: 'bg-orange-100 text-orange-800',
+                  OFERTA_REMOVIDA: 'bg-red-100 text-red-800',
+                  ACTIVATED: 'bg-amber-100 text-amber-800',
+                  DEACTIVATED: 'bg-slate-100 text-slate-700',
+                };
+                const colorClass = actionColors[log.action] || 'bg-slate-100 text-slate-700';
+                const date = new Date(log.createdAt);
+                const dateStr = date.toLocaleDateString('pt-BR', { day: '2-digit', month: '2-digit', year: '2-digit' });
+                const timeStr = date.toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' });
+
+                return (
+                  <div key={log.id} className="py-3 flex flex-col sm:flex-row sm:items-center gap-2">
+                    <div className="flex items-center gap-2 shrink-0">
+                      <span className={`text-[10px] font-bold uppercase px-2 py-0.5 rounded-md ${colorClass}`}>
+                        {log.action.replace(/_/g, ' ')}
+                      </span>
+                      <span className="text-[10px] font-bold uppercase text-slate-500 px-2 py-0.5 rounded-md bg-slate-50 border border-slate-100">
+                        {log.entityType}
+                      </span>
+                    </div>
+
+                    <div className="flex-1 min-w-0">
+                      <span className="text-sm font-semibold text-slate-900 truncate block">
+                        {log.entityName || log.entityId || '—'}
+                      </span>
+                      {log.notes && (
+                        <span className="text-xs text-slate-500 block truncate">{log.notes}</span>
+                      )}
+                    </div>
+
+                    <div className="flex items-center gap-1.5 shrink-0 text-xs text-slate-400">
+                      <User className="w-3.5 h-3.5" />
+                      <span>{log.performerName}</span>
+                      <span className="text-slate-300">•</span>
+                      <span>{dateStr} {timeStr}</span>
+                    </div>
+                  </div>
+                );
+              })}
+            </div>
+          )}
         </div>
       )}
 
