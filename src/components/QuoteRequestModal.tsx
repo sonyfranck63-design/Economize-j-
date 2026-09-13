@@ -2,6 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { useApp } from '../context/AppContext';
 import { CATEGORIES } from '../data/categories';
 import { X, PlusCircle, CheckCircle2, ShieldAlert, Sparkles, Upload, AlertCircle, LogIn, User } from 'lucide-react';
+import { maskPhoneBR, formatWhatsAppNumber } from '../utils/whatsappUtils';
 
 export const QuoteRequestModal: React.FC = () => {
   const {
@@ -118,7 +119,7 @@ export const QuoteRequestModal: React.FC = () => {
         userId: currentUser.id,
         targetBusinessId: quoteTargetBusinessId || undefined,
         userName: userName.trim() || currentUser.fullName || 'Cliente EconomizaJá',
-        userPhone: userPhone.trim() || currentUser.phone || '(11) 99999-8888',
+        userPhone: formatWhatsAppNumber(userPhone.trim() || currentUser.phone || '11999998888'),
         userEmail: currentUser.email || 'cliente@economizaja.app',
         city: city.trim(),
         state: currentLocation.state || 'SP',
@@ -410,7 +411,7 @@ export const QuoteRequestModal: React.FC = () => {
                       type="tel"
                       placeholder="Ex: (11) 99999-8888"
                       value={userPhone}
-                      onChange={(e) => setUserPhone(e.target.value)}
+                      onChange={(e) => setUserPhone(maskPhoneBR(e.target.value))}
                       className="w-full px-3.5 py-2.5 rounded-xl border border-slate-200 text-xs text-slate-800 bg-white focus:ring-2 focus:ring-emerald-500 focus:outline-hidden"
                     />
                   </div>

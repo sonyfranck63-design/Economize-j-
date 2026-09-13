@@ -3,6 +3,7 @@ import { useApp } from '../context/AppContext';
 import { CATEGORIES } from '../data/categories';
 import { Tag, MapPin, Clock, MessageCircle, Heart, Info, ArrowUpDown } from 'lucide-react';
 import { SafeImage } from './SafeImage';
+import { buildWhatsAppLink } from '../utils/whatsappUtils';
 
 export const OffersView: React.FC = () => {
   const {
@@ -165,7 +166,7 @@ export const OffersView: React.FC = () => {
                       Ver Perfil
                     </button>
                     <a
-                      href={`https://wa.me/${offer.businessWhatsapp}?text=${encodeURIComponent(`Olá! Vi a oferta "${offer.title}" por R$ ${offer.currentPrice.toFixed(2)} no EconomizaJá e gostaria de agendar ou retirar.`)}`}
+                      href={buildWhatsAppLink(offer.businessWhatsapp, `Olá! Vi a oferta "${offer.title}" por R$ ${offer.currentPrice.toFixed(2)} no EconomizaJá e gostaria de agendar ou retirar.`)}
                       target="_blank"
                       rel="noreferrer"
                       className="py-2.5 rounded-xl bg-emerald-500 hover:bg-emerald-600 text-white text-xs font-bold transition flex items-center justify-center gap-1.5 text-center shadow-xs"

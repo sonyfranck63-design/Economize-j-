@@ -552,23 +552,24 @@ export const dataService = {
       .order('created_at', { ascending: false })
       .limit(100);
 
-    if (!error && data) {
+    if (!error && data && data.length > 0) {
       queryData = data;
     } else {
       if (error?.message?.includes('Failed to fetch')) {
         console.error('ERRO CRÍTICO DE REDE: O projeto Supabase está offline, pausado ou a URL é inválida.');
         return [];
       }
-      // Fallback resiliente: se a view ainda não foi criada no Supabase pelo usuário,
-      // busca diretamente de quote_requests onde target_business_id é nulo (oportunidades gerais da região)
+      // Fallback resiliente: busca diretamente de quote_requests onde target_business_id é nulo
+      // ou pedidos abertos da região/marketplace
       try {
         const { data: directQuotes, error: directErr } = await supabase
           .from('quote_requests')
-          .select('*, profiles:user_id ( full_name )')
+          .select('*')
           .is('target_business_id', null)
-          .in('status', ['aberto', 'propostas_recebidas'])
+          .neq('status', 'cancelado')
           .order('created_at', { ascending: false })
           .limit(100);
+
         if (!directErr && directQuotes) {
           queryData = directQuotes;
         }
@@ -1265,6 +1266,33 @@ export const dataService = {
 
   async initiateFeaturedListing(businessId: string, days: number, offerId?: string): Promise<any> {
     if (!isSupabaseConfigured || !supabase) throw new Error('Supabase não configurado');
+
+    // 1. Prevenção de duplicação: se já houver destaque pendente para esta empresa, atualiza e reutiliza o existente
+    const { data: existingList } = await supabase
+      .from('featured_listings')
+      .select('id, daily_cost')
+      .eq('business_id', businessId)
+      .eq('active', false)
+      .order('created_at', { ascending: false })
+      .limit(1);
+
+    if (existingList && existingList.length > 0) {
+      const existingId = existingList[0].id;
+      const startDate = new Date().toISOString().split('T')[0];
+      const endDate = new Date(Date.now() + days * 24 * 60 * 60 * 1000).toISOString().split('T')[0];
+      await supabase
+        .from('featured_listings')
+        .update({
+          start_date: startDate,
+          end_date: endDate,
+          offer_id: offerId || null,
+        })
+        .eq('id', existingId);
+
+      const dailyRate = Number(existingList[0].daily_cost) || 19.9;
+      return { listing_id: existingId, total_cost: dailyRate * days };
+    }
+
     // Chama a RPC segura que gera cobrança PENDING e NÃO ativa destaque prematuramente
     const { data, error } = await supabase.rpc('initiate_featured_listing', {
       p_business_id: businessId,
@@ -1282,12 +1310,122 @@ export const dataService = {
 
   async confirmFeaturedListing(listingId: string, providerTransactionId?: string): Promise<any> {
     if (!isSupabaseConfigured || !supabase) throw new Error('Supabase não configurado');
-    const { data, error } = await supabase.rpc('confirm_featured_listing', {
-      p_listing_id: listingId,
-      p_provider_transaction_id: providerTransactionId || null,
-    });
-    if (error) throw new Error(error.message);
-    return data;
+
+    let rpcSucceeded = false;
+    let rpcData: any = null;
+    try {
+      const { data, error } = await supabase.rpc('confirm_featured_listing', {
+        p_listing_id: listingId,
+        p_provider_transaction_id: providerTransactionId || null,
+      });
+      if (!error) {
+        rpcSucceeded = true;
+        rpcData = data;
+      } else {
+        console.warn('RPC confirm_featured_listing retornou erro:', error.message);
+        // Se for erro da coluna updated_at inexistente ou RPC desatualizada, segue para o fallback
+        if (
+          !error.message?.includes('updated_at') &&
+          !error.message?.includes('does not exist') &&
+          !error.message?.includes('function')
+        ) {
+          throw new Error(error.message);
+        }
+      }
+    } catch (err: any) {
+      console.warn('Exceção ao chamar confirm_featured_listing:', err.message);
+      if (
+        !err.message?.includes('updated_at') &&
+        !err.message?.includes('does not exist') &&
+        !err.message?.includes('function')
+      ) {
+        throw err;
+      }
+    }
+
+    if (rpcSucceeded) {
+      // Limpa duplicatas pendentes da mesma empresa após a ativação
+      try {
+        if (rpcData?.business_id) {
+          await supabase
+            .from('featured_listings')
+            .delete()
+            .eq('business_id', rpcData.business_id)
+            .eq('active', false);
+        }
+      } catch (cleanupErr) {
+        console.warn('Aviso ao limpar duplicatas pendentes após ativação:', cleanupErr);
+      }
+      return rpcData;
+    }
+
+    // Fallback resiliente direto no Supabase (dispensa updated_at e ativa imediatamente):
+    const { data: listing, error: lErr } = await supabase
+      .from('featured_listings')
+      .select('*')
+      .eq('id', listingId)
+      .single();
+
+    if (lErr || !listing) {
+      throw new Error(lErr?.message || 'Solicitação de destaque não encontrada.');
+    }
+
+    // Atualiza featured_listings para active = true SEM referenciar coluna updated_at
+    const { error: fUpdateErr } = await supabase
+      .from('featured_listings')
+      .update({ active: true })
+      .eq('id', listingId);
+
+    if (fUpdateErr) {
+      throw new Error(fUpdateErr.message);
+    }
+
+    // Ativa destaque na empresa vinculada
+    await supabase
+      .from('businesses')
+      .update({ featured: true })
+      .eq('id', listing.business_id);
+
+    // Confirma o pagamento pendente correspondente
+    await supabase
+      .from('payments')
+      .update({ status: 'CONFIRMED', provider_payment_id: providerTransactionId || listingId })
+      .eq('provider_payment_id', listingId);
+
+    // Limpa quaisquer outras solicitações duplicadas pendentes da mesma empresa
+    try {
+      await supabase
+        .from('featured_listings')
+        .delete()
+        .eq('business_id', listing.business_id)
+        .eq('active', false);
+    } catch (cleanupErr) {
+      console.warn('Aviso ao limpar duplicatas pendentes:', cleanupErr);
+    }
+
+    return {
+      success: true,
+      listing_id: listingId,
+      business_id: listing.business_id,
+      active_until: listing.end_date,
+      message: 'Destaque ativado com sucesso.',
+    };
+  },
+
+  async rejectFeaturedListing(listingId: string): Promise<void> {
+    if (!isSupabaseConfigured || !supabase) return;
+    await Promise.all([
+      supabase.from('featured_listings').delete().eq('id', listingId),
+      supabase.from('payments').delete().eq('provider_payment_id', listingId),
+    ]);
+  },
+
+  async rejectSubscription(subscriptionId: string): Promise<void> {
+    if (!isSupabaseConfigured || !supabase) return;
+    await Promise.all([
+      supabase.from('subscriptions').delete().eq('id', subscriptionId),
+      supabase.from('payments').delete().eq('provider_payment_id', subscriptionId),
+    ]);
   },
 
   async adminGrantFeaturedHighlight(businessId: string, days: number, reason = 'Ativação Manual pelo Administrador'): Promise<any> {

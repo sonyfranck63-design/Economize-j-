@@ -2,6 +2,7 @@ import React, { useState } from 'react';
 import { Building2, MapPin, Phone, CheckCircle2, ChevronRight, Store, AlertCircle, Image as ImageIcon } from 'lucide-react';
 import { useApp } from '../context/AppContext';
 import { getSmartImage } from '../utils/imageUtils';
+import { maskPhoneBR, formatWhatsAppNumber } from '../utils/whatsappUtils';
 
 interface CompanyRegistrationViewProps {
   onComplete: () => void;
@@ -30,7 +31,8 @@ export const CompanyRegistrationView: React.FC<CompanyRegistrationViewProps> = (
 
   const handleChange = (e: React.ChangeEvent<HTMLInputElement | HTMLSelectElement | HTMLTextAreaElement>) => {
     const { name, value } = e.target;
-    setFormData(prev => ({ ...prev, [name]: value }));
+    const finalVal = (name === 'phone' || name === 'whatsapp') ? maskPhoneBR(value) : value;
+    setFormData(prev => ({ ...prev, [name]: finalVal }));
   };
 
   const handleSubmit = async (e: React.FormEvent) => {
@@ -64,8 +66,8 @@ export const CompanyRegistrationView: React.FC<CompanyRegistrationViewProps> = (
         name: formData.name.trim(),
         ownerName: formData.ownerName.trim() || currentUser.fullName || 'Responsável',
         email: currentUser.email || '',
-        phone: formData.phone.trim(),
-        whatsapp: formData.whatsapp.trim() || formData.phone.trim(),
+        phone: formData.phone.trim() || formData.whatsapp.trim(),
+        whatsapp: formatWhatsAppNumber(formData.whatsapp.trim() || formData.phone.trim()),
         categoryId: formData.categoryId,
         subcategory: formData.subcategory.trim() || 'Serviços Gerais',
         city: formData.city.trim() || 'São Paulo',

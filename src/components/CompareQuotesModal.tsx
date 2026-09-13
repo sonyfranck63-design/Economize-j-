@@ -2,6 +2,7 @@ import React from 'react';
 import { useApp } from '../context/AppContext';
 import { triggerCelebrationFireworks } from '../utils/confetti';
 import { isCategoryMatch, isLocationMatch } from '../utils/quoteStorage';
+import { formatWhatsAppNumber, buildWhatsAppLink } from '../utils/whatsappUtils';
 import {
   X,
   Star,
@@ -88,8 +89,8 @@ export const CompareQuotesModal: React.FC = () => {
         (isQuoteChosen && (quote.proposals.length === 1 || myProposal.status !== 'recusada')))
   );
 
-  // Clean WhatsApp numbers
-  const cleanClientWhatsapp = (quote.userPhone || '').replace(/\D/g, '');
+  // Clean WhatsApp numbers com DDI 55
+  const cleanClientWhatsapp = formatWhatsAppNumber(quote.userPhone);
 
   // Sort proposals by price (lowest price first) for smart comparison
   const sortedProposals = [...quote.proposals].sort((a, b) => a.price - b.price);
@@ -323,9 +324,10 @@ export const CompareQuotesModal: React.FC = () => {
             </div>
             {cleanClientWhatsapp && (
               <a
-                href={`https://wa.me/${cleanClientWhatsapp}?text=${encodeURIComponent(
+                href={buildWhatsAppLink(
+                  cleanClientWhatsapp,
                   `Olá ${quote.userName || ''}! Sou da empresa ${myProposal?.businessName}. Vi que você aceitou minha proposta de R$ ${myProposal?.price.toFixed(2)} para o pedido "${quote.title}" no EconomizaJá! Gostaria de combinar a data e horário para o atendimento.`
-                )}`}
+                )}
                 target="_blank"
                 rel="noreferrer"
                 className="px-4 py-2.5 rounded-xl bg-white hover:bg-emerald-50 text-emerald-800 text-xs font-bold transition flex items-center gap-2 shadow-md shrink-0 active:scale-95"
@@ -367,7 +369,7 @@ export const CompareQuotesModal: React.FC = () => {
                   myRelevantBusinesses.some((mb) => mb.id === prop.businessId) ||
                   businesses.some((b) => b.id === prop.businessId && b.ownerId === currentUser?.id);
                 
-                const cleanBizWhatsapp = (prop.businessWhatsapp || '').replace(/\D/g, '');
+                const cleanBizWhatsapp = formatWhatsAppNumber(prop.businessWhatsapp);
 
                 const isValidDate = prop.createdAt && !isNaN(new Date(prop.createdAt).getTime());
                 const formattedDate = isValidDate
@@ -459,11 +461,12 @@ export const CompareQuotesModal: React.FC = () => {
                       {isMyProposal ? (
                         cleanClientWhatsapp ? (
                           <a
-                            href={`https://wa.me/${cleanClientWhatsapp}?text=${encodeURIComponent(
+                            href={buildWhatsAppLink(
+                              cleanClientWhatsapp,
                               isAccepted
                                 ? `Olá ${quote.userName || ''}! Sou da empresa ${prop.businessName}. Vi que você aceitou nossa proposta de R$ ${prop.price.toFixed(2)} para o seu pedido "${quote.title}" no EconomizaJá! Gostaria de combinar a data e detalhes para o atendimento.`
                                 : `Olá ${quote.userName || ''}! Sou da empresa ${prop.businessName}. Enviei uma proposta de R$ ${prop.price.toFixed(2)} para o seu pedido "${quote.title}" no EconomizaJá e estou à disposição para conversar.`
-                            )}`}
+                            )}
                             target="_blank"
                             rel="noreferrer"
                             className="py-2.5 px-2 rounded-xl bg-emerald-600 hover:bg-emerald-700 text-white text-xs font-bold transition flex items-center justify-center gap-1 text-center shadow-xs"
@@ -483,11 +486,12 @@ export const CompareQuotesModal: React.FC = () => {
                         )
                       ) : (
                         <a
-                          href={`https://wa.me/${cleanBizWhatsapp}?text=${encodeURIComponent(
+                          href={buildWhatsAppLink(
+                            cleanBizWhatsapp,
                             isAccepted
                               ? `Olá! Aceitei sua proposta de R$ ${prop.price.toFixed(2)} para o orçamento "${quote.title}" no EconomizaJá e gostaria de combinar o atendimento!`
                               : `Olá! Vi sua proposta de R$ ${prop.price.toFixed(2)} para o orçamento "${quote.title}" no EconomizaJá e gostaria de conversar.`
-                          )}`}
+                          )}
                           target="_blank"
                           rel="noreferrer"
                           className="py-2.5 px-2 rounded-xl bg-emerald-500 hover:bg-emerald-600 text-white text-xs font-bold transition flex items-center justify-center gap-1 text-center shadow-xs"

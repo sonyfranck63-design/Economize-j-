@@ -3,6 +3,7 @@ import { useApp } from '../context/AppContext';
 import { CATEGORIES } from '../data/categories';
 import { BusinessAvatar } from './BusinessAvatar';
 import { SafeImage } from './SafeImage';
+import { buildWhatsAppLink } from '../utils/whatsappUtils';
 import {
   Search,
   Filter,
@@ -396,7 +397,7 @@ export const SearchView: React.FC = () => {
                   </button>
 
                   <a
-                    href={`https://wa.me/${biz.whatsapp}?text=${encodeURIComponent(`Olá! Encontrei o perfil de ${biz.name} no EconomizaJá e gostaria de tirar uma dúvida sobre serviços.`)}`}
+                    href={buildWhatsAppLink(biz.whatsapp, `Olá! Encontrei o perfil de ${biz.name} no EconomizaJá e gostaria de tirar uma dúvida sobre serviços.`)}
                     target="_blank"
                     rel="noreferrer"
                     className="p-2.5 rounded-xl bg-emerald-500 hover:bg-emerald-600 text-white transition shrink-0"
@@ -453,7 +454,7 @@ export const SearchView: React.FC = () => {
                     Ver Empresa
                   </button>
                   <a
-                    href={`https://wa.me/${offer.businessWhatsapp}?text=${encodeURIComponent(`Olá! Vi a oferta "${offer.title}" por R$ ${offer.currentPrice.toFixed(2)} no EconomizaJá.`)}`}
+                    href={buildWhatsAppLink(offer.businessWhatsapp, `Olá! Vi a oferta "${offer.title}" por R$ ${offer.currentPrice.toFixed(2)} no EconomizaJá.`)}
                     target="_blank"
                     rel="noreferrer"
                     className="w-full py-2 rounded-xl bg-emerald-500 hover:bg-emerald-600 text-white text-xs font-bold flex items-center justify-center gap-1 transition"

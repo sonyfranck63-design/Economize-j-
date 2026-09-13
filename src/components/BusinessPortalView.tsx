@@ -4,7 +4,8 @@ import { CompanyRegistrationView } from './CompanyRegistrationView';
 import { BusinessAvatar } from './BusinessAvatar';
 import { SafeImage } from './SafeImage';
 import { getSmartImage, isInvalidOrDeadImageUrl, OFFER_IMAGE_SUGGESTIONS } from '../utils/imageUtils';
-import { isQuoteMatchingBusiness } from '../utils/quoteStorage';
+import { isQuoteMatchingBusiness, isLocationMatch } from '../utils/quoteStorage';
+import { buildWhatsAppLink, formatWhatsAppNumber } from '../utils/whatsappUtils';
 import { dataService } from '../services/dataService';
 import {
   Building2,
@@ -236,14 +237,30 @@ export const BusinessPortalView: React.FC = () => {
     );
   }
 
-  // Quote requests relevant to this business's category and region
-  const relevantQuotes = quoteRequests.filter((q) => {
+  const [quotesScope, setQuotesScope] = useState<'category' | 'all_region'>('category');
+
+  // Cotações filtradas estritamente pela categoria da empresa
+  const categoryQuotes = quoteRequests.filter((q) => {
     if (q.status === 'cancelado') return false;
     if (q.targetBusinessId) {
       return (q.targetBusinessId || '').toLowerCase() === (currentBiz.id || '').toLowerCase();
     }
     return isQuoteMatchingBusiness(q, currentBiz);
   });
+
+  // Cotações gerais de toda a cidade ou estado da empresa
+  const regionalQuotes = quoteRequests.filter((q) => {
+    if (q.status === 'cancelado') return false;
+    if (q.targetBusinessId) {
+      return (q.targetBusinessId || '').toLowerCase() === (currentBiz.id || '').toLowerCase();
+    }
+    return isLocationMatch(currentBiz, q);
+  });
+
+  // Se houver da categoria, usa categoria; senão, ou se selecionado 'all_region', exibe as da região
+  const relevantQuotes = quotesScope === 'all_region'
+    ? regionalQuotes
+    : (categoryQuotes.length > 0 ? categoryQuotes : regionalQuotes);
 
   // Identifica se há orçamentos direcionados para outras empresas do mesmo usuário
   const otherBizDirectQuotes = ownedBusinesses
@@ -456,11 +473,48 @@ export const BusinessPortalView: React.FC = () => {
           <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
             <div>
               <h3 className="text-lg font-bold text-slate-900">
-                Oportunidades de Venda na Categoria "{currentBiz.subcategory}"
+                {quotesScope === 'all_region'
+                  ? `Todos os Orçamentos da Região de ${currentBiz.city || currentBiz.state || 'Atendimento'}`
+                  : `Oportunidades de Venda na Categoria "${currentBiz.subcategory || currentBiz.categoryId}"`}
               </h3>
               <p className="text-xs text-slate-500">
-                Clientes em {currentBiz.city} que solicitaram orçamentos recentemente
+                {quotesScope === 'all_region'
+                  ? `Exibindo todas as solicitações abertas em ${currentBiz.city || 'sua região'} para você enviar propostas`
+                  : `Clientes em ${currentBiz.city || 'sua região'} que solicitaram orçamentos`}
               </p>
+
+              {/* Botões de Alternância de Escopo de Orçamentos */}
+              <div className="flex items-center gap-2 pt-3">
+                <button
+                  type="button"
+                  onClick={() => setQuotesScope('category')}
+                  className={`px-3 py-1.5 rounded-xl text-xs font-bold transition flex items-center gap-1.5 cursor-pointer ${
+                    quotesScope === 'category'
+                      ? 'bg-emerald-600 text-white shadow-xs'
+                      : 'bg-slate-100 text-slate-600 hover:bg-slate-200'
+                  }`}
+                >
+                  <span>Minha Categoria</span>
+                  <span className={`text-[10px] px-1.5 py-0.2 rounded-full ${quotesScope === 'category' ? 'bg-emerald-800 text-white' : 'bg-slate-200 text-slate-700'}`}>
+                    {categoryQuotes.length}
+                  </span>
+                </button>
+
+                <button
+                  type="button"
+                  onClick={() => setQuotesScope('all_region')}
+                  className={`px-3 py-1.5 rounded-xl text-xs font-bold transition flex items-center gap-1.5 cursor-pointer ${
+                    quotesScope === 'all_region'
+                      ? 'bg-slate-900 text-white shadow-xs'
+                      : 'bg-slate-100 text-slate-600 hover:bg-slate-200'
+                  }`}
+                >
+                  <span>Geral da Região ({currentBiz.city || currentBiz.state || 'Geral'})</span>
+                  <span className={`text-[10px] px-1.5 py-0.2 rounded-full ${quotesScope === 'all_region' ? 'bg-slate-700 text-white' : 'bg-slate-200 text-slate-700'}`}>
+                    {regionalQuotes.length}
+                  </span>
+                </button>
+              </div>
             </div>
 
             <button
@@ -1070,9 +1124,10 @@ export const BusinessPortalView: React.FC = () => {
                       <span>Chave PIX: <strong className="font-mono text-slate-900">{monetization.adminPixKey}</strong></span>
                       {monetization.adminWhatsapp && (
                         <a
-                          href={`https://wa.me/${monetization.adminWhatsapp.replace(/\D/g, '')}?text=${encodeURIComponent(
+                          href={buildWhatsAppLink(
+                            monetization.adminWhatsapp,
                             `Olá! Sou da empresa *${currentBiz.name}* no EconomizaJá. Solicitei ${highlightPendingInfo.days} dias de Destaque Patrocinado (R$ ${highlightPendingInfo.totalCost.toFixed(2)}) e gostaria de enviar o comprovante PIX para confirmação.`
-                          )}`}
+                          )}
                           target="_blank"
                           rel="noreferrer"
                           className="px-3 py-1.5 bg-emerald-600 hover:bg-emerald-700 text-white rounded-lg font-bold text-[10px] text-center transition shrink-0"
@@ -1104,9 +1159,10 @@ export const BusinessPortalView: React.FC = () => {
           <div className="flex items-center gap-2 w-full sm:w-auto shrink-0">
             {monetization?.adminWhatsapp && (
               <a
-                href={`https://wa.me/${monetization.adminWhatsapp.replace(/\D/g, '')}?text=${encodeURIComponent(
+                href={buildWhatsAppLink(
+                  monetization.adminWhatsapp,
                   `Olá Administrador do EconomizaJá! Sou responsável pela empresa *${currentBiz.name}* e gostaria de solicitar a pausa/desativação temporária da minha empresa no guia.`
-                )}`}
+                )}
                 target="_blank"
                 rel="noreferrer"
                 className="flex-1 sm:flex-initial px-3.5 py-2 rounded-xl border border-slate-300 hover:bg-white text-slate-700 text-xs font-bold transition flex items-center justify-center gap-1.5"
@@ -1236,11 +1292,12 @@ export const BusinessPortalView: React.FC = () => {
               {/* Botão WhatsApp */}
               {monetization.adminWhatsapp && (
                 <a
-                  href={`https://wa.me/${monetization.adminWhatsapp.replace(/\D/g, '')}?text=${encodeURIComponent(
+                  href={buildWhatsAppLink(
+                    monetization.adminWhatsapp,
                     `Olá! Sou da empresa *${currentBiz.name}* no EconomizaJá. Acabei de realizar o pagamento PIX do *Plano ${
                       checkoutPlan === 'pro' ? 'Pró' : 'Premium'
                     }* e gostaria de solicitar a ativação.`
-                  )}`}
+                  )}
                   target="_blank"
                   rel="noreferrer"
                   className="w-full py-2.5 rounded-xl bg-emerald-600 hover:bg-emerald-700 text-white text-xs font-bold flex items-center justify-center gap-2 transition shadow-xs"

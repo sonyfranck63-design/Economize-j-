@@ -2,6 +2,7 @@ import React, { useState } from 'react';
 import { useApp } from '../context/AppContext';
 import { BusinessAvatar } from './BusinessAvatar';
 import { SafeImage } from './SafeImage';
+import { buildWhatsAppLink } from '../utils/whatsappUtils';
 import {
   X,
   Star,
@@ -189,7 +190,7 @@ export const BusinessDetailModal: React.FC = () => {
 
               <a
                 id="biz-btn-whatsapp"
-                href={`https://wa.me/${biz.whatsapp}?text=${encodeURIComponent(`Olá! Vi o perfil de ${biz.name} no EconomizaJá e gostaria de falar com um atendente.`)}`}
+                href={buildWhatsAppLink(biz.whatsapp, `Olá! Vi o perfil de ${biz.name} no EconomizaJá e gostaria de falar com um atendente.`)}
                 target="_blank"
                 rel="noreferrer"
                 className="flex-1 sm:flex-none px-5 py-2.5 rounded-xl bg-emerald-500 hover:bg-emerald-600 text-white font-bold text-xs shadow-sm transition flex items-center justify-center gap-1.5"
@@ -303,7 +304,7 @@ export const BusinessDetailModal: React.FC = () => {
                       R$ {prod.price.toFixed(2)}
                     </span>
                     <a
-                      href={`https://wa.me/${biz.whatsapp}?text=${encodeURIComponent(`Olá! Gostaria de reservar o produto "${prod.title}" por R$ ${prod.price.toFixed(2)} anunciado no EconomizaJá.`)}`}
+                      href={buildWhatsAppLink(biz.whatsapp, `Olá! Gostaria de reservar o produto "${prod.title}" por R$ ${prod.price.toFixed(2)} anunciado no EconomizaJá.`)}
                       target="_blank"
                       rel="noreferrer"
                       className="text-xs font-bold text-emerald-600 hover:underline"
@@ -351,7 +352,7 @@ export const BusinessDetailModal: React.FC = () => {
                       </div>
 
                       <a
-                        href={`https://wa.me/${o.businessWhatsapp}?text=${encodeURIComponent(`Olá! Vi a promoção "${o.title}" por R$ ${o.currentPrice.toFixed(2)} no EconomizaJá e quero garantir.`)}`}
+                        href={buildWhatsAppLink(o.businessWhatsapp, `Olá! Vi a promoção "${o.title}" por R$ ${o.currentPrice.toFixed(2)} no EconomizaJá e quero garantir.`)}
                         target="_blank"
                         rel="noreferrer"
                         className="inline-block mt-2 px-3 py-1.5 rounded-xl bg-emerald-500 hover:bg-emerald-600 text-white text-xs font-bold shadow-xs"

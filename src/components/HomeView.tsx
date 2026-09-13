@@ -3,6 +3,7 @@ import { useApp } from '../context/AppContext';
 import { CATEGORIES } from '../data/categories';
 import { BusinessAvatar } from './BusinessAvatar';
 import { SafeImage } from './SafeImage';
+import { buildWhatsAppLink } from '../utils/whatsappUtils';
 import {
   Search,
   MapPin,
@@ -326,7 +327,7 @@ export const HomeView: React.FC = () => {
                       Ver Empresa
                     </button>
                     <a
-                      href={`https://wa.me/${offer.businessWhatsapp}?text=${encodeURIComponent(`Olá! Vi a oferta "${offer.title}" por R$ ${offer.currentPrice.toFixed(2)} no EconomizaJá e gostaria de aproveitar!`)}`}
+                      href={buildWhatsAppLink(offer.businessWhatsapp, `Olá! Vi a oferta "${offer.title}" por R$ ${offer.currentPrice.toFixed(2)} no EconomizaJá e gostaria de aproveitar!`)}
                       target="_blank"
                       rel="noreferrer"
                       className="w-full py-2 rounded-xl bg-emerald-500 hover:bg-emerald-600 text-white text-xs font-bold transition flex items-center justify-center gap-1 text-center"

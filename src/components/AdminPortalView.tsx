@@ -26,8 +26,10 @@ import {
   Activity,
   RefreshCw,
   User,
+  Trash2,
 } from 'lucide-react';
 import { dataService } from '../services/dataService';
+import { buildWhatsAppLink } from '../utils/whatsappUtils';
 
 export const AdminPortalView: React.FC = () => {
   const {
@@ -147,6 +149,34 @@ export const AdminPortalView: React.FC = () => {
       await fetchPendingMonetization();
     } catch (err: any) {
       alert(`Erro ao ativar destaque: ${err.message}`);
+    } finally {
+      setProcessingId(null);
+    }
+  };
+
+  const handleRejectFeatured = async (featId: string) => {
+    if (!confirm('Deseja descartar/remover esta solicitação de destaque pendente?')) return;
+    setProcessingId(featId);
+    try {
+      await dataService.rejectFeaturedListing(featId);
+      alert('Solicitação de destaque descartada com sucesso.');
+      await fetchPendingMonetization();
+    } catch (err: any) {
+      alert(`Erro ao descartar destaque: ${err.message}`);
+    } finally {
+      setProcessingId(null);
+    }
+  };
+
+  const handleRejectSubscription = async (subId: string) => {
+    if (!confirm('Deseja descartar/remover esta solicitação de assinatura pendente?')) return;
+    setProcessingId(subId);
+    try {
+      await dataService.rejectSubscription(subId);
+      alert('Solicitação de assinatura descartada com sucesso.');
+      await fetchPendingMonetization();
+    } catch (err: any) {
+      alert(`Erro ao descartar assinatura: ${err.message}`);
     } finally {
       setProcessingId(null);
     }
@@ -613,9 +643,9 @@ export const AdminPortalView: React.FC = () => {
                         </div>
 
                         <div className="flex items-center gap-2">
-                          {cleanPhone && (
+                          {sub.businesses?.whatsapp && (
                             <a
-                              href={`https://wa.me/${cleanPhone}`}
+                              href={buildWhatsAppLink(sub.businesses.whatsapp, `Olá! Sou da administração do EconomizaJá referente ao comprovante de assinatura da sua empresa ${sub.businesses?.name || ''}.`)}
                               target="_blank"
                               rel="noreferrer"
                               className="px-3 py-2 bg-emerald-50 hover:bg-emerald-100 text-emerald-800 border border-emerald-200 rounded-xl text-xs font-bold transition flex items-center gap-1.5"
@@ -624,6 +654,16 @@ export const AdminPortalView: React.FC = () => {
                               <span>Ver WhatsApp</span>
                             </a>
                           )}
+
+                          <button
+                            disabled={processingId === sub.id}
+                            onClick={() => handleRejectSubscription(sub.id)}
+                            className="px-3 py-2 bg-slate-100 hover:bg-rose-50 hover:text-rose-700 text-slate-600 rounded-xl text-xs font-bold transition flex items-center gap-1 border border-slate-200"
+                            title="Descartar ou remover solicitação de assinatura"
+                          >
+                            <Trash2 className="w-3.5 h-3.5" />
+                            <span>Descartar</span>
+                          </button>
 
                           <button
                             disabled={processingId === sub.id}
@@ -658,7 +698,6 @@ export const AdminPortalView: React.FC = () => {
                 <div className="divide-y divide-slate-100">
                   {pendingItems.featuredListings.map((feat) => {
                     const bizName = feat.businesses?.name || 'Empresa';
-                    const cleanPhone = (feat.businesses?.whatsapp || '').replace(/\D/g, '');
                     const days = Math.max(1, Math.round((new Date(feat.end_date).getTime() - new Date(feat.start_date).getTime()) / (1000 * 60 * 60 * 24)));
                     const totalCost = Number(feat.daily_cost) * days;
 
@@ -680,9 +719,9 @@ export const AdminPortalView: React.FC = () => {
                         </div>
 
                         <div className="flex items-center gap-2">
-                          {cleanPhone && (
+                          {feat.businesses?.whatsapp && (
                             <a
-                              href={`https://wa.me/${cleanPhone}`}
+                              href={buildWhatsAppLink(feat.businesses.whatsapp, `Olá! Sou da administração do EconomizaJá referente ao destaque patrocinado da sua empresa ${bizName}.`)}
                               target="_blank"
                               rel="noreferrer"
                               className="px-3 py-2 bg-emerald-50 hover:bg-emerald-100 text-emerald-800 border border-emerald-200 rounded-xl text-xs font-bold transition flex items-center gap-1.5"
@@ -691,6 +730,16 @@ export const AdminPortalView: React.FC = () => {
                               <span>Ver WhatsApp</span>
                             </a>
                           )}
+
+                          <button
+                            disabled={processingId === feat.id}
+                            onClick={() => handleRejectFeatured(feat.id)}
+                            className="px-3 py-2 bg-slate-100 hover:bg-rose-50 hover:text-rose-700 text-slate-600 rounded-xl text-xs font-bold transition flex items-center gap-1 border border-slate-200"
+                            title="Descartar solicitação duplicada ou não confirmada"
+                          >
+                            <Trash2 className="w-3.5 h-3.5" />
+                            <span>Descartar</span>
+                          </button>
 
                           <button
                             disabled={processingId === feat.id}

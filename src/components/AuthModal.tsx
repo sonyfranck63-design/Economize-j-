@@ -2,6 +2,7 @@ import React, { useState } from 'react';
 import { useApp } from '../context/AppContext';
 import { authService, ADMIN_EMAILS } from '../services/authService';
 import { isSupabaseConfigured } from '../lib/supabase';
+import { maskPhoneBR, formatWhatsAppNumber } from '../utils/whatsappUtils';
 import {
   X,
   Lock,
@@ -51,7 +52,7 @@ export const AuthModal: React.FC = () => {
           role,
           city: city.trim() || 'São Paulo',
           state: state.trim().toUpperCase() || 'SP',
-          phone,
+          phone: formatWhatsAppNumber(phone),
         });
         setCurrentUser(user);
         setUserRole(user.role);
@@ -183,7 +184,7 @@ export const AuthModal: React.FC = () => {
                   type="tel"
                   required
                   value={phone}
-                  onChange={(e) => setPhone(e.target.value)}
+                  onChange={(e) => setPhone(maskPhoneBR(e.target.value))}
                   placeholder="(11) 98765-4321"
                   className="w-full px-3 py-2 rounded-xl border border-slate-300 text-sm focus:ring-2 focus:ring-emerald-500 focus:outline-hidden"
                 />
