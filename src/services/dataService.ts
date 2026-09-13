@@ -545,18 +545,40 @@ export const dataService = {
 
     // Consulta a view segura onde telefone e e-mail são protegidos/mascarados para empresas
     // JOIN com profiles para obter o nome real do solicitante
+    let queryData: any[] | null = null;
     const { data, error } = await supabase
       .from('secure_leads_view')
       .select('*, profiles:user_id ( full_name )')
       .order('created_at', { ascending: false })
       .limit(100);
 
-    if (error || !data) {
+    if (!error && data) {
+      queryData = data;
+    } else {
       if (error?.message?.includes('Failed to fetch')) {
         console.error('ERRO CRÍTICO DE REDE: O projeto Supabase está offline, pausado ou a URL é inválida.');
+        return [];
       }
-      return [];
+      // Fallback resiliente: se a view ainda não foi criada no Supabase pelo usuário,
+      // busca diretamente de quote_requests onde target_business_id é nulo (oportunidades gerais da região)
+      try {
+        const { data: directQuotes, error: directErr } = await supabase
+          .from('quote_requests')
+          .select('*, profiles:user_id ( full_name )')
+          .is('target_business_id', null)
+          .in('status', ['aberto', 'propostas_recebidas'])
+          .order('created_at', { ascending: false })
+          .limit(100);
+        if (!directErr && directQuotes) {
+          queryData = directQuotes;
+        }
+      } catch (fbErr) {
+        console.warn('Aviso no fallback de quote_requests:', fbErr);
+      }
     }
+
+    if (!queryData) return [];
+    const dataList = queryData;
 
     // Carrega propostas acessíveis para os orçamentos (RLS permite ver próprias propostas e se for cliente/admin)
     const proposalsMap = new Map<string, QuoteProposal[]>();
@@ -606,7 +628,7 @@ export const dataService = {
     }
 
     const deletedIds = getDeletedQuoteIds();
-    return data
+    return dataList
       .filter((qr: any) => !deletedIds.has(qr.id) && qr.status !== 'cancelado')
       .map((qr: any) => ({
       id: qr.id,
