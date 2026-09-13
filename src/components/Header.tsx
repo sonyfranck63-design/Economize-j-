@@ -117,22 +117,22 @@ export const Header: React.FC = () => {
                     setActiveTab('business_portal');
                   }
                 }}
-                className="hidden sm:flex items-center gap-1.5 px-3 py-1.5 bg-orange-50 hover:bg-orange-100 border border-orange-200 text-orange-800 rounded-full text-xs font-bold transition shadow-xs"
+                className="flex items-center gap-1.5 px-2 sm:px-3 py-1.5 bg-orange-50 hover:bg-orange-100 border border-orange-200 text-orange-800 rounded-full text-xs font-bold transition shadow-xs shrink-0"
                 title="Cadastre sua empresa e receba orçamentos"
               >
-                <Building2 className="w-3.5 h-3.5 text-orange-600" />
-                <span>Seja Parceiro</span>
+                <Building2 className="w-3.5 h-3.5 text-orange-600 shrink-0" />
+                <span className="hidden sm:inline">Seja Parceiro</span>
               </button>
             )}
             
             {currentUser?.role === 'business' && (
               <button
                 onClick={() => setActiveTab('business_portal')}
-                className="hidden sm:flex items-center gap-1.5 px-3 py-1.5 bg-indigo-50 hover:bg-indigo-100 border border-indigo-200 text-indigo-800 rounded-full text-xs font-bold transition shadow-xs"
+                className="flex items-center gap-1.5 px-2 sm:px-3 py-1.5 bg-indigo-50 hover:bg-indigo-100 border border-indigo-200 text-indigo-800 rounded-full text-xs font-bold transition shadow-xs shrink-0"
                 title="Acessar o Painel da sua Empresa"
               >
-                <Building2 className="w-3.5 h-3.5 text-indigo-600" />
-                <span>Painel da Empresa</span>
+                <Building2 className="w-3.5 h-3.5 text-indigo-600 shrink-0" />
+                <span className="hidden sm:inline">Painel da Empresa</span>
               </button>
             )}
 

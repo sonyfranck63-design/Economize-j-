@@ -108,10 +108,8 @@ export const BrandLogo: React.FC<BrandLogoProps> = ({
             } ${isLight ? 'text-white' : 'text-slate-900'}`}
           >
             Economiza
-            <span className="text-emerald-500 ml-0.5 relative">
+            <span className="text-emerald-500 ml-0.5">
               Já
-              {/* Subtle accent dot */}
-              <span className="absolute -top-0.5 -right-2 w-1.5 h-1.5 rounded-full bg-amber-400 animate-pulse" />
             </span>
           </span>
 
