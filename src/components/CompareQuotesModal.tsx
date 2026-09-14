@@ -56,10 +56,10 @@ export const CompareQuotesModal: React.FC = () => {
 
   if (!quote) return null;
 
-  // Identifica empresas pertencentes ao usuário logado (ou todas se admin)
-  const userBusinesses = businesses.filter(
-    (b) => b.ownerId === currentUser?.id || currentUser?.role === 'admin'
-  );
+  // Identifica empresas pertencentes exclusivamente ao usuário logado (o admin supervisiona, não se passa por parceiro)
+  const userBusinesses = currentUser?.id
+    ? businesses.filter((b) => (b.ownerId || '').toLowerCase() === currentUser.id.toLowerCase())
+    : [];
 
   // Empresas que atendem à categoria do orçamento (com matching flexível e inteligente)
   const myRelevantBusinesses = userBusinesses.filter((b) =>
@@ -116,6 +116,11 @@ export const CompareQuotesModal: React.FC = () => {
               }`}>
                 {quote.status === 'cancelado' ? 'PEDIDO ENCERRADO' : 'COMPARE AS OPÇÕES'}
               </span>
+              {currentUser?.role === 'admin' && currentUser?.id !== quote.userId && (
+                <span className="text-[10px] font-bold uppercase px-2.5 py-0.5 rounded-md bg-amber-50 text-amber-700 border border-amber-200">
+                  Supervisão Administrativa
+                </span>
+              )}
               <span className="text-xs text-slate-500 font-medium">
                 {quote.neighborhood}, {quote.city}
               </span>
@@ -502,8 +507,8 @@ export const CompareQuotesModal: React.FC = () => {
                         </a>
                       )}
 
-                      {/* Customer / Admin button */}
-                      {(currentUser?.id === quote.userId || currentUser?.role === 'admin') && (
+                      {/* Ação exclusiva do Consumidor Solicitante do Orçamento */}
+                      {currentUser?.id === quote.userId && (
                         <button
                           disabled={quote.status === 'cancelado' || isProcessingAction}
                           onClick={async () => {
@@ -544,6 +549,24 @@ export const CompareQuotesModal: React.FC = () => {
                             'ESCOLHER'
                           )}
                         </button>
+                      )}
+
+                      {/* Visualização para o Administrador (Supervisão neutra, sem se passar por consumidor nem parceiro) */}
+                      {currentUser?.role === 'admin' && currentUser?.id !== quote.userId && (
+                        isAccepted ? (
+                          <div className="flex items-center justify-center bg-emerald-50 border border-emerald-200 text-emerald-800 rounded-xl px-2 py-2 font-bold text-[10px] uppercase text-center gap-1 shadow-xs">
+                            <Sparkles className="w-3 h-3 text-amber-500" />
+                            <span>Escolhida pelo Cliente</span>
+                          </div>
+                        ) : isQuoteChosen ? (
+                          <div className="flex items-center justify-center bg-slate-100 text-slate-500 rounded-xl px-2 py-2 font-semibold text-[10px] uppercase text-center">
+                            Não Selecionada
+                          </div>
+                        ) : (
+                          <div className="flex items-center justify-center bg-slate-50 border border-dashed border-slate-200 rounded-xl px-2 py-2 text-center">
+                            <span className="text-[9px] text-slate-500 font-bold uppercase leading-tight">Aguardando Decisão do Cliente</span>
+                          </div>
+                        )
                       )}
                       
                       {/* Partner view for proposal status */}

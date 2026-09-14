@@ -44,6 +44,7 @@ export const AdminPortalView: React.FC = () => {
     toggleBusinessFeatured,
     removeOffer,
     deleteBusiness,
+    refreshBusinesses,
   } = useApp();
 
   if (currentUser?.role !== 'admin') {
@@ -82,6 +83,7 @@ export const AdminPortalView: React.FC = () => {
     setIsSubmittingHighlight(true);
     try {
       await toggleBusinessFeatured(highlightTargetBiz.id, highlightDays, highlightNotes);
+      await refreshBusinesses?.();
       alert(`Destaque para a empresa "${highlightTargetBiz.name}" ativado com sucesso por ${highlightDays} dias!`);
       setHighlightTargetBiz(null);
       await fetchPendingMonetization();
@@ -131,6 +133,7 @@ export const AdminPortalView: React.FC = () => {
     setProcessingId(subId);
     try {
       await dataService.confirmPlanSubscription(subId);
+      await refreshBusinesses?.();
       alert('Assinatura ativada com sucesso!');
       await fetchPendingMonetization();
     } catch (err: any) {
@@ -145,6 +148,7 @@ export const AdminPortalView: React.FC = () => {
     setProcessingId(featId);
     try {
       await dataService.confirmFeaturedListing(featId);
+      await refreshBusinesses?.();
       alert('Destaque ativado com sucesso!');
       await fetchPendingMonetization();
     } catch (err: any) {

@@ -51,6 +51,7 @@ export const BusinessPortalView: React.FC = () => {
     setPublicRoute,
     userRole,
     refreshQuoteRequests,
+    refreshBusinesses,
   } = useApp();
 
   const [isRefreshing, setIsRefreshing] = useState(false);
@@ -66,7 +67,7 @@ export const BusinessPortalView: React.FC = () => {
   const [selectedBizId, setSelectedBizId] = useState<string | null>(null);
   
   const currentBiz = selectedBizId 
-    ? ownedBusinesses.find((b) => b.id === selectedBizId) 
+    ? (ownedBusinesses.find((b) => b.id === selectedBizId) || (ownedBusinesses.length > 0 ? ownedBusinesses[0] : null))
     : (ownedBusinesses.length > 0 ? ownedBusinesses[0] : null);
 
   // Se o dropdown não tiver selecionado ninguem ainda mas tiver empresa, seleciona a primeira
@@ -75,6 +76,14 @@ export const BusinessPortalView: React.FC = () => {
       setSelectedBizId(ownedBusinesses[0].id);
     }
   }, [ownedBusinesses, selectedBizId]);
+
+  // Sincroniza dados e cotações ao carregar o portal
+  React.useEffect(() => {
+    if (currentUser) {
+      refreshBusinesses?.();
+      refreshQuoteRequests?.();
+    }
+  }, [currentUser]);
 
   // Fechar modais ao apertar Escape
   React.useEffect(() => {
@@ -89,6 +98,7 @@ export const BusinessPortalView: React.FC = () => {
   }, []);
 
   const [activeTab, setActiveTab] = useState<'leads' | 'ofertas' | 'planos' | 'metricas'>('leads');
+  const [quotesScope, setQuotesScope] = useState<'category' | 'all_region'>('category');
 
   // Plan checkout modal
   const [checkoutPlan, setCheckoutPlan] = useState<'pro' | 'premium' | null>(null);
@@ -236,8 +246,6 @@ export const BusinessPortalView: React.FC = () => {
       </div>
     );
   }
-
-  const [quotesScope, setQuotesScope] = useState<'category' | 'all_region'>('category');
 
   // Cotações filtradas estritamente pela categoria da empresa
   const categoryQuotes = quoteRequests.filter((q) => {
@@ -394,6 +402,19 @@ export const BusinessPortalView: React.FC = () => {
             >
               <PlusCircle className="w-3.5 h-3.5" />
               <span className="hidden sm:inline">Nova Empresa</span>
+            </button>
+            <button
+              onClick={async () => {
+                setIsRefreshing(true);
+                await refreshBusinesses?.();
+                await refreshQuoteRequests?.();
+                setIsRefreshing(false);
+              }}
+              title="Atualizar dados do negócio e plano"
+              className="text-xs font-bold px-3 py-2.5 bg-slate-100 hover:bg-slate-200 text-slate-700 border border-slate-200 rounded-xl transition-colors flex items-center gap-1 shrink-0"
+            >
+              <RefreshCw className={`w-3.5 h-3.5 ${isRefreshing ? 'animate-spin text-emerald-600' : ''}`} />
+              <span className="hidden sm:inline">Atualizar</span>
             </button>
           </div>
         </div>

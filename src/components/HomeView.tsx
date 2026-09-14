@@ -73,6 +73,7 @@ export const HomeView: React.FC = () => {
     if (localSearch.trim()) {
       setSearchQuery(localSearch.trim());
       setActiveTab('search');
+      window.scrollTo({ top: 0, behavior: 'instant' });
     }
   };
 
@@ -80,11 +81,13 @@ export const HomeView: React.FC = () => {
     setLocalSearch(suggestion);
     setSearchQuery(suggestion);
     setActiveTab('search');
+    window.scrollTo({ top: 0, behavior: 'instant' });
   };
 
   const handleCategoryClick = (catId: string) => {
     setSelectedCategory(catId);
     setActiveTab('search');
+    window.scrollTo({ top: 0, behavior: 'instant' });
   };
 
   const featuredBusinesses = businesses

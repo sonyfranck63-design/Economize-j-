@@ -96,6 +96,7 @@ interface AppContextType {
   markNotificationRead: (id: string) => void;
   deleteAccountAndData: () => void;
   refreshQuoteRequests: () => Promise<void>;
+  refreshBusinesses: () => Promise<void>;
 
   // Modals & Navigation Helpers
   selectedBusinessId: string | null;
@@ -803,6 +804,38 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
 
     saveLocalBusiness(newBusiness);
     setBusinesses((prev) => [newBusiness, ...prev]);
+
+    // Atualiza automaticamente o papel do usuário para parceiro/business
+    if (currentUser && currentUser.role === 'customer') {
+      const updatedUser = { ...currentUser, role: 'business' as const };
+      setCurrentUser(updatedUser);
+      setUserRole('business');
+      try {
+        localStorage.setItem('economizaja_user', JSON.stringify(updatedUser));
+      } catch {
+        // ignore
+      }
+      if (isSupabaseConfigured && supabase) {
+        Promise.resolve(
+          supabase
+            .from('profiles')
+            .update({ role: 'business' })
+            .eq('id', currentUser.id)
+        ).catch((err: any) => console.warn('Aviso ao atualizar perfil para business:', err));
+      }
+    }
+  };
+
+  const refreshBusinesses = async () => {
+    if (!isSupabaseConfigured) return;
+    try {
+      const bizList = await dataService.getBusinesses(undefined, undefined, true);
+      if (bizList && bizList.length > 0) {
+        setBusinesses(bizList);
+      }
+    } catch (err) {
+      console.warn('Erro ao sincronizar lista de empresas:', err);
+    }
   };
 
   const updateMonetization = async (settings: AdminMonetizationSettings) => {
@@ -1101,6 +1134,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
         markNotificationRead,
         deleteAccountAndData,
         refreshQuoteRequests,
+        refreshBusinesses,
 
         selectedBusinessId,
         setSelectedBusinessId,

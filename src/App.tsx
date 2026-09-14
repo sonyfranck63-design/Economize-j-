@@ -25,6 +25,7 @@ import { AuthModal } from './components/AuthModal';
 import { PrivacyPolicyView } from './components/PrivacyPolicyView';
 import { TermsOfServiceView } from './components/TermsOfServiceView';
 import { DeleteAccountView } from './components/DeleteAccountView';
+import { ErrorBoundary } from './components/ErrorBoundary';
 import { useNativeAndroid } from './hooks/useNativeAndroid';
 
 const MainContent: React.FC = () => {
@@ -32,6 +33,11 @@ const MainContent: React.FC = () => {
 
   // Integração nativa Android: Hardware Back Button & Teclado
   useNativeAndroid();
+
+  // Garante que a rolagem retorne ao topo ao trocar de aba ou rota
+  React.useEffect(() => {
+    window.scrollTo({ top: 0, behavior: 'instant' });
+  }, [activeTab, publicRoute]);
 
   const resetToApp = () => {
     window.location.hash = '';
@@ -47,7 +53,7 @@ const MainContent: React.FC = () => {
       <Header />
 
       {/* Main Container */}
-      <main className="flex-1 max-w-7xl w-full mx-auto px-4 sm:px-6 lg:px-8 pt-4 sm:pt-6 pb-24 md:pb-8">
+      <main className="flex-1 max-w-7xl w-full mx-auto px-3 sm:px-6 lg:px-8 pt-3 sm:pt-6 pb-24 md:pb-8">
         {publicRoute === 'privacy' && <PrivacyPolicyView onBack={resetToApp} />}
         {publicRoute === 'terms' && <TermsOfServiceView onBack={resetToApp} />}
         {publicRoute === 'delete_account' && <DeleteAccountView onBack={resetToApp} />}
@@ -85,8 +91,10 @@ const MainContent: React.FC = () => {
 
 export default function App() {
   return (
-    <AppProvider>
-      <MainContent />
-    </AppProvider>
+    <ErrorBoundary>
+      <AppProvider>
+        <MainContent />
+      </AppProvider>
+    </ErrorBoundary>
   );
 }

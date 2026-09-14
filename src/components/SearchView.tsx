@@ -43,6 +43,11 @@ export const SearchView: React.FC = () => {
   const [sortBy, setSortBy] = useState<'relevance' | 'distance' | 'rating'>('relevance');
   const [showFiltersModal, setShowFiltersModal] = useState(false);
 
+  // Garante posicionamento no topo ao mudar categoria ou pesquisa
+  React.useEffect(() => {
+    window.scrollTo({ top: 0, behavior: 'instant' });
+  }, [selectedCategory, searchQuery]);
+
   // Filtered Businesses
   const filteredBusinesses = useMemo(() => {
     return businesses

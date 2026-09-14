@@ -67,7 +67,7 @@ export const Header: React.FC = () => {
       )}
 
       <div className="max-w-7xl mx-auto px-2 sm:px-6 lg:px-8">
-        <div className="flex items-center justify-between h-16 gap-1 sm:gap-3">
+        <div className="flex items-center justify-between h-14 sm:h-16 gap-1 sm:gap-3">
           
           {/* Brand Logo & Slogan */}
           <div className="flex items-center gap-1.5 sm:gap-3 shrink min-w-0">
