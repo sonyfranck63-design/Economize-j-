@@ -25,9 +25,13 @@ import { AuthModal } from './components/AuthModal';
 import { PrivacyPolicyView } from './components/PrivacyPolicyView';
 import { TermsOfServiceView } from './components/TermsOfServiceView';
 import { DeleteAccountView } from './components/DeleteAccountView';
+import { useNativeAndroid } from './hooks/useNativeAndroid';
 
 const MainContent: React.FC = () => {
   const { activeTab, publicRoute, setPublicRoute, userRole } = useApp();
+
+  // Integração nativa Android: Hardware Back Button & Teclado
+  useNativeAndroid();
 
   const resetToApp = () => {
     window.location.hash = '';
