@@ -2256,6 +2256,20 @@ WHERE
   );
 
 GRANT SELECT ON public.secure_leads_view TO authenticated, anon;
+GRANT EXECUTE ON FUNCTION public.is_business_owner(UUID, UUID) TO anon, authenticated;
+GRANT EXECUTE ON FUNCTION public.user_has_active_business(UUID) TO anon, authenticated;
+GRANT EXECUTE ON FUNCTION public.has_user_proposed(UUID, UUID) TO anon, authenticated;
+
+CREATE TABLE IF NOT EXISTS public.notifications (
+  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  user_id UUID NOT NULL REFERENCES public.profiles(id) ON DELETE CASCADE,
+  title TEXT NOT NULL,
+  message TEXT NOT NULL,
+  type TEXT NOT NULL,
+  read BOOLEAN NOT NULL DEFAULT false,
+  link_action TEXT,
+  created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+);
 
 ALTER TABLE public.notifications ENABLE ROW LEVEL SECURITY;
 
