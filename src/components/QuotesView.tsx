@@ -13,6 +13,7 @@ import {
   AlertTriangle,
   X,
   Sparkles,
+  SlidersHorizontal,
 } from 'lucide-react';
 import { QuoteRequest } from '../types';
 
@@ -27,6 +28,7 @@ export const QuotesView: React.FC = () => {
     deleteQuoteRequest,
     currentUser,
     setPublicRoute,
+    setActiveTab: setNavTab,
   } = useApp();
 
   const [activeTab, setActiveTab] = useState<TabFilter>('all');
@@ -48,18 +50,23 @@ export const QuotesView: React.FC = () => {
     return () => window.removeEventListener('keydown', handleEscape);
   }, [isProcessing]);
 
-  // Contadores para as abas
-  const totalCount = quoteRequests.length;
-  const activeCount = quoteRequests.filter(
+  // Filtra as cotações pessoais do solicitante (o Admin não herda cotações alheias como pessoais)
+  const myQuotes = currentUser?.id
+    ? quoteRequests.filter((qr) => qr.userId === currentUser.id)
+    : quoteRequests;
+
+  // Contadores para as abas baseadas nas cotações pessoais
+  const totalCount = myQuotes.length;
+  const activeCount = myQuotes.filter(
     (qr) => qr.status === 'aberto' || qr.status === 'propostas_recebidas'
   ).length;
-  const completedCount = quoteRequests.filter(
+  const completedCount = myQuotes.filter(
     (qr) => qr.status === 'escolhido' || qr.status === 'finalizado'
   ).length;
-  const cancelledCount = quoteRequests.filter((qr) => qr.status === 'cancelado').length;
+  const cancelledCount = myQuotes.filter((qr) => qr.status === 'cancelado').length;
 
   // Filtragem
-  const filteredQuotes = quoteRequests.filter((qr) => {
+  const filteredQuotes = myQuotes.filter((qr) => {
     if (activeTab === 'active') return qr.status === 'aberto' || qr.status === 'propostas_recebidas';
     if (activeTab === 'completed') return qr.status === 'escolhido' || qr.status === 'finalizado';
     if (activeTab === 'cancelled') return qr.status === 'cancelado';
@@ -94,6 +101,34 @@ export const QuotesView: React.FC = () => {
 
   return (
     <div className="space-y-6 pb-12">
+      {/* Banner de Supervisão para o Administrador */}
+      {currentUser?.role === 'admin' && (
+        <div className="bg-slate-900 text-white rounded-2xl p-4 sm:p-5 flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3 border border-slate-800 shadow-sm">
+          <div className="flex items-center gap-3">
+            <div className="w-10 h-10 rounded-xl bg-slate-800 text-emerald-400 flex items-center justify-center shrink-0 border border-slate-700">
+              <SlidersHorizontal className="w-5 h-5" />
+            </div>
+            <div>
+              <div className="flex items-center gap-2">
+                <span className="text-[10px] font-bold uppercase bg-emerald-500/20 text-emerald-400 border border-emerald-500/30 px-2 py-0.5 rounded-md">
+                  Supervisão de Administrador
+                </span>
+                <span className="text-xs text-slate-400">Visão de Consumidor Ativa</span>
+              </div>
+              <p className="text-xs text-slate-300 mt-0.5">
+                Esta tela exibe apenas seus orçamentos pessoais solicitados como cliente. Para auditar todas as solicitações e propostas da plataforma, utilize o Painel Admin.
+              </p>
+            </div>
+          </div>
+          <button
+            onClick={() => setNavTab('admin_portal')}
+            className="px-4 py-2 bg-emerald-600 hover:bg-emerald-700 text-white rounded-xl text-xs font-bold transition shrink-0 active:scale-95 shadow-sm"
+          >
+            Abrir Painel Admin
+          </button>
+        </div>
+      )}
+
       {/* Header */}
       <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 bg-white rounded-2xl p-6 border border-slate-100 shadow-sm">
         <div>

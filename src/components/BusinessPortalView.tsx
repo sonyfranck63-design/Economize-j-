@@ -56,11 +56,9 @@ export const BusinessPortalView: React.FC = () => {
 
   const [isRefreshing, setIsRefreshing] = useState(false);
 
-  // Se houver empresas com ownerId correspondente ao usuário, usamos elas (ou todas se admin).
+  // Empresas pertencentes exclusivamente ao usuário logado (Admin não herda empresas de terceiros)
   const ownedBusinesses = currentUser
-    ? (currentUser.role === 'admin'
-        ? businesses
-        : businesses.filter((b) => (b.ownerId || '').toLowerCase() === (currentUser.id || '').toLowerCase()))
+    ? businesses.filter((b) => (b.ownerId || '').toLowerCase() === (currentUser.id || '').toLowerCase())
     : [];
   
   // Pick the first business as current active managed business
@@ -650,8 +648,38 @@ export const BusinessPortalView: React.FC = () => {
 
                     <div className="flex items-center justify-between text-xs text-slate-500 pt-1">
                       <span>Prazo solicitado: <strong>{q.desiredDeadline}</strong></span>
-                      <span>Cliente: {q.userName} ({q.userPhone})</span>
+                      <span>Cliente: <strong>{q.userName}</strong></span>
                     </div>
+
+                    {isProposalAccepted && (
+                      <div className="p-3.5 bg-emerald-50 border border-emerald-200 rounded-xl flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3">
+                        <div>
+                          <span className="text-[10px] font-extrabold uppercase text-emerald-800 bg-emerald-100 px-2 py-0.5 rounded-md">
+                            🎉 CLIENTE CONTRATOU SUA EMPRESA
+                          </span>
+                          <p className="text-xs text-emerald-950 font-bold mt-1">
+                            {q.userName} • Telefone: {q.userPhone && !q.userPhone.includes('****') ? q.userPhone : 'Liberado no WhatsApp'}
+                          </p>
+                          <p className="text-[11px] text-emerald-700">
+                            Inicie o contato imediatamente para combinar data, horário e execução do serviço.
+                          </p>
+                        </div>
+                        {q.userPhone && !q.userPhone.includes('****') && (
+                          <a
+                            href={buildWhatsAppLink(
+                              q.userPhone,
+                              `Olá ${q.userName || ''}! Sou da empresa ${myProposal?.businessName || currentBiz?.name || 'parceira'}. Vi que você aceitou minha proposta de R$ ${myProposal?.price.toFixed(2)} para o pedido "${q.title}" no EconomizaJá! Gostaria de combinar a data e horário para o atendimento.`
+                            )}
+                            target="_blank"
+                            rel="noreferrer"
+                            className="px-4 py-2.5 bg-emerald-600 hover:bg-emerald-700 text-white rounded-xl text-xs font-bold transition flex items-center gap-2 shadow-sm shrink-0 active:scale-95"
+                          >
+                            <MessageCircle className="w-4 h-4" />
+                            <span>Conversar no WhatsApp</span>
+                          </a>
+                        )}
+                      </div>
+                    )}
 
                     <div className="pt-2 border-t border-slate-100 flex items-center justify-between">
                       <span className="text-xs text-slate-400">

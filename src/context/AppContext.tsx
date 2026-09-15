@@ -94,6 +94,7 @@ interface AppContextType {
   deleteBusiness: (businessId: string) => void;
   upgradeBusinessPlan: (businessId: string, planTier: 'free' | 'pro' | 'premium') => void;
   markNotificationRead: (id: string) => void;
+  refreshNotifications: () => Promise<void>;
   deleteAccountAndData: () => void;
   refreshQuoteRequests: () => Promise<void>;
   refreshBusinesses: () => Promise<void>;
@@ -265,6 +266,12 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
             setFavorites(userFavs);
           }
 
+          // Carrega notificações persistidas no Supabase
+          const userNotifs = await dataService.getNotifications(userProfile.id);
+          if (userNotifs && userNotifs.length > 0) {
+            setNotifications(userNotifs);
+          }
+
           // Identifica empresas pertencentes ao usuário para garantir orçamentos direcionados
           const myBizIds = (bizList || [])
             .filter((b) => (b.ownerId || '').toLowerCase() === (userProfile.id || '').toLowerCase())
@@ -294,7 +301,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     loadBackendData();
   }, []);
 
-  // Sincroniza favoritos e cotações do usuário autenticado sempre que o login for realizado ou empresas atualizadas
+  // Sincroniza favoritos, cotações e notificações do usuário autenticado
   useEffect(() => {
     if (!currentUser?.id || !isSupabaseConfigured) {
       return;
@@ -307,6 +314,13 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       }
     });
 
+    // Carrega notificações persistidas do usuário
+    dataService.getNotifications(currentUser.id).then((userNotifs) => {
+      if (userNotifs) {
+        setNotifications(userNotifs);
+      }
+    });
+
     const myBizIds = businesses
       .filter((b) => (b.ownerId || '').toLowerCase() === (currentUser.id || '').toLowerCase())
       .map((b) => b.id);
@@ -315,6 +329,38 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     dataService.syncAllQuoteRequests(currentUser.id, myBizIds).then((allQuotes) => {
       setQuoteRequests(allQuotes || []);
     });
+
+    // Realtime listener para notificações automáticas do Supabase
+    let channel: any = null;
+    try {
+      if (supabase) {
+        channel = supabase
+          .channel(`user-notifs-${currentUser.id}`)
+          .on(
+            'postgres_changes',
+            {
+              event: '*',
+              schema: 'public',
+              table: 'notifications',
+              filter: `user_id=eq.${currentUser.id}`,
+            },
+            () => {
+              dataService.getNotifications(currentUser.id).then((updated) => {
+                if (updated) setNotifications(updated);
+              });
+            }
+          )
+          .subscribe();
+      }
+    } catch (realtimeErr) {
+      console.warn('Aviso ao registrar listener Realtime de notificações:', realtimeErr);
+    }
+
+    return () => {
+      if (channel && supabase) {
+        supabase.removeChannel(channel);
+      }
+    };
   }, [currentUser?.id, currentUser?.role, businesses.length]);
 
   // Geolocation trigger
@@ -1031,6 +1077,19 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     setNotifications((prev) =>
       prev.map((n) => (n.id === id ? { ...n, read: true } : n))
     );
+    if (isSupabaseConfigured) {
+      dataService.markNotificationRead(id).catch((err) => {
+        console.warn('Aviso ao sincronizar leitura da notificação com Supabase:', err);
+      });
+    }
+  };
+
+  const refreshNotifications = async () => {
+    if (!currentUser?.id || !isSupabaseConfigured) return;
+    const notifs = await dataService.getNotifications(currentUser.id);
+    if (notifs) {
+      setNotifications(notifs);
+    }
   };
 
   const deleteAccountAndData = () => {
@@ -1132,6 +1191,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
         deleteBusiness,
         upgradeBusinessPlan,
         markNotificationRead,
+        refreshNotifications,
         deleteAccountAndData,
         refreshQuoteRequests,
         refreshBusinesses,

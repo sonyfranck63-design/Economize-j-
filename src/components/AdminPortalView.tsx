@@ -58,6 +58,7 @@ export const AdminPortalView: React.FC = () => {
   }
 
   const [adminTab, setAdminTab] = useState<'empresas' | 'ofertas' | 'leads' | 'assinaturas' | 'monetizacao' | 'auditoria'>('empresas');
+  const [expandedQuoteId, setExpandedQuoteId] = useState<string | null>(null);
 
   // Estado dos logs de auditoria
   const [auditLogs, setAuditLogs] = useState<any[]>([]);
@@ -546,39 +547,170 @@ export const AdminPortalView: React.FC = () => {
         </div>
       )}
 
-      {/* TAB: LEADS */}
+      {/* TAB: LEADS / COTAÇÕES */}
       {adminTab === 'leads' && (
         <div className="bg-white rounded-2xl p-6 border border-slate-100 shadow-sm space-y-4">
-          <h3 className="text-base font-bold text-slate-900">Fluxo de Solicitações de Orçamento</h3>
+          <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 border-b border-slate-100 pb-3">
+            <div>
+              <h3 className="text-base font-bold text-slate-900 flex items-center gap-2">
+                <FileText className="w-5 h-5 text-emerald-600" />
+                <span>Supervisão de Solicitações &amp; Propostas Comerciais</span>
+              </h3>
+              <p className="text-xs text-slate-500 mt-0.5">
+                Audite todos os orçamentos solicitados na plataforma, empresas concorrentes e contratos definidos
+              </p>
+            </div>
+            <span className="text-xs font-bold px-3 py-1 bg-slate-100 text-slate-700 rounded-full self-start sm:self-auto">
+              Total: {quoteRequests.length} solicitações
+            </span>
+          </div>
 
           {quoteRequests.length === 0 ? (
             <div className="py-12 flex flex-col items-center justify-center text-center bg-slate-50 rounded-xl border border-dashed border-slate-200">
               <FileText className="w-8 h-8 text-slate-400 mb-3" />
-              <h4 className="text-sm font-bold text-slate-900">Nenhum orçamento solicitado</h4>
+              <h4 className="text-sm font-bold text-slate-900">Nenhum orçamento no histórico</h4>
               <p className="text-xs text-slate-500 max-w-md mt-1">
-                Os pedidos de orçamento dos clientes aparecerão aqui.
+                Os pedidos de orçamento solicitados pelos usuários aparecerão aqui para auditoria administrativa.
               </p>
             </div>
           ) : (
             <div className="space-y-3">
-              {quoteRequests.map((q) => (
-              <div key={q.id} className="p-4 rounded-xl bg-slate-50 border border-slate-100 space-y-2">
-                <div className="flex items-center justify-between">
-                  <div>
-                    <span className="text-xs font-bold uppercase text-emerald-700">{q.categoryId}</span>
-                    <h4 className="font-bold text-sm text-slate-900">{q.title}</h4>
+              {quoteRequests.map((q) => {
+                const isExpanded = expandedQuoteId === q.id;
+                const proposals = q.proposals || [];
+                const chosenProposal = proposals.find((p) => p.status === 'escolhida');
+                const isChosen = q.status === 'escolhido' || Boolean(chosenProposal);
+
+                return (
+                  <div 
+                    key={q.id} 
+                    className={`rounded-2xl border p-4 sm:p-5 transition space-y-3 ${
+                      isChosen 
+                        ? 'bg-emerald-50/30 border-emerald-200 ring-1 ring-emerald-500/10' 
+                        : q.status === 'cancelado' 
+                        ? 'bg-slate-50 border-slate-200 opacity-80' 
+                        : 'bg-white border-slate-200 hover:border-slate-300 shadow-2xs'
+                    }`}
+                  >
+                    <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2">
+                      <div className="flex flex-wrap items-center gap-2">
+                        <span className="text-[10px] font-bold uppercase text-emerald-800 bg-emerald-100 px-2.5 py-0.5 rounded-md">
+                          {q.categoryId}
+                        </span>
+                        {q.targetBusinessId && (
+                          <span className="text-[10px] font-bold uppercase text-amber-900 bg-amber-100 border border-amber-300 px-2.5 py-0.5 rounded-md">
+                            Direcionado Exclusivo
+                          </span>
+                        )}
+                        <span className="text-xs text-slate-400">
+                          {isNaN(Date.parse(q.createdAt)) ? q.createdAt : new Date(q.createdAt).toLocaleDateString('pt-BR')}
+                        </span>
+                      </div>
+
+                      <div className="flex items-center gap-2">
+                        {isChosen ? (
+                          <span className="text-xs font-extrabold text-emerald-800 bg-emerald-100 border border-emerald-300 px-2.5 py-0.5 rounded-full flex items-center gap-1">
+                            <CheckCircle2 className="w-3.5 h-3.5 text-emerald-600" />
+                            Contrato Definido
+                          </span>
+                        ) : q.status === 'cancelado' ? (
+                          <span className="text-xs font-semibold text-slate-600 bg-slate-200 px-2.5 py-0.5 rounded-full">
+                            Encerrado
+                          </span>
+                        ) : (
+                          <span className="text-xs font-semibold text-amber-800 bg-amber-50 border border-amber-200 px-2.5 py-0.5 rounded-full">
+                            Aguardando Decisão
+                          </span>
+                        )}
+
+                        <button
+                          onClick={() => setExpandedQuoteId(isExpanded ? null : q.id)}
+                          className="text-xs font-bold text-slate-700 bg-slate-100 hover:bg-slate-200 px-3 py-1 rounded-xl transition"
+                        >
+                          {isExpanded ? 'Recolher' : `Inspecionar (${proposals.length} propostas)`}
+                        </button>
+                      </div>
+                    </div>
+
+                    <div>
+                      <h4 className="font-bold text-sm sm:text-base text-slate-900">{q.title}</h4>
+                      <p className="text-xs text-slate-600 mt-1 leading-relaxed">{q.description}</p>
+                    </div>
+
+                    <div className="grid grid-cols-1 sm:grid-cols-3 gap-2 text-xs bg-slate-50 p-2.5 rounded-xl border border-slate-100 text-slate-600">
+                      <div>
+                        <span className="font-semibold text-slate-400 block text-[10px] uppercase">Solicitante</span>
+                        <strong className="text-slate-800">{q.userName}</strong> ({q.userPhone || 'Tel. não inf.'})
+                      </div>
+                      <div>
+                        <span className="font-semibold text-slate-400 block text-[10px] uppercase">Local</span>
+                        <strong className="text-slate-800">{q.neighborhood ? `${q.neighborhood}, ` : ''}{q.city} - {q.state}</strong>
+                      </div>
+                      <div>
+                        <span className="font-semibold text-slate-400 block text-[10px] uppercase">Prazo Desejado</span>
+                        <strong className="text-slate-800">{q.desiredDeadline}</strong>
+                      </div>
+                    </div>
+
+                    {/* Propostas Detalhadas em Auditoria */}
+                    {isExpanded && (
+                      <div className="mt-3 pt-3 border-t border-slate-200 space-y-2.5 animate-in fade-in">
+                        <div className="flex items-center justify-between">
+                          <h5 className="text-xs font-bold uppercase tracking-wider text-slate-700">
+                            Propostas Recebidas ({proposals.length})
+                          </h5>
+                          {chosenProposal && (
+                            <span className="text-xs font-bold text-emerald-700">
+                              Vencedora: {chosenProposal.businessName} (R$ {chosenProposal.price.toFixed(2)})
+                            </span>
+                          )}
+                        </div>
+
+                        {proposals.length === 0 ? (
+                          <p className="text-xs text-slate-500 py-3 text-center bg-slate-50 rounded-xl border border-dashed border-slate-200">
+                            Nenhuma empresa enviou proposta para este pedido até o momento.
+                          </p>
+                        ) : (
+                          <div className="divide-y divide-slate-100 bg-slate-50 rounded-xl p-3 border border-slate-200">
+                            {proposals.map((p) => (
+                              <div key={p.id} className="py-2.5 flex flex-col sm:flex-row sm:items-center justify-between gap-2">
+                                <div>
+                                  <div className="flex items-center gap-2">
+                                    <strong className="text-xs text-slate-900">{p.businessName}</strong>
+                                    {p.status === 'escolhida' ? (
+                                      <span className="text-[10px] font-bold uppercase px-2 py-0.2 bg-emerald-600 text-white rounded-md shadow-2xs">
+                                        🎉 Escolhida pelo Cliente
+                                      </span>
+                                    ) : p.status === 'recusada' ? (
+                                      <span className="text-[10px] font-semibold text-slate-500 bg-slate-200 px-2 py-0.2 rounded-md">
+                                        Recusada
+                                      </span>
+                                    ) : (
+                                      <span className="text-[10px] font-semibold text-amber-800 bg-amber-100 px-2 py-0.2 rounded-md">
+                                        Pendente
+                                      </span>
+                                    )}
+                                  </div>
+                                  <p className="text-xs text-slate-500 mt-0.5">
+                                    Prazo: {p.deadlineText} • {p.description || 'Sem descrição adicional'}
+                                  </p>
+                                </div>
+
+                                <div className="text-right shrink-0">
+                                  <span className="text-sm font-extrabold text-slate-900">
+                                    R$ {p.price.toFixed(2)}
+                                  </span>
+                                </div>
+                              </div>
+                            ))}
+                          </div>
+                        )}
+                      </div>
+                    )}
+
                   </div>
-                  <span className="text-xs bg-white px-2.5 py-1 rounded-md border border-slate-200 font-bold text-slate-800 shadow-xs">
-                    {q.proposals.length} propostas enviadas
-                  </span>
-                </div>
-                <p className="text-xs text-slate-600">{q.description}</p>
-                <div className="text-xs text-slate-400 flex items-center justify-between">
-                  <span>Solicitante: {q.userName} ({q.city})</span>
-                  <span>Status: <strong>{q.status}</strong></span>
-                </div>
-              </div>
-            ))}
+                );
+              })}
             </div>
           )}
         </div>

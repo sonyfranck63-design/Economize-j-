@@ -10,6 +10,7 @@ import {
   PriceAlert,
   ChatMessage,
   AdminMonetizationSettings,
+  NotificationItem,
 } from '../types';
 
 export const dataService = {
@@ -1573,6 +1574,101 @@ export const dataService = {
     } catch (err) {
       console.warn('[AdminAudit] Erro ao carregar logs:', err);
       return [];
+    }
+  },
+
+  // ==========================================
+  // NOTIFICATIONS PERSISTENCE & SYNC
+  // ==========================================
+
+  /**
+   * Busca as notificações persistidas do usuário autenticado no Supabase.
+   */
+  async getNotifications(userId: string): Promise<NotificationItem[]> {
+    if (!isSupabaseConfigured || !supabase || !userId) return [];
+    try {
+      const { data, error } = await supabase
+        .from('notifications')
+        .select('*')
+        .eq('user_id', userId)
+        .order('created_at', { ascending: false })
+        .limit(50);
+
+      if (error || !data) {
+        if (!this.isTableMissing(error)) {
+          console.warn('Aviso ao carregar notificações do Supabase:', error?.message);
+        }
+        return [];
+      }
+
+      return data.map((n: any) => {
+        const createdAtDate = new Date(n.created_at);
+        const now = new Date();
+        const diffMs = now.getTime() - createdAtDate.getTime();
+        const diffMins = Math.floor(diffMs / (1000 * 60));
+        const diffHours = Math.floor(diffMins / 60);
+        const diffDays = Math.floor(diffHours / 24);
+
+        let relativeTime = 'Agora';
+        if (diffMins > 0 && diffMins < 60) {
+          relativeTime = `Há ${diffMins} min`;
+        } else if (diffHours > 0 && diffHours < 24) {
+          relativeTime = `Há ${diffHours}h`;
+        } else if (diffDays === 1) {
+          relativeTime = 'Ontem';
+        } else if (diffDays > 1) {
+          relativeTime = createdAtDate.toLocaleDateString('pt-BR', { day: '2-digit', month: '2-digit' });
+        }
+
+        return {
+          id: n.id,
+          title: n.title,
+          message: n.message,
+          timestamp: relativeTime,
+          type: n.type || 'system',
+          read: Boolean(n.read),
+          linkAction: n.link_action || undefined,
+        };
+      });
+    } catch (err) {
+      console.warn('Erro defensivo ao consultar notificações:', err);
+      return [];
+    }
+  },
+
+  /**
+   * Marca uma notificação individual como lida no Supabase.
+   */
+  async markNotificationRead(notificationId: string): Promise<void> {
+    if (!isSupabaseConfigured || !supabase || !notificationId) return;
+    try {
+      await supabase.rpc('mark_notification_read', { p_notification_id: notificationId });
+    } catch (err) {
+      // Fallback update direto caso a RPC ainda não tenha sido aplicada no banco
+      try {
+        await supabase.from('notifications').update({ read: true }).eq('id', notificationId);
+      } catch (fbErr) {
+        console.warn('Aviso ao marcar notificação como lida:', fbErr);
+      }
+    }
+  },
+
+  /**
+   * Marca todas as notificações do usuário como lidas.
+   */
+  async markAllNotificationsRead(): Promise<void> {
+    if (!isSupabaseConfigured || !supabase) return;
+    try {
+      await supabase.rpc('mark_all_notifications_read');
+    } catch (err) {
+      try {
+        const { data: authData } = await supabase.auth.getUser();
+        if (authData?.user?.id) {
+          await supabase.from('notifications').update({ read: true }).eq('user_id', authData.user.id);
+        }
+      } catch (fbErr) {
+        console.warn('Aviso ao marcar todas notificações como lidas:', fbErr);
+      }
     }
   },
 };

@@ -185,8 +185,8 @@ export const CompareQuotesModal: React.FC = () => {
           </div>
         )}
 
-        {/* Partner Proposal Section - Only for businesses matching the quote */}
-        {hasRelevantBusiness && !alreadyResponded && quote.status !== 'cancelado' && (
+        {/* Partner Proposal Section - Only for businesses matching the quote (Admin não envia propostas como parceiro) */}
+        {hasRelevantBusiness && currentUser?.role !== 'admin' && !alreadyResponded && quote.status !== 'cancelado' && (
           <div className="mb-6 p-5 bg-emerald-50 border border-emerald-100 rounded-2xl space-y-4">
             {!activeProposalForm ? (
               <div className="flex flex-col sm:flex-row items-center justify-between gap-4">

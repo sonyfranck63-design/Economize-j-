@@ -177,7 +177,7 @@ export interface NotificationItem {
   title: string;
   message: string;
   timestamp: string;
-  type: 'proposal' | 'offer' | 'price_alert' | 'chat' | 'system';
+  type: 'proposal' | 'offer' | 'price_alert' | 'chat' | 'system' | 'quote_directed' | 'proposal_received' | 'proposal_accepted' | 'proposal_chosen' | 'lead_opportunity';
   read: boolean;
   linkAction?: string;
 }

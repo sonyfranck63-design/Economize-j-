@@ -2169,3 +2169,300 @@ CREATE POLICY "quote_proposals_delete"
 
 -- Recarregar cache de schema
 NOTIFY pgrst, 'reload schema';
+
+
+-- ==============================================================================
+-- EconomizaJá — Migração 00035: Notificações Automáticas e WhatsApp pós-Aceite
+-- ==============================================================================
+
+DROP VIEW IF EXISTS public.secure_leads_view;
+
+CREATE VIEW public.secure_leads_view AS
+SELECT
+  qr.id,
+  qr.user_id,
+  qr.target_business_id,
+  CASE
+    WHEN auth.uid() = qr.user_id THEN qr.user_name
+    WHEN public.is_admin() THEN qr.user_name
+    WHEN qr.target_business_id IS NOT NULL
+         AND public.is_business_owner(qr.target_business_id, auth.uid())
+      THEN qr.user_name
+    WHEN EXISTS (
+      SELECT 1 FROM public.quote_proposals qp
+      WHERE qp.quote_request_id = qr.id
+        AND qp.status = 'escolhida'
+        AND public.is_business_owner(qp.business_id, auth.uid())
+    ) THEN qr.user_name
+    ELSE SPLIT_PART(qr.user_name, ' ', 1) || ' (Cliente)'
+  END AS user_name,
+  CASE
+    WHEN auth.uid() = qr.user_id THEN qr.user_phone
+    WHEN public.is_admin() THEN qr.user_phone
+    WHEN qr.target_business_id IS NOT NULL
+         AND public.is_business_owner(qr.target_business_id, auth.uid())
+      THEN qr.user_phone
+    WHEN EXISTS (
+      SELECT 1 FROM public.quote_proposals qp
+      WHERE qp.quote_request_id = qr.id
+        AND qp.status = 'escolhida'
+        AND public.is_business_owner(qp.business_id, auth.uid())
+    ) THEN qr.user_phone
+    ELSE '****-****'
+  END AS user_phone,
+  CASE
+    WHEN auth.uid() = qr.user_id THEN qr.user_email
+    WHEN public.is_admin() THEN qr.user_email
+    WHEN qr.target_business_id IS NOT NULL
+         AND public.is_business_owner(qr.target_business_id, auth.uid())
+      THEN qr.user_email
+    WHEN EXISTS (
+      SELECT 1 FROM public.quote_proposals qp
+      WHERE qp.quote_request_id = qr.id
+        AND qp.status = 'escolhida'
+        AND public.is_business_owner(qp.business_id, auth.uid())
+    ) THEN qr.user_email
+    ELSE 'oculto@privado.com'
+  END AS user_email,
+  qr.city,
+  qr.state,
+  qr.neighborhood,
+  qr.category_id,
+  qr.subcategory,
+  qr.title,
+  qr.description,
+  qr.desired_deadline,
+  qr.budget_range,
+  qr.photos,
+  qr.status,
+  qr.created_at,
+  qr.created_at AS updated_at
+FROM public.quote_requests qr
+WHERE
+  auth.uid() = qr.user_id
+  OR public.is_admin()
+  OR (
+    qr.target_business_id IS NOT NULL
+    AND public.is_business_owner(qr.target_business_id, auth.uid())
+  )
+  OR public.has_user_proposed(qr.id, auth.uid())
+  OR (
+    qr.target_business_id IS NULL
+    AND qr.status IN ('aberto', 'propostas_recebidas')
+    AND (
+      public.user_has_active_business(auth.uid())
+      OR (SELECT role FROM public.profiles WHERE id = auth.uid()) IN ('business', 'admin')
+    )
+  );
+
+GRANT SELECT ON public.secure_leads_view TO authenticated, anon;
+
+ALTER TABLE public.notifications ENABLE ROW LEVEL SECURITY;
+
+DROP POLICY IF EXISTS "Users can access own notifications" ON public.notifications;
+DROP POLICY IF EXISTS "notifications_select" ON public.notifications;
+DROP POLICY IF EXISTS "notifications_insert" ON public.notifications;
+DROP POLICY IF EXISTS "notifications_update" ON public.notifications;
+DROP POLICY IF EXISTS "notifications_delete" ON public.notifications;
+
+CREATE POLICY "notifications_select"
+  ON public.notifications FOR SELECT
+  TO authenticated
+  USING (user_id = auth.uid() OR public.is_admin());
+
+CREATE POLICY "notifications_insert"
+  ON public.notifications FOR INSERT
+  TO authenticated
+  WITH CHECK (user_id = auth.uid() OR public.is_admin());
+
+CREATE POLICY "notifications_update"
+  ON public.notifications FOR UPDATE
+  TO authenticated
+  USING (user_id = auth.uid() OR public.is_admin())
+  WITH CHECK (user_id = auth.uid() OR public.is_admin());
+
+CREATE POLICY "notifications_delete"
+  ON public.notifications FOR DELETE
+  TO authenticated
+  USING (user_id = auth.uid() OR public.is_admin());
+
+GRANT SELECT, INSERT, UPDATE, DELETE ON public.notifications TO authenticated;
+
+CREATE INDEX IF NOT EXISTS idx_notifications_user_created 
+  ON public.notifications(user_id, created_at DESC);
+
+-- Triggers de Notificações
+CREATE OR REPLACE FUNCTION public.fn_notify_on_quote_request()
+RETURNS TRIGGER AS $$
+DECLARE
+  v_biz_owner UUID;
+  v_biz_name TEXT;
+BEGIN
+  IF NEW.target_business_id IS NOT NULL THEN
+    SELECT owner_id, name INTO v_biz_owner, v_biz_name
+    FROM public.businesses
+    WHERE id = NEW.target_business_id;
+
+    IF v_biz_owner IS NOT NULL THEN
+      INSERT INTO public.notifications (
+        user_id,
+        title,
+        message,
+        type,
+        read,
+        link_action
+      ) VALUES (
+        v_biz_owner,
+        '📋 Novo Orçamento Direcionado!',
+        'Um cliente solicitou um orçamento exclusivo para sua empresa: "' || NEW.title || '" em ' || COALESCE(NEW.neighborhood, NEW.city) || '.',
+        'quote_directed',
+        false,
+        'business_portal'
+      );
+    END IF;
+  END IF;
+
+  RETURN NEW;
+END;
+$$ LANGUAGE plpgsql SECURITY DEFINER SET search_path = public;
+
+DROP TRIGGER IF EXISTS tr_notify_quote_request ON public.quote_requests;
+CREATE TRIGGER tr_notify_quote_request
+  AFTER INSERT ON public.quote_requests
+  FOR EACH ROW
+  EXECUTE FUNCTION public.fn_notify_on_quote_request();
+
+CREATE OR REPLACE FUNCTION public.fn_notify_on_proposal_submitted()
+RETURNS TRIGGER AS $$
+DECLARE
+  v_quote RECORD;
+  v_biz_name TEXT;
+BEGIN
+  SELECT user_id, title INTO v_quote
+  FROM public.quote_requests
+  WHERE id = NEW.quote_request_id;
+
+  SELECT name INTO v_biz_name
+  FROM public.businesses
+  WHERE id = NEW.business_id;
+
+  IF v_quote.user_id IS NOT NULL THEN
+    INSERT INTO public.notifications (
+      user_id,
+      title,
+      message,
+      type,
+      read,
+      link_action
+    ) VALUES (
+      v_quote.user_id,
+      '💼 Nova Proposta Recebida!',
+      'A empresa "' || COALESCE(v_biz_name, 'Parceira') || '" enviou uma proposta de R$ ' || TO_CHAR(NEW.price, 'FM999G999G990D00') || ' para o seu pedido "' || v_quote.title || '".',
+      'proposal_received',
+      false,
+      'quotes'
+    );
+  END IF;
+
+  RETURN NEW;
+END;
+$$ LANGUAGE plpgsql SECURITY DEFINER SET search_path = public;
+
+DROP TRIGGER IF EXISTS tr_notify_proposal_submitted ON public.quote_proposals;
+CREATE TRIGGER tr_notify_proposal_submitted
+  AFTER INSERT ON public.quote_proposals
+  FOR EACH ROW
+  EXECUTE FUNCTION public.fn_notify_on_proposal_submitted();
+
+CREATE OR REPLACE FUNCTION public.fn_notify_on_proposal_accepted()
+RETURNS TRIGGER AS $$
+DECLARE
+  v_quote RECORD;
+  v_biz RECORD;
+BEGIN
+  IF NEW.status = 'escolhida' AND (OLD.status IS NULL OR OLD.status != 'escolhida') THEN
+    SELECT user_id, title INTO v_quote
+    FROM public.quote_requests
+    WHERE id = NEW.quote_request_id;
+
+    SELECT owner_id, name INTO v_biz
+    FROM public.businesses
+    WHERE id = NEW.business_id;
+
+    IF v_biz.owner_id IS NOT NULL THEN
+      INSERT INTO public.notifications (
+        user_id,
+        title,
+        message,
+        type,
+        read,
+        link_action
+      ) VALUES (
+        v_biz.owner_id,
+        '🎉 Parabéns! Sua Proposta foi Escolhida!',
+        'O cliente aceitou sua proposta de R$ ' || TO_CHAR(NEW.price, 'FM999G999G990D00') || ' para o orçamento "' || v_quote.title || '". O WhatsApp do cliente já está liberado para agendamento!',
+        'proposal_accepted',
+        false,
+        'business_portal'
+      );
+    END IF;
+
+    IF v_quote.user_id IS NOT NULL THEN
+      INSERT INTO public.notifications (
+        user_id,
+        title,
+        message,
+        type,
+        read,
+        link_action
+      ) VALUES (
+        v_quote.user_id,
+        '🎉 Contratação Confirmada!',
+        'Você escolheu a proposta de "' || COALESCE(v_biz.name, 'Empresa Parceira') || '". O contato via WhatsApp está disponível para combinar o atendimento.',
+        'proposal_chosen',
+        false,
+        'quotes'
+      );
+    END IF;
+  END IF;
+
+  RETURN NEW;
+END;
+$$ LANGUAGE plpgsql SECURITY DEFINER SET search_path = public;
+
+DROP TRIGGER IF EXISTS tr_notify_proposal_accepted ON public.quote_proposals;
+CREATE TRIGGER tr_notify_proposal_accepted
+  AFTER UPDATE OF status ON public.quote_proposals
+  FOR EACH ROW
+  EXECUTE FUNCTION public.fn_notify_on_proposal_accepted();
+
+CREATE OR REPLACE FUNCTION public.mark_notification_read(p_notification_id UUID)
+RETURNS BOOLEAN AS $$
+BEGIN
+  UPDATE public.notifications
+  SET read = true
+  WHERE id = p_notification_id
+    AND (user_id = auth.uid() OR public.is_admin());
+  RETURN true;
+END;
+$$ LANGUAGE plpgsql SECURITY DEFINER SET search_path = public;
+
+REVOKE EXECUTE ON FUNCTION public.mark_notification_read(UUID) FROM PUBLIC;
+REVOKE EXECUTE ON FUNCTION public.mark_notification_read(UUID) FROM anon;
+GRANT EXECUTE ON FUNCTION public.mark_notification_read(UUID) TO authenticated;
+
+CREATE OR REPLACE FUNCTION public.mark_all_notifications_read()
+RETURNS BOOLEAN AS $$
+BEGIN
+  UPDATE public.notifications
+  SET read = true
+  WHERE user_id = auth.uid();
+  RETURN true;
+END;
+$$ LANGUAGE plpgsql SECURITY DEFINER SET search_path = public;
+
+REVOKE EXECUTE ON FUNCTION public.mark_all_notifications_read() FROM PUBLIC;
+REVOKE EXECUTE ON FUNCTION public.mark_all_notifications_read() FROM anon;
+GRANT EXECUTE ON FUNCTION public.mark_all_notifications_read() TO authenticated;
+
+NOTIFY pgrst, 'reload schema';
