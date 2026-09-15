@@ -97,6 +97,7 @@ export const BusinessPortalView: React.FC = () => {
 
   const [activeTab, setActiveTab] = useState<'leads' | 'ofertas' | 'planos' | 'metricas'>('leads');
   const [quotesScope, setQuotesScope] = useState<'category' | 'all_region'>('category');
+  const [quotesFilterTab, setQuotesFilterTab] = useState<'won' | 'sent' | 'opportunities'>('opportunities');
 
   // Plan checkout modal
   const [checkoutPlan, setCheckoutPlan] = useState<'pro' | 'premium' | null>(null);
@@ -251,6 +252,10 @@ export const BusinessPortalView: React.FC = () => {
     if (q.targetBusinessId) {
       return (q.targetBusinessId || '').toLowerCase() === (currentBiz.id || '').toLowerCase();
     }
+    // Sempre inclui se a empresa já enviou proposta ou foi contratada
+    if (q.proposals && q.proposals.some((p) => (p.businessId || '').toLowerCase() === (currentBiz.id || '').toLowerCase())) {
+      return true;
+    }
     return isQuoteMatchingBusiness(q, currentBiz);
   });
 
@@ -260,6 +265,10 @@ export const BusinessPortalView: React.FC = () => {
     if (q.targetBusinessId) {
       return (q.targetBusinessId || '').toLowerCase() === (currentBiz.id || '').toLowerCase();
     }
+    // Sempre inclui se a empresa já enviou proposta ou foi contratada
+    if (q.proposals && q.proposals.some((p) => (p.businessId || '').toLowerCase() === (currentBiz.id || '').toLowerCase())) {
+      return true;
+    }
     return isLocationMatch(currentBiz, q);
   });
 
@@ -267,6 +276,47 @@ export const BusinessPortalView: React.FC = () => {
   const relevantQuotes = quotesScope === 'all_region'
     ? regionalQuotes
     : (categoryQuotes.length > 0 ? categoryQuotes : regionalQuotes);
+
+  // 1. Serviços Ganhos / Contratados pelo cliente (Prioridade máxima)
+  const wonQuotes = relevantQuotes.filter((q) => {
+    const myProposal = q.proposals.find((p) => (p.businessId || '').toLowerCase() === (currentBiz.id || '').toLowerCase());
+    return Boolean(
+      myProposal &&
+      (myProposal.status === 'escolhida' ||
+        (q.status === 'escolhido' && (q.proposals.length === 1 || myProposal.status !== 'recusada')))
+    );
+  });
+
+  // 2. Propostas Enviadas (Aguardando decisão do cliente)
+  const sentQuotes = relevantQuotes.filter((q) => {
+    const myProposal = q.proposals.find((p) => (p.businessId || '').toLowerCase() === (currentBiz.id || '').toLowerCase());
+    const isWon = Boolean(
+      myProposal &&
+      (myProposal.status === 'escolhida' ||
+        (q.status === 'escolhido' && (q.proposals.length === 1 || myProposal.status !== 'recusada')))
+    );
+    return Boolean(myProposal && !isWon && q.status !== 'cancelado');
+  });
+
+  // 3. Novas Oportunidades (Ainda não enviou proposta)
+  const oppsQuotes = relevantQuotes.filter((q) => {
+    const alreadySent = q.proposals.some((p) => (p.businessId || '').toLowerCase() === (currentBiz.id || '').toLowerCase());
+    return !alreadySent && q.status !== 'cancelado';
+  });
+
+  // Alterna automaticamente para a aba de 'won' quando houver serviços ganhos
+  React.useEffect(() => {
+    if (wonQuotes.length > 0) {
+      setQuotesFilterTab('won');
+    }
+  }, [wonQuotes.length, currentBiz.id]);
+
+  // Lista a ser exibida conforme a aba ativa
+  const displayedQuotes = quotesFilterTab === 'won'
+    ? wonQuotes
+    : quotesFilterTab === 'sent'
+    ? sentQuotes
+    : oppsQuotes;
 
   // Identifica se há orçamentos direcionados para outras empresas do mesmo usuário
   const otherBizDirectQuotes = ownedBusinesses
@@ -489,69 +539,121 @@ export const BusinessPortalView: React.FC = () => {
       {/* TAB: LEADS / COTAÇÕES RECEBIDAS */}
       {activeTab === 'leads' && (
         <div className="space-y-4">
-          <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
-            <div>
-              <h3 className="text-lg font-bold text-slate-900">
-                {quotesScope === 'all_region'
-                  ? `Todos os Orçamentos da Região de ${currentBiz.city || currentBiz.state || 'Atendimento'}`
-                  : `Oportunidades de Venda na Categoria "${currentBiz.subcategory || currentBiz.categoryId}"`}
-              </h3>
-              <p className="text-xs text-slate-500">
-                {quotesScope === 'all_region'
-                  ? `Exibindo todas as solicitações abertas em ${currentBiz.city || 'sua região'} para você enviar propostas`
-                  : `Clientes em ${currentBiz.city || 'sua região'} que solicitaram orçamentos`}
-              </p>
+          {/* Header e Abas de Status de Orçamentos */}
+          <div className="bg-white rounded-2xl border border-slate-100 p-4 sm:p-5 shadow-xs space-y-3">
+            <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+              <div>
+                <h3 className="text-base sm:text-lg font-black text-slate-900 tracking-tight">
+                  Orçamentos & Serviços da Empresa
+                </h3>
+                <p className="text-xs text-slate-500">
+                  Acompanhe seus serviços ganhos, propostas em análise e novas oportunidades na região.
+                </p>
+              </div>
 
-              {/* Botões de Alternância de Escopo de Orçamentos */}
-              <div className="flex items-center gap-2 pt-3">
+              <button
+                onClick={async () => {
+                  setIsRefreshing(true);
+                  try {
+                    await refreshQuoteRequests();
+                  } finally {
+                    setIsRefreshing(false);
+                  }
+                }}
+                disabled={isRefreshing}
+                className="text-xs font-bold px-3 py-2 rounded-xl border border-slate-200 hover:bg-slate-50 text-slate-700 transition flex items-center gap-1.5 self-start sm:self-auto cursor-pointer"
+                title="Atualizar orçamentos em tempo real"
+              >
+                <RefreshCw className={`w-3.5 h-3.5 ${isRefreshing ? 'animate-spin text-emerald-600' : 'text-slate-500'}`} />
+                <span>{isRefreshing ? 'Atualizando...' : 'Atualizar'}</span>
+              </button>
+            </div>
+
+            {/* Abas de Status (Segmented Pills) */}
+            <div className="flex items-center gap-2 overflow-x-auto pt-2 border-t border-slate-100 pb-1 scrollbar-none">
+              <button
+                type="button"
+                onClick={() => setQuotesFilterTab('won')}
+                className={`px-3.5 py-2 rounded-xl text-xs font-bold transition flex items-center gap-1.5 whitespace-nowrap cursor-pointer ${
+                  quotesFilterTab === 'won'
+                    ? 'bg-emerald-600 text-white shadow-xs'
+                    : 'bg-slate-100 text-slate-600 hover:bg-slate-200'
+                }`}
+              >
+                <CheckCircle2 className="w-3.5 h-3.5" />
+                <span>Serviços Ganhos</span>
+                <span className={`text-[10px] px-1.5 py-0.2 rounded-full font-extrabold ${
+                  quotesFilterTab === 'won' ? 'bg-emerald-800 text-white' : 'bg-emerald-100 text-emerald-800'
+                }`}>
+                  {wonQuotes.length}
+                </span>
+              </button>
+
+              <button
+                type="button"
+                onClick={() => setQuotesFilterTab('sent')}
+                className={`px-3.5 py-2 rounded-xl text-xs font-bold transition flex items-center gap-1.5 whitespace-nowrap cursor-pointer ${
+                  quotesFilterTab === 'sent'
+                    ? 'bg-slate-900 text-white shadow-xs'
+                    : 'bg-slate-100 text-slate-600 hover:bg-slate-200'
+                }`}
+              >
+                <Clock className="w-3.5 h-3.5" />
+                <span>Propostas Enviadas</span>
+                <span className={`text-[10px] px-1.5 py-0.2 rounded-full font-bold ${
+                  quotesFilterTab === 'sent' ? 'bg-slate-700 text-white' : 'bg-slate-200 text-slate-700'
+                }`}>
+                  {sentQuotes.length}
+                </span>
+              </button>
+
+              <button
+                type="button"
+                onClick={() => setQuotesFilterTab('opportunities')}
+                className={`px-3.5 py-2 rounded-xl text-xs font-bold transition flex items-center gap-1.5 whitespace-nowrap cursor-pointer ${
+                  quotesFilterTab === 'opportunities'
+                    ? 'bg-slate-900 text-white shadow-xs'
+                    : 'bg-slate-100 text-slate-600 hover:bg-slate-200'
+                }`}
+              >
+                <Sparkles className="w-3.5 h-3.5 text-amber-400" />
+                <span>Novas Oportunidades</span>
+                <span className={`text-[10px] px-1.5 py-0.2 rounded-full font-bold ${
+                  quotesFilterTab === 'opportunities' ? 'bg-slate-700 text-white' : 'bg-amber-100 text-amber-800'
+                }`}>
+                  {oppsQuotes.length}
+                </span>
+              </button>
+            </div>
+
+            {/* Subfiltro de escopo (somente visível na aba de Oportunidades) */}
+            {quotesFilterTab === 'opportunities' && (
+              <div className="flex items-center gap-2 pt-2 border-t border-slate-100">
+                <span className="text-[11px] font-semibold text-slate-500">Filtrar por:</span>
                 <button
                   type="button"
                   onClick={() => setQuotesScope('category')}
-                  className={`px-3 py-1.5 rounded-xl text-xs font-bold transition flex items-center gap-1.5 cursor-pointer ${
+                  className={`px-2.5 py-1 rounded-lg text-xs font-semibold transition ${
                     quotesScope === 'category'
-                      ? 'bg-emerald-600 text-white shadow-xs'
+                      ? 'bg-slate-800 text-white'
                       : 'bg-slate-100 text-slate-600 hover:bg-slate-200'
                   }`}
                 >
-                  <span>Minha Categoria</span>
-                  <span className={`text-[10px] px-1.5 py-0.2 rounded-full ${quotesScope === 'category' ? 'bg-emerald-800 text-white' : 'bg-slate-200 text-slate-700'}`}>
-                    {categoryQuotes.length}
-                  </span>
+                  Minha Categoria ({categoryQuotes.filter(q => !q.proposals.some(p => (p.businessId || '').toLowerCase() === (currentBiz.id || '').toLowerCase())).length})
                 </button>
-
                 <button
                   type="button"
                   onClick={() => setQuotesScope('all_region')}
-                  className={`px-3 py-1.5 rounded-xl text-xs font-bold transition flex items-center gap-1.5 cursor-pointer ${
+                  className={`px-2.5 py-1 rounded-lg text-xs font-semibold transition ${
                     quotesScope === 'all_region'
-                      ? 'bg-slate-900 text-white shadow-xs'
+                      ? 'bg-slate-800 text-white'
                       : 'bg-slate-100 text-slate-600 hover:bg-slate-200'
                   }`}
                 >
-                  <span>Geral da Região ({currentBiz.city || currentBiz.state || 'Geral'})</span>
-                  <span className={`text-[10px] px-1.5 py-0.2 rounded-full ${quotesScope === 'all_region' ? 'bg-slate-700 text-white' : 'bg-slate-200 text-slate-700'}`}>
-                    {regionalQuotes.length}
-                  </span>
+                  Toda a Região ({regionalQuotes.filter(q => !q.proposals.some(p => (p.businessId || '').toLowerCase() === (currentBiz.id || '').toLowerCase())).length})
                 </button>
               </div>
-            </div>
-
-            <button
-              onClick={async () => {
-                setIsRefreshing(true);
-                try {
-                  await refreshQuoteRequests();
-                } finally {
-                  setIsRefreshing(false);
-                }
-              }}
-              disabled={isRefreshing}
-              className="text-xs font-bold px-3 py-2 rounded-xl border border-slate-200 hover:bg-slate-50 text-slate-700 transition flex items-center gap-1.5 self-start sm:self-auto cursor-pointer"
-              title="Atualizar lista de orçamentos e leads recebidos"
-            >
-              <RefreshCw className={`w-3.5 h-3.5 ${isRefreshing ? 'animate-spin text-emerald-600' : 'text-slate-500'}`} />
-              <span>{isRefreshing ? 'Atualizando...' : 'Atualizar Leads'}</span>
-            </button>
+            )}
           </div>
 
           {otherBizDirectQuotes.length > 0 && (
@@ -574,148 +676,168 @@ export const BusinessPortalView: React.FC = () => {
             </div>
           )}
 
+          {/* LISTAGEM DE COTAÇÕES FILTRADAS */}
           <div className="space-y-3">
-            {relevantQuotes.length === 0 ? (
-              <div className="bg-white rounded-2xl p-10 text-center border border-slate-100 shadow-sm">
-                <p className="text-xs text-slate-500">Nenhum novo orçamento aguardando nesta categoria no momento.</p>
+            {displayedQuotes.length === 0 ? (
+              <div className="bg-white rounded-2xl p-8 sm:p-12 text-center border border-slate-100 shadow-xs space-y-2">
+                <div className="w-12 h-12 bg-slate-50 text-slate-400 rounded-2xl flex items-center justify-center mx-auto mb-2">
+                  {quotesFilterTab === 'won' ? (
+                    <CheckCircle2 className="w-6 h-6 text-emerald-500" />
+                  ) : quotesFilterTab === 'sent' ? (
+                    <Clock className="w-6 h-6 text-slate-400" />
+                  ) : (
+                    <Sparkles className="w-6 h-6 text-amber-500" />
+                  )}
+                </div>
+                <h4 className="text-sm font-bold text-slate-800">
+                  {quotesFilterTab === 'won'
+                    ? 'Nenhum serviço ganho no momento'
+                    : quotesFilterTab === 'sent'
+                    ? 'Nenhuma proposta em análise'
+                    : 'Nenhuma nova oportunidade nesta categoria'}
+                </h4>
+                <p className="text-xs text-slate-500 max-w-sm mx-auto">
+                  {quotesFilterTab === 'won'
+                    ? 'Quando um cliente aceitar seu orçamento, o contato liberado aparecerá aqui com prioridade máxima.'
+                    : quotesFilterTab === 'sent'
+                    ? 'Suas propostas enviadas que aguardam retorno dos clientes serão listadas aqui.'
+                    : 'Aguarde novos pedidos de clientes na sua cidade ou amplie para ver toda a região.'}
+                </p>
+                {quotesFilterTab !== 'opportunities' && oppsQuotes.length > 0 && (
+                  <button
+                    onClick={() => setQuotesFilterTab('opportunities')}
+                    className="mt-2 text-xs font-bold text-emerald-600 hover:text-emerald-700 underline cursor-pointer"
+                  >
+                    Ver {oppsQuotes.length} oportunidade(s) disponível(is) para envio
+                  </button>
+                )}
               </div>
             ) : (
-              relevantQuotes.map((q) => {
-                const alreadySent = q.proposals.some((p) => p.businessId === currentBiz.id);
-                const myProposal = q.proposals.find((p) => p.businessId === currentBiz.id);
+              displayedQuotes.map((q) => {
+                const alreadySent = q.proposals.some((p) => (p.businessId || '').toLowerCase() === (currentBiz.id || '').toLowerCase());
+                const myProposal = q.proposals.find((p) => (p.businessId || '').toLowerCase() === (currentBiz.id || '').toLowerCase());
                 const isProposalAccepted = Boolean(
                   myProposal &&
                     (myProposal.status === 'escolhida' ||
                       (q.status === 'escolhido' && (q.proposals.length === 1 || myProposal.status !== 'recusada')))
                 );
 
+                const hasPhone = Boolean(q.userPhone && !q.userPhone.includes('****'));
+
                 return (
                   <div
                     key={q.id}
-                    className={`bg-white rounded-2xl border p-5 shadow-sm space-y-3 transition ${
+                    className={`bg-white rounded-2xl p-5 shadow-xs transition space-y-3 ${
                       isProposalAccepted
-                        ? 'border-emerald-500 bg-emerald-50/20 ring-2 ring-emerald-500/20'
-                        : 'border-slate-100'
+                        ? 'border-2 border-emerald-500 ring-4 ring-emerald-500/5'
+                        : alreadySent
+                        ? 'border border-slate-200'
+                        : 'border border-slate-100 hover:border-slate-200'
                     }`}
                   >
+                    {/* Topo do Card */}
                     <div className="flex items-start justify-between gap-3">
-                      <div>
-                        <div className="flex flex-wrap gap-2">
+                      <div className="space-y-1">
+                        <div className="flex flex-wrap items-center gap-1.5">
+                          {isProposalAccepted ? (
+                            <span className="text-[10px] font-extrabold uppercase text-white bg-emerald-600 px-2.5 py-0.5 rounded-md flex items-center gap-1 shadow-2xs">
+                              <CheckCircle2 className="w-3 h-3" />
+                              Serviço Ganho • R$ {myProposal?.price.toFixed(2)}
+                            </span>
+                          ) : alreadySent ? (
+                            <span className="text-[10px] font-bold uppercase text-slate-700 bg-slate-100 px-2.5 py-0.5 rounded-md flex items-center gap-1">
+                              <Clock className="w-3 h-3" />
+                              Proposta Enviada • R$ {myProposal?.price.toFixed(2)}
+                            </span>
+                          ) : (
+                            <span className="text-[10px] font-bold uppercase text-amber-800 bg-amber-50 border border-amber-200 px-2.5 py-0.5 rounded-md">
+                              Nova Oportunidade
+                            </span>
+                          )}
+
                           {q.targetBusinessId && (
-                            <span className="text-[10px] font-bold uppercase text-amber-900 bg-amber-100 border border-amber-300 px-2.5 py-0.5 rounded-md flex items-center gap-1">
-                              <Star className="w-3 h-3 text-amber-600 fill-amber-500" />
-                              Orçamento Direcionado para Sua Empresa
+                            <span className="text-[10px] font-bold uppercase text-amber-900 bg-amber-100 px-2 py-0.5 rounded-md flex items-center gap-1">
+                              <Star className="w-3 h-3 fill-amber-500 text-amber-500" />
+                              Exclusivo
                             </span>
                           )}
-                          <span className="text-[10px] font-bold uppercase text-emerald-700 bg-emerald-50 px-2.5 py-0.5 rounded-md">
-                            LEAD REGIONAL • {q.neighborhood}
+
+                          <span className="text-[10px] text-slate-500 bg-slate-50 px-2 py-0.5 rounded-md">
+                            {q.neighborhood ? `${q.neighborhood}, ${q.city}` : q.city}
                           </span>
-                          {q.subcategory && (
-                            <span className="text-[10px] font-bold uppercase text-slate-600 bg-slate-100 px-2.5 py-0.5 rounded-md">
-                              {q.subcategory}
-                            </span>
-                          )}
                         </div>
-                        <h4 className="font-bold text-base text-slate-900 mt-1">{q.title}</h4>
+                        <h4 className="font-bold text-base text-slate-900">{q.title}</h4>
                       </div>
 
-                      {q.status === 'cancelado' ? (
-                        <span className="inline-flex items-center gap-1 text-xs font-semibold text-slate-600 bg-slate-100 px-2.5 py-1 rounded-md border border-slate-200">
-                          Encerrado pelo Cliente
-                        </span>
-                      ) : alreadySent ? (
-                        isProposalAccepted ? (
-                          <span className="inline-flex items-center gap-1.5 text-xs font-extrabold text-white bg-emerald-600 px-3 py-1 rounded-md shadow-xs">
-                            <CheckCircle2 className="w-3.5 h-3.5 text-emerald-200" />
-                            🎉 Proposta Escolhida (R$ {myProposal?.price.toFixed(2)})
-                          </span>
-                        ) : (
-                          <span className="inline-flex items-center gap-1 text-xs font-bold text-emerald-800 bg-emerald-50 px-2.5 py-1 rounded-md border border-emerald-200">
-                            <CheckCircle2 className="w-3.5 h-3.5" />
-                            Proposta Enviada (R$ {myProposal?.price.toFixed(2)})
-                          </span>
-                        )
-                      ) : (
-                        <span className="text-xs font-bold text-amber-800 bg-amber-50 px-2.5 py-1 rounded-md border border-amber-200">
-                          Novo Lead
+                      {q.status === 'cancelado' && (
+                        <span className="text-xs font-semibold text-slate-500 bg-slate-100 px-2.5 py-1 rounded-md">
+                          Encerrado
                         </span>
                       )}
                     </div>
 
-                    <p className="text-xs text-slate-600 leading-relaxed bg-slate-50 p-3 rounded-xl border border-slate-100">
+                    {/* Descrição do Pedido */}
+                    <p className="text-xs text-slate-600 leading-relaxed bg-slate-50/70 p-3 rounded-xl border border-slate-100">
                       {q.description}
                     </p>
 
-                    <div className="flex items-center justify-between text-xs text-slate-500 pt-1">
-                      <span>Prazo solicitado: <strong>{q.desiredDeadline}</strong></span>
-                      <span>Cliente: <strong>{q.userName}</strong></span>
+                    {/* Metadados: Cliente e Prazo */}
+                    <div className="flex flex-wrap items-center justify-between text-xs text-slate-500 gap-2 pt-0.5">
+                      <span>Cliente: <strong className="text-slate-700">{q.userName}</strong></span>
+                      <span>Prazo: <strong className="text-slate-700">{q.desiredDeadline || 'A combinar'}</strong></span>
                     </div>
 
-                    {isProposalAccepted && (
-                      <div className="p-3.5 bg-emerald-50 border border-emerald-200 rounded-xl flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3">
-                        <div>
-                          <span className="text-[10px] font-extrabold uppercase text-emerald-800 bg-emerald-100 px-2 py-0.5 rounded-md">
-                            🎉 CLIENTE CONTRATOU SUA EMPRESA
-                          </span>
-                          <p className="text-xs text-emerald-950 font-bold mt-1">
-                            {q.userName} • Telefone: {q.userPhone && !q.userPhone.includes('****') ? q.userPhone : 'Liberado no WhatsApp'}
-                          </p>
-                          <p className="text-[11px] text-emerald-700">
-                            Inicie o contato imediatamente para combinar data, horário e execução do serviço.
-                          </p>
-                        </div>
-                        {q.userPhone && !q.userPhone.includes('****') && (
-                          <a
-                            href={buildWhatsAppLink(
-                              q.userPhone,
-                              `Olá ${q.userName || ''}! Sou da empresa ${myProposal?.businessName || currentBiz?.name || 'parceira'}. Vi que você aceitou minha proposta de R$ ${myProposal?.price.toFixed(2)} para o pedido "${q.title}" no EconomizaJá! Gostaria de combinar a data e horário para o atendimento.`
-                            )}
-                            target="_blank"
-                            rel="noreferrer"
-                            className="px-4 py-2.5 bg-emerald-600 hover:bg-emerald-700 text-white rounded-xl text-xs font-bold transition flex items-center gap-2 shadow-sm shrink-0 active:scale-95"
-                          >
-                            <MessageCircle className="w-4 h-4" />
-                            <span>Conversar no WhatsApp</span>
-                          </a>
-                        )}
-                      </div>
-                    )}
-
-                    <div className="pt-2 border-t border-slate-100 flex items-center justify-between">
-                      <span className="text-xs text-slate-400">
-                        {(q.proposals || []).length} empresas concorrendo neste pedido
+                    {/* Rodapé e Ação Principal (CTA Único e Limpo) */}
+                    <div className="pt-3 border-t border-slate-100 flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+                      <span className="text-[11px] text-slate-400">
+                        {(q.proposals || []).length} empresa(s) orçando este pedido
                       </span>
 
-                      {q.status === 'cancelado' ? (
-                        <button
-                          onClick={() => setComparingQuoteRequestId(q.id)}
-                          className="px-3.5 py-2 rounded-xl text-xs font-semibold border border-slate-200 hover:bg-slate-50 text-slate-600 transition"
-                        >
-                          Ver Detalhes (Encerrado)
-                        </button>
-                      ) : !alreadySent ? (
-                        <button
-                          onClick={() => setActiveQuoteId(q.id)}
-                          className="px-4 py-2.5 rounded-xl bg-emerald-600 hover:bg-emerald-700 text-white text-xs font-bold shadow-sm shadow-emerald-600/20 transition flex items-center gap-1.5"
-                        >
-                          <Send className="w-3.5 h-3.5" />
-                          <span>ENVIAR PROPOSTA DE ORÇAMENTO</span>
-                        </button>
-                      ) : (
-                        <button
-                          onClick={() => setComparingQuoteRequestId(q.id)}
-                          className={`px-4 py-2 rounded-xl text-xs font-bold transition flex items-center gap-1.5 ${
-                            isProposalAccepted
-                              ? 'bg-emerald-600 hover:bg-emerald-700 text-white shadow-sm'
-                              : 'border border-slate-200 hover:bg-slate-50 text-slate-700'
-                          }`}
-                        >
-                          {isProposalAccepted && <CheckCircle2 className="w-3.5 h-3.5 text-emerald-200" />}
-                          <span>
-                            {isProposalAccepted ? 'Ver Proposta Escolhida & Contato' : 'Ver Comparativo de Propostas'}
-                          </span>
-                        </button>
-                      )}
+                      <div className="flex items-center gap-2 w-full sm:w-auto">
+                        {isProposalAccepted ? (
+                          <>
+                            {hasPhone ? (
+                              <a
+                                href={buildWhatsAppLink(
+                                  q.userPhone,
+                                  `Olá ${q.userName || ''}! Sou da empresa ${myProposal?.businessName || currentBiz?.name || 'parceira'}. Vi que você aceitou minha proposta de R$ ${myProposal?.price.toFixed(2)} para o pedido "${q.title}" no EconomizaJá! Gostaria de combinar a data e horário para o atendimento.`
+                                )}
+                                target="_blank"
+                                rel="noreferrer"
+                                className="w-full sm:w-auto px-5 py-2.5 bg-emerald-600 hover:bg-emerald-700 text-white rounded-xl text-xs font-bold transition flex items-center justify-center gap-2 shadow-xs active:scale-95"
+                              >
+                                <MessageCircle className="w-4 h-4" />
+                                <span>Conversar no WhatsApp</span>
+                              </a>
+                            ) : (
+                              <span className="text-xs text-slate-500 font-medium">
+                                Telefone em liberação
+                              </span>
+                            )}
+                            <button
+                              onClick={() => setComparingQuoteRequestId(q.id)}
+                              className="px-3.5 py-2.5 rounded-xl text-xs font-semibold text-slate-600 hover:bg-slate-100 transition whitespace-nowrap"
+                            >
+                              Ver Detalhes
+                            </button>
+                          </>
+                        ) : !alreadySent ? (
+                          <button
+                            onClick={() => setActiveQuoteId(q.id)}
+                            className="w-full sm:w-auto px-5 py-2.5 rounded-xl bg-emerald-600 hover:bg-emerald-700 text-white text-xs font-bold shadow-xs transition flex items-center justify-center gap-1.5 active:scale-95 cursor-pointer"
+                          >
+                            <Send className="w-3.5 h-3.5" />
+                            <span>Enviar Proposta</span>
+                          </button>
+                        ) : (
+                          <button
+                            onClick={() => setComparingQuoteRequestId(q.id)}
+                            className="w-full sm:w-auto px-4 py-2.5 rounded-xl text-xs font-bold border border-slate-200 hover:bg-slate-50 text-slate-700 transition flex items-center justify-center gap-1.5"
+                          >
+                            <span>Ver Proposta Enviada</span>
+                          </button>
+                        )}
+                      </div>
                     </div>
                   </div>
                 );

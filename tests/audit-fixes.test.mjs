@@ -160,5 +160,42 @@ describe('Auditoria e Correções Funcionais - EconomizaJá', () => {
     assert.ok(sqlContent.includes("tr_notify_proposal_submitted"), 'Migration deve conter trigger de envio de proposta');
     assert.ok(sqlContent.includes("tr_notify_proposal_accepted"), 'Migration deve conter trigger de aceite de proposta');
   });
+
+  test('11. BusinessPortalView: Abas de status de orçamentos (Ganhos, Enviados, Oportunidades) e CTA único', () => {
+    const portalPath = path.join(rootDir, 'src', 'components', 'BusinessPortalView.tsx');
+    const content = fs.readFileSync(portalPath, 'utf-8');
+
+    assert.ok(
+      content.includes("quotesFilterTab"),
+      'BusinessPortalView deve possuir quotesFilterTab para alternância entre status'
+    );
+    assert.ok(
+      content.includes("Serviços Ganhos") && content.includes("Propostas Enviadas") && content.includes("Novas Oportunidades"),
+      'BusinessPortalView deve renderizar as 3 abas de status para o parceiro'
+    );
+    assert.ok(
+      content.includes("setQuotesFilterTab('won')"),
+      'BusinessPortalView deve priorizar a aba de serviços ganhos'
+    );
+  });
+
+  test('12. QuotesView: Seletor de visão Consumidor vs Minha Empresa para parceiros', () => {
+    const quotesPath = path.join(rootDir, 'src', 'components', 'QuotesView.tsx');
+    const content = fs.readFileSync(quotesPath, 'utf-8');
+
+    assert.ok(
+      content.includes("viewMode"),
+      'QuotesView deve possuir controle de viewMode'
+    );
+    assert.ok(
+      content.includes("Meus Pedidos (Consumidor)") && content.includes("Serviços da Minha Empresa"),
+      'QuotesView deve renderizar seletor entre pedidos do cliente e serviços da empresa'
+    );
+    assert.ok(
+      content.includes("businessQuotes"),
+      'QuotesView deve calcular e listar orçamentos onde a empresa participou'
+    );
+  });
 });
+
 

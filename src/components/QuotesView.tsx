@@ -14,14 +14,19 @@ import {
   X,
   Sparkles,
   SlidersHorizontal,
+  Building2,
+  MessageCircle,
 } from 'lucide-react';
 import { QuoteRequest } from '../types';
+import { buildWhatsAppLink } from '../utils/whatsappUtils';
+
 
 type TabFilter = 'all' | 'active' | 'completed' | 'cancelled';
 
 export const QuotesView: React.FC = () => {
   const {
     quoteRequests,
+    businesses,
     setComparingQuoteRequestId,
     setIsQuoteModalOpen,
     cancelQuoteRequest,
@@ -31,6 +36,7 @@ export const QuotesView: React.FC = () => {
     setActiveTab: setNavTab,
   } = useApp();
 
+  const [viewMode, setViewMode] = useState<'customer' | 'business'>('customer');
   const [activeTab, setActiveTab] = useState<TabFilter>('all');
   const [quoteToCancel, setQuoteToCancel] = useState<QuoteRequest | null>(null);
   const [quoteToDelete, setQuoteToDelete] = useState<QuoteRequest | null>(null);
@@ -50,6 +56,30 @@ export const QuotesView: React.FC = () => {
     return () => window.removeEventListener('keydown', handleEscape);
   }, [isProcessing]);
 
+  // Empresas do usuário logado
+  const userBusinesses = currentUser?.id
+    ? businesses.filter((b) => (b.ownerId || '').toLowerCase() === (currentUser.id || '').toLowerCase())
+    : [];
+
+  // Orçamentos onde as empresas do usuário participam
+  const businessQuotes = quoteRequests.filter((qr) => {
+    const hasMyProposal = qr.proposals.some((p) =>
+      userBusinesses.some((b) => (b.id || '').toLowerCase() === (p.businessId || '').toLowerCase())
+    );
+    const isTargeted = userBusinesses.some(
+      (b) => (b.id || '').toLowerCase() === (qr.targetBusinessId || '').toLowerCase()
+    );
+    return hasMyProposal || isTargeted;
+  });
+
+  const wonBusinessQuotes = businessQuotes.filter((qr) => {
+    return qr.proposals.some(
+      (p) =>
+        userBusinesses.some((b) => (b.id || '').toLowerCase() === (p.businessId || '').toLowerCase()) &&
+        (p.status === 'escolhida' || (qr.status === 'escolhido' && p.status !== 'recusada'))
+    );
+  });
+
   // Filtra as cotações pessoais do solicitante (o Admin não herda cotações alheias como pessoais)
   const myQuotes = currentUser?.id
     ? quoteRequests.filter((qr) => qr.userId === currentUser.id)
@@ -61,14 +91,14 @@ export const QuotesView: React.FC = () => {
     (qr) => qr.status === 'aberto' || qr.status === 'propostas_recebidas'
   ).length;
   const completedCount = myQuotes.filter(
-    (qr) => qr.status === 'escolhido' || qr.status === 'finalizado'
+    (qr) => qr.status === 'escolhido' || qr.status === 'escolhida' || qr.status === 'finalizado'
   ).length;
   const cancelledCount = myQuotes.filter((qr) => qr.status === 'cancelado').length;
 
   // Filtragem
   const filteredQuotes = myQuotes.filter((qr) => {
     if (activeTab === 'active') return qr.status === 'aberto' || qr.status === 'propostas_recebidas';
-    if (activeTab === 'completed') return qr.status === 'escolhido' || qr.status === 'finalizado';
+    if (activeTab === 'completed') return qr.status === 'escolhido' || qr.status === 'escolhida' || qr.status === 'finalizado';
     if (activeTab === 'cancelled') return qr.status === 'cancelado';
     return true;
   });
@@ -129,100 +159,281 @@ export const QuotesView: React.FC = () => {
         </div>
       )}
 
-      {/* Header */}
-      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 bg-white rounded-2xl p-6 border border-slate-100 shadow-sm">
-        <div>
-          <h2 className="text-2xl font-bold text-slate-900">Minhas Solicitações de Orçamento</h2>
-          <p className="text-xs text-slate-500 mt-1">
-            Acompanhe propostas recebidas de oficinas, profissionais e lojas. Você tem controle total para encerrar ou excluir suas cotações a qualquer momento.
-          </p>
-        </div>
-
-        <div className="flex items-center gap-2 shrink-0">
-          {currentUser && (
-            <button
-              onClick={() => setPublicRoute('delete_account')}
-              className="px-3.5 py-3 rounded-xl border border-slate-200 hover:border-rose-200 hover:bg-rose-50 text-slate-500 hover:text-rose-700 font-semibold text-xs transition flex items-center gap-1.5"
-              title="Solicitar eliminação dos meus dados e cadastro (LGPD Art. 18)"
-            >
-              <Trash2 className="w-3.5 h-3.5 text-slate-400 group-hover:text-rose-600" />
-              <span className="hidden sm:inline">Excluir Conta</span>
-            </button>
-          )}
-
+      {/* Seletor de Perfil: Consumidor vs Minha Empresa (se possuir empresa cadastrada) */}
+      {userBusinesses.length > 0 && (
+        <div className="bg-slate-100 p-1.5 rounded-2xl flex items-center gap-1.5 shadow-2xs">
           <button
-            onClick={() => setIsQuoteModalOpen(true)}
-            className="px-5 py-3 rounded-xl bg-emerald-600 hover:bg-emerald-700 text-white font-bold text-xs shadow-md shadow-emerald-600/20 transition flex items-center justify-center gap-2 shrink-0 active:scale-95"
-          >
-            <PlusCircle className="w-4 h-4" />
-            <span>PEDIR NOVO ORÇAMENTO</span>
-          </button>
-        </div>
-      </div>
-
-      {/* Tabs / Filtros */}
-      {totalCount > 0 && (
-        <div className="flex items-center gap-2 overflow-x-auto pb-1 no-scrollbar border-b border-slate-200">
-          <button
-            onClick={() => setActiveTab('all')}
-            className={`px-4 py-2 rounded-xl text-xs font-bold transition shrink-0 flex items-center gap-2 ${
-              activeTab === 'all'
-                ? 'bg-slate-900 text-white shadow-xs'
-                : 'bg-white text-slate-600 hover:bg-slate-100 border border-slate-200'
+            type="button"
+            onClick={() => setViewMode('customer')}
+            className={`flex-1 py-2.5 px-3 rounded-xl text-xs font-bold transition flex items-center justify-center gap-2 cursor-pointer ${
+              viewMode === 'customer'
+                ? 'bg-white text-slate-900 shadow-xs'
+                : 'text-slate-600 hover:text-slate-900'
             }`}
           >
-            <span>Todos</span>
-            <span className={`text-[10px] px-1.5 py-0.2 rounded-full ${activeTab === 'all' ? 'bg-slate-700 text-white' : 'bg-slate-200 text-slate-700'}`}>
-              {totalCount}
+            <span>Meus Pedidos (Consumidor)</span>
+            <span className={`text-[10px] px-2 py-0.5 rounded-full font-bold ${
+              viewMode === 'customer' ? 'bg-slate-100 text-slate-700' : 'bg-slate-200 text-slate-600'
+            }`}>
+              {myQuotes.length}
             </span>
           </button>
 
           <button
-            onClick={() => setActiveTab('active')}
-            className={`px-4 py-2 rounded-xl text-xs font-bold transition shrink-0 flex items-center gap-2 ${
-              activeTab === 'active'
+            type="button"
+            onClick={() => setViewMode('business')}
+            className={`flex-1 py-2.5 px-3 rounded-xl text-xs font-bold transition flex items-center justify-center gap-2 cursor-pointer ${
+              viewMode === 'business'
                 ? 'bg-emerald-600 text-white shadow-xs'
-                : 'bg-white text-slate-600 hover:bg-slate-100 border border-slate-200'
+                : 'text-slate-600 hover:text-slate-900'
             }`}
           >
-            <span>Em Aberto</span>
-            <span className={`text-[10px] px-1.5 py-0.2 rounded-full ${activeTab === 'active' ? 'bg-emerald-700 text-white' : 'bg-emerald-100 text-emerald-800'}`}>
-              {activeCount}
-            </span>
-          </button>
-
-          <button
-            onClick={() => setActiveTab('completed')}
-            className={`px-4 py-2 rounded-xl text-xs font-bold transition shrink-0 flex items-center gap-2 ${
-              activeTab === 'completed'
-                ? 'bg-blue-600 text-white shadow-xs'
-                : 'bg-white text-slate-600 hover:bg-slate-100 border border-slate-200'
-            }`}
-          >
-            <span>Concluídos / Escolhidos</span>
-            <span className={`text-[10px] px-1.5 py-0.2 rounded-full ${activeTab === 'completed' ? 'bg-blue-700 text-white' : 'bg-blue-100 text-blue-800'}`}>
-              {completedCount}
-            </span>
-          </button>
-
-          <button
-            onClick={() => setActiveTab('cancelled')}
-            className={`px-4 py-2 rounded-xl text-xs font-bold transition shrink-0 flex items-center gap-2 ${
-              activeTab === 'cancelled'
-                ? 'bg-slate-600 text-white shadow-xs'
-                : 'bg-white text-slate-600 hover:bg-slate-100 border border-slate-200'
-            }`}
-          >
-            <span>Encerrados</span>
-            <span className={`text-[10px] px-1.5 py-0.2 rounded-full ${activeTab === 'cancelled' ? 'bg-slate-700 text-white' : 'bg-slate-200 text-slate-700'}`}>
-              {cancelledCount}
+            <Building2 className="w-3.5 h-3.5" />
+            <span>Serviços da Minha Empresa</span>
+            <span className={`text-[10px] px-2 py-0.5 rounded-full font-extrabold ${
+              viewMode === 'business' ? 'bg-emerald-800 text-white' : 'bg-emerald-100 text-emerald-800'
+            }`}>
+              {wonBusinessQuotes.length > 0 ? `${wonBusinessQuotes.length} ganho(s)` : businessQuotes.length}
             </span>
           </button>
         </div>
       )}
 
-      {/* List */}
-      <div className="space-y-4">
+      {/* VISÃO DA EMPRESA PARCEIRA */}
+      {viewMode === 'business' ? (
+        <div className="space-y-4">
+          <div className="bg-white rounded-2xl border border-slate-100 p-5 shadow-xs flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3">
+            <div>
+              <div className="flex items-center gap-2">
+                <span className="text-[10px] font-extrabold uppercase bg-emerald-50 text-emerald-700 border border-emerald-200 px-2.5 py-0.5 rounded-md">
+                  Painel Rápido do Parceiro
+                </span>
+                <span className="text-xs text-slate-400 font-medium">
+                  {userBusinesses.map(b => b.name).join(', ')}
+                </span>
+              </div>
+              <h3 className="text-lg font-bold text-slate-900 mt-1">Orçamentos Vinculados à Sua Empresa</h3>
+              <p className="text-xs text-slate-500">
+                Abaixo estão as propostas enviadas pela sua empresa e os serviços onde você foi contratado pelo cliente.
+              </p>
+            </div>
+
+            <button
+              onClick={() => setNavTab('business_portal')}
+              className="px-4 py-2.5 bg-slate-900 hover:bg-slate-800 text-white rounded-xl text-xs font-bold transition shrink-0 flex items-center gap-1.5 shadow-xs active:scale-95 cursor-pointer"
+            >
+              <Building2 className="w-4 h-4 text-emerald-400" />
+              <span>Abrir Painel do Parceiro</span>
+            </button>
+          </div>
+
+          {/* Lista de cotações da empresa */}
+          {businessQuotes.length === 0 ? (
+            <div className="bg-white rounded-2xl p-10 text-center border border-slate-100 shadow-xs space-y-3">
+              <Building2 className="w-12 h-12 text-slate-300 mx-auto" />
+              <h4 className="text-sm font-bold text-slate-800">Nenhum orçamento em andamento para sua empresa</h4>
+              <p className="text-xs text-slate-500 max-w-sm mx-auto">
+                Acesse o Painel do Parceiro para ver novas oportunidades na sua região e enviar propostas comerciais.
+              </p>
+              <button
+                onClick={() => setNavTab('business_portal')}
+                className="mt-2 px-5 py-2.5 bg-emerald-600 hover:bg-emerald-700 text-white rounded-xl text-xs font-bold shadow-xs transition"
+              >
+                Buscar Oportunidades no Painel
+              </button>
+            </div>
+          ) : (
+            <div className="space-y-3">
+              {businessQuotes.map((q) => {
+                const myProposal = q.proposals.find((p) =>
+                  userBusinesses.some((b) => (b.id || '').toLowerCase() === (p.businessId || '').toLowerCase())
+                );
+                const isWon = Boolean(
+                  myProposal &&
+                    (myProposal.status === 'escolhida' ||
+                      (q.status === 'escolhido' && (q.proposals.length === 1 || myProposal.status !== 'recusada')))
+                );
+                const hasPhone = Boolean(q.userPhone && !q.userPhone.includes('****'));
+
+                return (
+                  <div
+                    key={q.id}
+                    className={`bg-white rounded-2xl p-5 shadow-xs transition space-y-3 ${
+                      isWon
+                        ? 'border-2 border-emerald-500 ring-4 ring-emerald-500/5'
+                        : 'border border-slate-200'
+                    }`}
+                  >
+                    <div className="flex items-start justify-between gap-3">
+                      <div className="space-y-1">
+                        <div className="flex flex-wrap items-center gap-1.5">
+                          {isWon ? (
+                            <span className="text-[10px] font-extrabold uppercase text-white bg-emerald-600 px-2.5 py-0.5 rounded-md flex items-center gap-1">
+                              <CheckCircle2 className="w-3 h-3" />
+                              🎉 Proposta Aceita • R$ {myProposal?.price.toFixed(2)}
+                            </span>
+                          ) : (
+                            <span className="text-[10px] font-bold uppercase text-slate-700 bg-slate-100 px-2.5 py-0.5 rounded-md flex items-center gap-1">
+                              <Clock className="w-3 h-3" />
+                              Proposta Enviada • R$ {myProposal?.price.toFixed(2)}
+                            </span>
+                          )}
+
+                          <span className="text-[10px] text-slate-500 bg-slate-50 px-2 py-0.5 rounded-md">
+                            {q.neighborhood ? `${q.neighborhood}, ${q.city}` : q.city}
+                          </span>
+                        </div>
+                        <h4 className="font-bold text-base text-slate-900">{q.title}</h4>
+                      </div>
+
+                      {isWon && (
+                        <span className="text-[10px] font-bold uppercase bg-emerald-100 text-emerald-800 px-2 py-1 rounded-md">
+                          Contratado
+                        </span>
+                      )}
+                    </div>
+
+                    <p className="text-xs text-slate-600 bg-slate-50/70 p-3 rounded-xl border border-slate-100">
+                      {q.description}
+                    </p>
+
+                    <div className="flex flex-wrap items-center justify-between text-xs text-slate-500 gap-2">
+                      <span>Cliente: <strong className="text-slate-700">{q.userName}</strong></span>
+                      <span>Prazo: <strong className="text-slate-700">{q.desiredDeadline || 'A combinar'}</strong></span>
+                    </div>
+
+                    <div className="pt-3 border-t border-slate-100 flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+                      <span className="text-[11px] text-slate-400">
+                        {myProposal?.businessName ? `Empresa: ${myProposal.businessName}` : 'Sua Empresa'}
+                      </span>
+
+                      <div className="flex items-center gap-2 w-full sm:w-auto">
+                        {isWon && hasPhone && (
+                          <a
+                            href={buildWhatsAppLink(
+                              q.userPhone,
+                              `Olá ${q.userName || ''}! Sou da empresa ${myProposal?.businessName || 'parceira'}. Vi que você aceitou minha proposta de R$ ${myProposal?.price.toFixed(2)} para o pedido "${q.title}" no EconomizaJá! Gostaria de combinar o atendimento.`
+                            )}
+                            target="_blank"
+                            rel="noreferrer"
+                            className="w-full sm:w-auto px-5 py-2.5 bg-emerald-600 hover:bg-emerald-700 text-white rounded-xl text-xs font-bold transition flex items-center justify-center gap-2 shadow-xs active:scale-95"
+                          >
+                            <MessageCircle className="w-4 h-4" />
+                            <span>Conversar no WhatsApp</span>
+                          </a>
+                        )}
+
+                        <button
+                          onClick={() => setComparingQuoteRequestId(q.id)}
+                          className="w-full sm:w-auto px-4 py-2.5 rounded-xl text-xs font-semibold border border-slate-200 hover:bg-slate-50 text-slate-700 transition"
+                        >
+                          Ver Detalhes do Pedido
+                        </button>
+                      </div>
+                    </div>
+                  </div>
+                );
+              })}
+            </div>
+          )}
+        </div>
+      ) : (
+        /* VISÃO DO CONSUMIDOR (PADRÃO) */
+        <>
+          {/* Header */}
+          <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 bg-white rounded-2xl p-6 border border-slate-100 shadow-sm">
+            <div>
+              <h2 className="text-2xl font-bold text-slate-900">Minhas Solicitações de Orçamento</h2>
+              <p className="text-xs text-slate-500 mt-1">
+                Acompanhe propostas recebidas de oficinas, profissionais e lojas. Você tem controle total para encerrar ou excluir suas cotações a qualquer momento.
+              </p>
+            </div>
+
+            <div className="flex items-center gap-2 shrink-0">
+              {currentUser && (
+                <button
+                  onClick={() => setPublicRoute('delete_account')}
+                  className="px-3.5 py-3 rounded-xl border border-slate-200 hover:border-rose-200 hover:bg-rose-50 text-slate-500 hover:text-rose-700 font-semibold text-xs transition flex items-center gap-1.5"
+                  title="Solicitar eliminação dos meus dados e cadastro (LGPD Art. 18)"
+                >
+                  <Trash2 className="w-3.5 h-3.5 text-slate-400 group-hover:text-rose-600" />
+                  <span className="hidden sm:inline">Excluir Conta</span>
+                </button>
+              )}
+
+              <button
+                onClick={() => setIsQuoteModalOpen(true)}
+                className="px-5 py-3 rounded-xl bg-emerald-600 hover:bg-emerald-700 text-white font-bold text-xs shadow-md shadow-emerald-600/20 transition flex items-center justify-center gap-2 shrink-0 active:scale-95"
+              >
+                <PlusCircle className="w-4 h-4" />
+                <span>PEDIR NOVO ORÇAMENTO</span>
+              </button>
+            </div>
+          </div>
+
+          {/* Tabs / Filtros */}
+          {totalCount > 0 && (
+            <div className="flex items-center gap-2 overflow-x-auto pb-1 no-scrollbar border-b border-slate-200">
+              <button
+                onClick={() => setActiveTab('all')}
+                className={`px-4 py-2 rounded-xl text-xs font-bold transition shrink-0 flex items-center gap-2 ${
+                  activeTab === 'all'
+                    ? 'bg-slate-900 text-white shadow-xs'
+                    : 'bg-white text-slate-600 hover:bg-slate-100 border border-slate-200'
+                }`}
+              >
+                <span>Todos</span>
+                <span className={`text-[10px] px-1.5 py-0.2 rounded-full ${activeTab === 'all' ? 'bg-slate-700 text-white' : 'bg-slate-200 text-slate-700'}`}>
+                  {totalCount}
+                </span>
+              </button>
+
+              <button
+                onClick={() => setActiveTab('active')}
+                className={`px-4 py-2 rounded-xl text-xs font-bold transition shrink-0 flex items-center gap-2 ${
+                  activeTab === 'active'
+                    ? 'bg-emerald-600 text-white shadow-xs'
+                    : 'bg-white text-slate-600 hover:bg-slate-100 border border-slate-200'
+                }`}
+              >
+                <span>Em Aberto</span>
+                <span className={`text-[10px] px-1.5 py-0.2 rounded-full ${activeTab === 'active' ? 'bg-emerald-700 text-white' : 'bg-emerald-100 text-emerald-800'}`}>
+                  {activeCount}
+                </span>
+              </button>
+
+              <button
+                onClick={() => setActiveTab('completed')}
+                className={`px-4 py-2 rounded-xl text-xs font-bold transition shrink-0 flex items-center gap-2 ${
+                  activeTab === 'completed'
+                    ? 'bg-blue-600 text-white shadow-xs'
+                    : 'bg-white text-slate-600 hover:bg-slate-100 border border-slate-200'
+                }`}
+              >
+                <span>Concluídos / Escolhidos</span>
+                <span className={`text-[10px] px-1.5 py-0.2 rounded-full ${activeTab === 'completed' ? 'bg-blue-700 text-white' : 'bg-blue-100 text-blue-800'}`}>
+                  {completedCount}
+                </span>
+              </button>
+
+              <button
+                onClick={() => setActiveTab('cancelled')}
+                className={`px-4 py-2 rounded-xl text-xs font-bold transition shrink-0 flex items-center gap-2 ${
+                  activeTab === 'cancelled'
+                    ? 'bg-slate-600 text-white shadow-xs'
+                    : 'bg-white text-slate-600 hover:bg-slate-100 border border-slate-200'
+                }`}
+              >
+                <span>Encerrados</span>
+                <span className={`text-[10px] px-1.5 py-0.2 rounded-full ${activeTab === 'cancelled' ? 'bg-slate-700 text-white' : 'bg-slate-200 text-slate-700'}`}>
+                  {cancelledCount}
+                </span>
+              </button>
+            </div>
+          )}
+
+          {/* List */}
+          <div className="space-y-4">
         {filteredQuotes.length === 0 ? (
           <div className="bg-white rounded-2xl p-12 text-center border border-slate-100 shadow-sm space-y-4">
             <FileText className="w-12 h-12 text-slate-300 mx-auto" />
@@ -398,6 +609,8 @@ export const QuotesView: React.FC = () => {
           })
         )}
       </div>
+    </>
+  )}
 
       {/* MODAL DE CONFIRMAÇÃO: ENCERRAR PEDIDO */}
       {quoteToCancel && (
