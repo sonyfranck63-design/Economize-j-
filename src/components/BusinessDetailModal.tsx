@@ -3,6 +3,8 @@ import { useApp } from '../context/AppContext';
 import { BusinessAvatar } from './BusinessAvatar';
 import { SafeImage } from './SafeImage';
 import { buildWhatsAppLink } from '../utils/whatsappUtils';
+import { motion, AnimatePresence } from 'motion/react';
+import { modalBackdropVariants, modalContentVariants } from '../utils/motionVariants';
 import {
   X,
   Star,
@@ -51,13 +53,9 @@ export const BusinessDetailModal: React.FC = () => {
     return () => window.removeEventListener('keydown', handleEscape);
   }, [setSelectedBusinessId]);
 
-  if (!selectedBusinessId) return null;
-
-  const biz = businesses.find((b) => b.id === selectedBusinessId);
-  if (!biz) return null;
-
-  const bizOffers = offers.filter((o) => o.businessId === biz.id);
-  const isFav = favorites.businessIds.includes(biz.id);
+  const biz = selectedBusinessId ? businesses.find((b) => b.id === selectedBusinessId) : null;
+  const bizOffers = biz ? offers.filter((o) => o.businessId === biz.id) : [];
+  const isFav = biz ? favorites.businessIds.includes(biz.id) : false;
 
   const handleReviewSubmit = (e: React.FormEvent) => {
     e.preventDefault();
@@ -65,7 +63,7 @@ export const BusinessDetailModal: React.FC = () => {
       setIsAuthModalOpen(true);
       return;
     }
-    if (!reviewComment.trim()) return;
+    if (!reviewComment.trim() || !biz) return;
 
     addReview(biz.id, {
       authorName: currentUser.fullName,
@@ -78,17 +76,34 @@ export const BusinessDetailModal: React.FC = () => {
   };
 
   const handleOpenMaps = () => {
+    if (!biz) return;
     const query = encodeURIComponent(`${biz.address}, ${biz.neighborhood}, ${biz.city} - ${biz.state}`);
     window.open(`https://www.google.com/maps/search/?api=1&query=${query}`, '_blank');
   };
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-950/60 p-2 sm:p-4 backdrop-blur-xs">
-      {/* Background Overlay */}
-      <div className="absolute inset-0" onClick={() => setSelectedBusinessId(null)} />
-      
-      {/* Modal Container */}
-      <div className="relative w-full max-w-3xl bg-white rounded-2xl shadow-2xl border border-slate-100 animate-in fade-in zoom-in-95 flex flex-col max-h-[92vh] overflow-hidden">
+    <AnimatePresence>
+      {Boolean(selectedBusinessId && biz) && biz && (
+        <motion.div
+          key="business-detail-backdrop"
+          variants={modalBackdropVariants}
+          initial="hidden"
+          animate="visible"
+          exit="exit"
+          className="fixed inset-0 z-50 flex items-center justify-center bg-slate-950/60 p-2 sm:p-4 backdrop-blur-xs"
+        >
+          {/* Background Overlay */}
+          <div className="absolute inset-0" onClick={() => setSelectedBusinessId(null)} />
+          
+          {/* Modal Container */}
+          <motion.div
+            key="business-detail-card"
+            variants={modalContentVariants}
+            initial="hidden"
+            animate="visible"
+            exit="exit"
+            className="relative w-full max-w-3xl bg-white rounded-2xl shadow-2xl border border-slate-100 flex flex-col max-h-[92vh] overflow-hidden"
+          >
         
         {/* Cover / Header */}
         <div className="relative h-44 sm:h-56 bg-slate-900 shrink-0">
@@ -454,7 +469,9 @@ export const BusinessDetailModal: React.FC = () => {
 
         </div>
 
-      </div>
-    </div>
+          </motion.div>
+        </motion.div>
+      )}
+    </AnimatePresence>
   );
 };

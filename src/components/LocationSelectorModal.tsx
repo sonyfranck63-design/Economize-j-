@@ -1,6 +1,8 @@
 import React, { useState } from 'react';
 import { useApp } from '../context/AppContext';
 import { MapPin, Navigation, X, Check } from 'lucide-react';
+import { motion, AnimatePresence } from 'motion/react';
+import { modalBackdropVariants, modalContentVariants } from '../utils/motionVariants';
 
 const POPULAR_CITIES = [
   { city: 'São Paulo', state: 'SP', neighborhood: 'Santo Amaro' },
@@ -25,7 +27,14 @@ export const LocationSelectorModal: React.FC = () => {
   const [inputNeighborhood, setInputNeighborhood] = useState(currentLocation.neighborhood);
   const [inputState, setInputState] = useState(currentLocation.state);
 
-  if (!isLocationSelectorOpen) return null;
+  // Fechar com ESC para acessibilidade
+  React.useEffect(() => {
+    const handleEscape = (e: KeyboardEvent) => {
+      if (e.key === 'Escape') setIsLocationSelectorOpen(false);
+    };
+    window.addEventListener('keydown', handleEscape);
+    return () => window.removeEventListener('keydown', handleEscape);
+  }, [setIsLocationSelectorOpen]);
 
   const handleSave = (e: React.FormEvent) => {
     e.preventDefault();
@@ -45,8 +54,25 @@ export const LocationSelectorModal: React.FC = () => {
   };
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-950/60 p-4 backdrop-blur-xs">
-      <div className="w-full max-w-md bg-white rounded-2xl p-6 shadow-2xl border border-slate-100 animate-in fade-in zoom-in-95">
+    <AnimatePresence>
+      {isLocationSelectorOpen && (
+        <motion.div
+          key="location-modal-backdrop"
+          variants={modalBackdropVariants}
+          initial="hidden"
+          animate="visible"
+          exit="exit"
+          className="fixed inset-0 z-50 flex items-center justify-center bg-slate-950/60 p-4 backdrop-blur-xs"
+        >
+          <div className="fixed inset-0" onClick={() => setIsLocationSelectorOpen(false)} />
+          <motion.div
+            key="location-modal-card"
+            variants={modalContentVariants}
+            initial="hidden"
+            animate="visible"
+            exit="exit"
+            className="relative w-full max-w-md bg-white rounded-2xl p-6 shadow-2xl border border-slate-100"
+          >
         
         {/* Header */}
         <div className="flex items-center justify-between pb-3 border-b border-slate-100">
@@ -163,7 +189,9 @@ export const LocationSelectorModal: React.FC = () => {
           </div>
         </div>
 
-      </div>
-    </div>
+          </motion.div>
+        </motion.div>
+      )}
+    </AnimatePresence>
   );
 };

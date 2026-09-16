@@ -2,6 +2,7 @@ import React, { useState } from 'react';
 import { useApp } from '../context/AppContext';
 import { PWAInstallButton } from './PWAInstallButton';
 import { BrandLogo } from './BrandLogo';
+import { NotificationItemSkeleton } from './Skeleton';
 import {
   MapPin,
   Bell,
@@ -33,6 +34,7 @@ export const Header: React.FC = () => {
     logout,
     isDatabaseConnected,
     setPublicRoute,
+    isLoadingData,
   } = useApp();
 
   const [isNotifOpen, setIsNotifOpen] = useState(false);
@@ -158,7 +160,7 @@ export const Header: React.FC = () => {
               >
                 <Bell className="w-5 h-5 shrink-0" />
                 {unreadCount > 0 && (
-                  <span className="absolute -top-1 -right-1 min-w-[18px] h-[18px] px-1 bg-rose-500 text-white text-[10px] font-extrabold rounded-full flex items-center justify-center ring-2 ring-white shadow-xs">
+                  <span className="absolute -top-1 -right-1 min-w-[18px] h-[18px] px-1 bg-amber-500 text-slate-950 text-[10px] font-black rounded-full flex items-center justify-center ring-2 ring-white shadow-xs">
                     {unreadCount > 9 ? '9+' : unreadCount}
                   </span>
                 )}
@@ -180,7 +182,13 @@ export const Header: React.FC = () => {
                   </div>
 
                   <div className="max-h-72 overflow-y-auto divide-y divide-slate-100 mt-2 -mr-1 pr-1">
-                    {notifications.length === 0 ? (
+                    {isLoadingData ? (
+                      <div className="py-2 space-y-2">
+                        <NotificationItemSkeleton />
+                        <NotificationItemSkeleton />
+                        <NotificationItemSkeleton />
+                      </div>
+                    ) : notifications.length === 0 ? (
                       <div className="text-center py-8 text-slate-400 space-y-1.5">
                         <CheckCircle2 className="w-8 h-8 text-slate-300 mx-auto" />
                         <p className="text-xs font-semibold text-slate-700">Tudo em dia!</p>

@@ -286,7 +286,7 @@ export const HomeView: React.FC = () => {
                       Oferta Local
                     </div>
                     {offer.originalPrice && (
-                      <div className="absolute top-2 right-2 bg-rose-500 text-white text-[10px] font-bold px-2 py-1 rounded-md shadow-xs">
+                      <div className="absolute top-2 right-2 bg-gradient-to-r from-amber-500 to-orange-500 text-white text-[10px] font-extrabold px-2 py-0.5 rounded-md shadow-xs">
                         -R$ {(offer.originalPrice - offer.currentPrice).toFixed(0)}
                       </div>
                     )}
@@ -300,14 +300,19 @@ export const HomeView: React.FC = () => {
                 </div>
 
                 <div className="pt-3 border-t border-slate-100 mt-3">
-                  <div className="flex items-baseline gap-2">
+                  <div className="flex items-baseline gap-2 flex-wrap">
                     <span className="text-lg font-bold text-emerald-600">
                       R$ {offer.currentPrice.toFixed(2)}
                     </span>
                     {offer.originalPrice && (
-                      <span className="text-xs text-slate-400 line-through">
-                        R$ {offer.originalPrice.toFixed(2)}
-                      </span>
+                      <>
+                        <span className="text-xs text-slate-400 line-through">
+                          R$ {offer.originalPrice.toFixed(2)}
+                        </span>
+                        <span className="text-[10px] font-extrabold text-amber-800 bg-amber-50 border border-amber-200 px-1.5 py-0.2 rounded-md">
+                          -{Math.round(((offer.originalPrice - offer.currentPrice) / offer.originalPrice) * 100)}%
+                        </span>
+                      </>
                     )}
                   </div>
 

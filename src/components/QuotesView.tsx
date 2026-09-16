@@ -19,7 +19,14 @@ import {
 } from 'lucide-react';
 import { QuoteRequest } from '../types';
 import { buildWhatsAppLink } from '../utils/whatsappUtils';
-
+import { motion, AnimatePresence } from 'motion/react';
+import {
+  staggerContainerVariants,
+  staggerItemVariants,
+} from '../utils/motionVariants';
+import { QuoteCardSkeleton } from './Skeleton';
+import { EmptyState } from './EmptyState';
+import { PullToRefresh } from './PullToRefresh';
 
 type TabFilter = 'all' | 'active' | 'completed' | 'cancelled';
 
@@ -34,6 +41,8 @@ export const QuotesView: React.FC = () => {
     currentUser,
     setPublicRoute,
     setActiveTab: setNavTab,
+    isLoadingData,
+    refreshQuoteRequests,
   } = useApp();
 
   const [viewMode, setViewMode] = useState<'customer' | 'business'>('customer');
@@ -130,8 +139,9 @@ export const QuotesView: React.FC = () => {
   };
 
   return (
-    <div className="space-y-6 pb-12">
-      {/* Banner de Supervisão para o Administrador */}
+    <PullToRefresh onRefresh={refreshQuoteRequests}>
+      <div className="space-y-6 pb-12">
+        {/* Banner de Supervisão para o Administrador */}
       {currentUser?.role === 'admin' && (
         <div className="bg-slate-900 text-white rounded-2xl p-4 sm:p-5 flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3 border border-slate-800 shadow-sm">
           <div className="flex items-center gap-3">
@@ -228,22 +238,30 @@ export const QuotesView: React.FC = () => {
           </div>
 
           {/* Lista de cotações da empresa */}
-          {businessQuotes.length === 0 ? (
-            <div className="bg-white rounded-2xl p-10 text-center border border-slate-100 shadow-xs space-y-3">
-              <Building2 className="w-12 h-12 text-slate-300 mx-auto" />
-              <h4 className="text-sm font-bold text-slate-800">Nenhum orçamento em andamento para sua empresa</h4>
-              <p className="text-xs text-slate-500 max-w-sm mx-auto">
-                Acesse o Painel do Parceiro para ver novas oportunidades na sua região e enviar propostas comerciais.
-              </p>
-              <button
-                onClick={() => setNavTab('business_portal')}
-                className="mt-2 px-5 py-2.5 bg-emerald-600 hover:bg-emerald-700 text-white rounded-xl text-xs font-bold shadow-xs transition"
-              >
-                Buscar Oportunidades no Painel
-              </button>
+          {isLoadingData ? (
+            <div className="space-y-4">
+              <QuoteCardSkeleton />
+              <QuoteCardSkeleton />
             </div>
+          ) : businessQuotes.length === 0 ? (
+            <EmptyState
+              icon={Building2}
+              badge="Painel do Parceiro"
+              title="Nenhum orçamento em andamento para sua empresa"
+              description="Acesse o Painel do Parceiro para ver novas oportunidades na sua região e enviar propostas comerciais."
+              action={{
+                label: 'Buscar Oportunidades no Painel',
+                onClick: () => setNavTab('business_portal'),
+                icon: Building2,
+              }}
+            />
           ) : (
-            <div className="space-y-3">
+            <motion.div
+              variants={staggerContainerVariants}
+              initial="hidden"
+              animate="show"
+              className="space-y-3"
+            >
               {businessQuotes.map((q) => {
                 const myProposal = q.proposals.find((p) =>
                   userBusinesses.some((b) => (b.id || '').toLowerCase() === (p.businessId || '').toLowerCase())
@@ -256,7 +274,8 @@ export const QuotesView: React.FC = () => {
                 const hasPhone = Boolean(q.userPhone && !q.userPhone.includes('****'));
 
                 return (
-                  <div
+                  <motion.div
+                    variants={staggerItemVariants}
                     key={q.id}
                     className={`bg-white rounded-2xl p-5 shadow-xs transition space-y-3 ${
                       isWon
@@ -278,48 +297,36 @@ export const QuotesView: React.FC = () => {
                               Proposta Enviada • R$ {myProposal?.price.toFixed(2)}
                             </span>
                           )}
-
-                          <span className="text-[10px] text-slate-500 bg-slate-50 px-2 py-0.5 rounded-md">
-                            {q.neighborhood ? `${q.neighborhood}, ${q.city}` : q.city}
+                          <span className="text-[10px] font-bold uppercase text-slate-500 bg-slate-100 px-2 py-0.5 rounded-md">
+                            {q.city} - {q.neighborhood}
                           </span>
                         </div>
-                        <h4 className="font-bold text-base text-slate-900">{q.title}</h4>
+                        <h4 className="text-base font-bold text-slate-900">{q.title}</h4>
+                        <p className="text-xs text-slate-600 line-clamp-2">{q.description}</p>
                       </div>
 
-                      {isWon && (
-                        <span className="text-[10px] font-bold uppercase bg-emerald-100 text-emerald-800 px-2 py-1 rounded-md">
-                          Contratado
-                        </span>
-                      )}
+                      <div className="text-right shrink-0">
+                        <span className="text-[10px] text-slate-400 block font-medium">Cliente</span>
+                        <span className="text-xs font-bold text-slate-700">{q.userName}</span>
+                      </div>
                     </div>
 
-                    <p className="text-xs text-slate-600 bg-slate-50/70 p-3 rounded-xl border border-slate-100">
-                      {q.description}
-                    </p>
+                    <div className="pt-3 border-t border-slate-100 flex flex-col sm:flex-row items-stretch sm:items-center justify-between gap-2">
+                      <div className="text-xs text-slate-500 flex items-center gap-1.5">
+                        <Clock className="w-3.5 h-3.5 text-slate-400" />
+                        <span>Prazo solicitado: {q.desiredDeadline || 'A combinar'}</span>
+                      </div>
 
-                    <div className="flex flex-wrap items-center justify-between text-xs text-slate-500 gap-2">
-                      <span>Cliente: <strong className="text-slate-700">{q.userName}</strong></span>
-                      <span>Prazo: <strong className="text-slate-700">{q.desiredDeadline || 'A combinar'}</strong></span>
-                    </div>
-
-                    <div className="pt-3 border-t border-slate-100 flex flex-col sm:flex-row sm:items-center justify-between gap-3">
-                      <span className="text-[11px] text-slate-400">
-                        {myProposal?.businessName ? `Empresa: ${myProposal.businessName}` : 'Sua Empresa'}
-                      </span>
-
-                      <div className="flex items-center gap-2 w-full sm:w-auto">
+                      <div className="flex items-center gap-2">
                         {isWon && hasPhone && (
                           <a
-                            href={buildWhatsAppLink(
-                              q.userPhone,
-                              `Olá ${q.userName || ''}! Sou da empresa ${myProposal?.businessName || 'parceira'}. Vi que você aceitou minha proposta de R$ ${myProposal?.price.toFixed(2)} para o pedido "${q.title}" no EconomizaJá! Gostaria de combinar o atendimento.`
-                            )}
+                            href={buildWhatsAppLink(q.userPhone, `Olá ${q.userName}! Sua proposta para "${q.title}" foi aprovada no EconomizaJá.`)}
                             target="_blank"
                             rel="noreferrer"
-                            className="w-full sm:w-auto px-5 py-2.5 bg-emerald-600 hover:bg-emerald-700 text-white rounded-xl text-xs font-bold transition flex items-center justify-center gap-2 shadow-xs active:scale-95"
+                            className="w-full sm:w-auto px-4 py-2.5 bg-emerald-600 hover:bg-emerald-700 text-white rounded-xl text-xs font-bold transition flex items-center justify-center gap-1.5 shadow-xs"
                           >
                             <MessageCircle className="w-4 h-4" />
-                            <span>Conversar no WhatsApp</span>
+                            <span>Chamar Cliente no WhatsApp</span>
                           </a>
                         )}
 
@@ -331,10 +338,10 @@ export const QuotesView: React.FC = () => {
                         </button>
                       </div>
                     </div>
-                  </div>
+                  </motion.div>
                 );
               })}
-            </div>
+            </motion.div>
           )}
         </div>
       ) : (
@@ -433,30 +440,40 @@ export const QuotesView: React.FC = () => {
           )}
 
           {/* List */}
-          <div className="space-y-4">
-        {filteredQuotes.length === 0 ? (
-          <div className="bg-white rounded-2xl p-12 text-center border border-slate-100 shadow-sm space-y-4">
-            <FileText className="w-12 h-12 text-slate-300 mx-auto" />
-            <h3 className="text-base font-bold text-slate-800">
-              {activeTab === 'all'
-                ? 'Você ainda não tem nenhum orçamento no histórico'
-                : activeTab === 'active'
-                ? 'Nenhum orçamento em andamento no momento'
-                : activeTab === 'completed'
-                ? 'Nenhum orçamento concluído ou com proposta escolhida'
-                : 'Nenhum orçamento encerrado'}
-            </h3>
-            <p className="text-xs text-slate-500 max-w-sm mx-auto">
-              Precisa trocar pneus, fazer reformas, consertar celular ou outro serviço? Peça orçamentos sem compromisso.
-            </p>
-            <button
-              onClick={() => setIsQuoteModalOpen(true)}
-              className="px-6 py-3 rounded-xl bg-slate-900 text-white font-bold text-xs shadow-sm hover:bg-slate-800 transition"
+          {isLoadingData ? (
+            <div className="space-y-4">
+              <QuoteCardSkeleton />
+              <QuoteCardSkeleton />
+              <QuoteCardSkeleton />
+            </div>
+          ) : (
+            <motion.div
+              variants={staggerContainerVariants}
+              initial="hidden"
+              animate="show"
+              className="space-y-4"
             >
-              Pedir Meu Primeiro Orçamento
-            </button>
-          </div>
-        ) : (
+          {filteredQuotes.length === 0 ? (
+            <EmptyState
+              icon={FileText}
+              badge="Cotações Rápidas"
+              title={
+                activeTab === 'all'
+                  ? 'Você ainda não pediu nenhum orçamento'
+                  : activeTab === 'active'
+                  ? 'Nenhum orçamento em andamento no momento'
+                  : activeTab === 'completed'
+                  ? 'Nenhum orçamento concluído ou com proposta escolhida'
+                  : 'Nenhum orçamento encerrado'
+              }
+              description="Precisa trocar pneus, fazer reformas, consertar celular ou outro serviço? Peça orçamentos sem compromisso e receba propostas das melhores empresas locais."
+              action={{
+                label: 'Pedir Meu Primeiro Orçamento',
+                onClick: () => setIsQuoteModalOpen(true),
+                icon: PlusCircle,
+              }}
+            />
+          ) : (
           filteredQuotes.map((qr) => {
             const proposals = qr.proposals || [];
             const hasProposals = proposals.length > 0;
@@ -464,7 +481,8 @@ export const QuotesView: React.FC = () => {
             const isChosen = qr.status === 'escolhido' || qr.status === 'finalizado';
 
             return (
-              <div
+              <motion.div
+                variants={staggerItemVariants}
                 key={qr.id}
                 className={`bg-white rounded-2xl border p-6 shadow-sm hover:shadow-md transition space-y-4 ${
                   isCancelled
@@ -604,11 +622,12 @@ export const QuotesView: React.FC = () => {
                     </button>
                   </div>
                 </div>
-              </div>
+              </motion.div>
             );
           })
         )}
-      </div>
+      </motion.div>
+      )}
     </>
   )}
 
@@ -723,6 +742,7 @@ export const QuotesView: React.FC = () => {
         </div>
       )}
     </div>
+    </PullToRefresh>
   );
 };
 

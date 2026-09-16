@@ -12,16 +12,42 @@ import {
   Lock,
   Globe,
 } from 'lucide-react';
+import { motion, AnimatePresence } from 'motion/react';
+import { modalBackdropVariants, modalContentVariants } from '../utils/motionVariants';
 
 export const PlayStoreModal: React.FC = () => {
   const { isPlayStoreModalOpen, setIsPlayStoreModalOpen } = useApp();
   const [activeTab, setActiveTab] = useState<'checklist' | 'commands' | 'listing' | 'security'>('checklist');
 
-  if (!isPlayStoreModalOpen) return null;
+  // Fechar com ESC para acessibilidade
+  React.useEffect(() => {
+    const handleEscape = (e: KeyboardEvent) => {
+      if (e.key === 'Escape') setIsPlayStoreModalOpen(false);
+    };
+    window.addEventListener('keydown', handleEscape);
+    return () => window.removeEventListener('keydown', handleEscape);
+  }, [setIsPlayStoreModalOpen]);
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-950/60 p-3 sm:p-4 backdrop-blur-xs overflow-y-auto">
-      <div className="w-full max-w-3xl bg-white rounded-2xl p-6 sm:p-8 shadow-2xl border border-slate-100 animate-in fade-in zoom-in-95 my-8 space-y-5 max-h-[90vh] flex flex-col">
+    <AnimatePresence>
+      {isPlayStoreModalOpen && (
+        <motion.div
+          key="playstore-modal-backdrop"
+          variants={modalBackdropVariants}
+          initial="hidden"
+          animate="visible"
+          exit="exit"
+          className="fixed inset-0 z-50 flex items-center justify-center bg-slate-950/60 p-3 sm:p-4 backdrop-blur-xs overflow-y-auto"
+        >
+          <div className="fixed inset-0" onClick={() => setIsPlayStoreModalOpen(false)} />
+          <motion.div
+            key="playstore-modal-card"
+            variants={modalContentVariants}
+            initial="hidden"
+            animate="visible"
+            exit="exit"
+            className="relative w-full max-w-3xl bg-white rounded-2xl p-6 sm:p-8 shadow-2xl border border-slate-100 my-8 space-y-5 max-h-[90vh] flex flex-col"
+          >
         
         {/* Header */}
         <div className="flex items-start justify-between pb-4 border-b border-slate-100 shrink-0">
@@ -226,7 +252,9 @@ export const PlayStoreModal: React.FC = () => {
           </button>
         </div>
 
-      </div>
-    </div>
+          </motion.div>
+        </motion.div>
+      )}
+    </AnimatePresence>
   );
 };

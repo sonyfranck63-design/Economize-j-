@@ -31,6 +31,11 @@ import {
   getLocalQuoteRequests,
   saveLocalQuoteRequest,
 } from '../utils/localDataStorage';
+import {
+  hapticImpactLight,
+  hapticNotificationSuccess,
+  hapticNotificationWarning,
+} from '../utils/haptics';
 
 export type PublicPageRoute = 'app' | 'privacy' | 'terms' | 'delete_account';
 
@@ -98,6 +103,7 @@ interface AppContextType {
   deleteAccountAndData: () => void;
   refreshQuoteRequests: () => Promise<void>;
   refreshBusinesses: () => Promise<void>;
+  refreshOffers: () => Promise<void>;
 
   // Modals & Navigation Helpers
   selectedBusinessId: string | null;
@@ -435,6 +441,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       return;
     }
 
+    hapticImpactLight();
     const isFav = favorites.businessIds.includes(id);
 
     if (isSupabaseConfigured) {
@@ -472,6 +479,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       return;
     }
 
+    hapticImpactLight();
     const isFav = favorites.offerIds.includes(id);
 
     if (isSupabaseConfigured) {
@@ -544,6 +552,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       ...prev,
     ]);
 
+    hapticNotificationSuccess();
     return assignedId;
   };
 
@@ -586,6 +595,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
         })
       );
     }
+    hapticNotificationSuccess();
   };
 
   const acceptProposal = async (quoteRequestId: string, proposalId: string) => {
@@ -612,6 +622,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       );
     }
 
+    hapticNotificationSuccess();
     setNotifications((prev) => [
       {
         id: `accept-${Date.now()}`,
@@ -626,6 +637,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
   };
 
   const cancelQuoteRequest = async (quoteRequestId: string) => {
+    hapticNotificationWarning();
     const previous = [...quoteRequests];
     setQuoteRequests((prev) =>
       prev.map((qr) => (qr.id === quoteRequestId ? { ...qr, status: 'cancelado' as const } : qr))
@@ -881,6 +893,18 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       }
     } catch (err) {
       console.warn('Erro ao sincronizar lista de empresas:', err);
+    }
+  };
+
+  const refreshOffers = async () => {
+    if (!isSupabaseConfigured) return;
+    try {
+      const offList = await dataService.getOffers();
+      if (offList) {
+        setOffers(offList);
+      }
+    } catch (err) {
+      console.warn('Erro ao atualizar ofertas:', err);
     }
   };
 
@@ -1195,6 +1219,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
         deleteAccountAndData,
         refreshQuoteRequests,
         refreshBusinesses,
+        refreshOffers,
 
         selectedBusinessId,
         setSelectedBusinessId,

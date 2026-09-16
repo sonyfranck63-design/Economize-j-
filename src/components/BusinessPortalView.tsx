@@ -34,6 +34,7 @@ import {
   RefreshCw,
   Star,
 } from 'lucide-react';
+import { EmptyState } from './EmptyState';
 
 export const BusinessPortalView: React.FC = () => {
   const {
@@ -679,39 +680,45 @@ export const BusinessPortalView: React.FC = () => {
           {/* LISTAGEM DE COTAÇÕES FILTRADAS */}
           <div className="space-y-3">
             {displayedQuotes.length === 0 ? (
-              <div className="bg-white rounded-2xl p-8 sm:p-12 text-center border border-slate-100 shadow-xs space-y-2">
-                <div className="w-12 h-12 bg-slate-50 text-slate-400 rounded-2xl flex items-center justify-center mx-auto mb-2">
-                  {quotesFilterTab === 'won' ? (
-                    <CheckCircle2 className="w-6 h-6 text-emerald-500" />
-                  ) : quotesFilterTab === 'sent' ? (
-                    <Clock className="w-6 h-6 text-slate-400" />
-                  ) : (
-                    <Sparkles className="w-6 h-6 text-amber-500" />
-                  )}
-                </div>
-                <h4 className="text-sm font-bold text-slate-800">
-                  {quotesFilterTab === 'won'
+              <EmptyState
+                icon={
+                  quotesFilterTab === 'won'
+                    ? CheckCircle2
+                    : quotesFilterTab === 'sent'
+                    ? Clock
+                    : Sparkles
+                }
+                badge={
+                  quotesFilterTab === 'won'
+                    ? 'Serviços Ganhos'
+                    : quotesFilterTab === 'sent'
+                    ? 'Propostas Enviadas'
+                    : 'Oportunidades'
+                }
+                title={
+                  quotesFilterTab === 'won'
                     ? 'Nenhum serviço ganho no momento'
                     : quotesFilterTab === 'sent'
                     ? 'Nenhuma proposta em análise'
-                    : 'Nenhuma nova oportunidade nesta categoria'}
-                </h4>
-                <p className="text-xs text-slate-500 max-w-sm mx-auto">
-                  {quotesFilterTab === 'won'
+                    : 'Nenhuma nova oportunidade nesta categoria'
+                }
+                description={
+                  quotesFilterTab === 'won'
                     ? 'Quando um cliente aceitar seu orçamento, o contato liberado aparecerá aqui com prioridade máxima.'
                     : quotesFilterTab === 'sent'
                     ? 'Suas propostas enviadas que aguardam retorno dos clientes serão listadas aqui.'
-                    : 'Aguarde novos pedidos de clientes na sua cidade ou amplie para ver toda a região.'}
-                </p>
-                {quotesFilterTab !== 'opportunities' && oppsQuotes.length > 0 && (
-                  <button
-                    onClick={() => setQuotesFilterTab('opportunities')}
-                    className="mt-2 text-xs font-bold text-emerald-600 hover:text-emerald-700 underline cursor-pointer"
-                  >
-                    Ver {oppsQuotes.length} oportunidade(s) disponível(is) para envio
-                  </button>
-                )}
-              </div>
+                    : 'Aguarde novos pedidos de clientes na sua cidade ou amplie para ver toda a região.'
+                }
+                action={
+                  quotesFilterTab !== 'opportunities' && oppsQuotes.length > 0
+                    ? {
+                        label: `Ver ${oppsQuotes.length} oportunidade(s) disponível(is)`,
+                        onClick: () => setQuotesFilterTab('opportunities'),
+                        icon: Sparkles,
+                      }
+                    : undefined
+                }
+              />
             ) : (
               displayedQuotes.map((q) => {
                 const alreadySent = q.proposals.some((p) => (p.businessId || '').toLowerCase() === (currentBiz.id || '').toLowerCase());
@@ -1087,9 +1094,13 @@ export const BusinessPortalView: React.FC = () => {
             <h3 className="text-lg font-bold text-slate-900 mb-4">Minhas Ofertas Ativas</h3>
             <div className="space-y-3">
               {offers.filter(o => o.businessId === currentBiz.id).length === 0 ? (
-                <div className="bg-slate-50 rounded-xl p-6 text-center border border-slate-100">
-                  <p className="text-sm text-slate-500">Você ainda não possui nenhuma oferta ativa.</p>
-                </div>
+                <EmptyState
+                  compact
+                  icon={Tag}
+                  badge="Promoções"
+                  title="Você ainda não possui nenhuma oferta ativa"
+                  description="Cadastre ofertas com descontos promocionais para atrair clientes da sua região."
+                />
               ) : (
                 offers.filter(o => o.businessId === currentBiz.id).map(offer => (
                   <div key={offer.id} className="flex items-center gap-4 bg-slate-50 p-3 rounded-xl border border-slate-100">

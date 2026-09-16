@@ -3,6 +3,8 @@ import { useApp } from '../context/AppContext';
 import { CATEGORIES } from '../data/categories';
 import { X, PlusCircle, CheckCircle2, ShieldAlert, Sparkles, Upload, AlertCircle, LogIn, User } from 'lucide-react';
 import { maskPhoneBR, formatWhatsAppNumber } from '../utils/whatsappUtils';
+import { motion, AnimatePresence } from 'motion/react';
+import { modalBackdropVariants, modalContentVariants } from '../utils/motionVariants';
 
 export const QuoteRequestModal: React.FC = () => {
   const {
@@ -82,8 +84,6 @@ export const QuoteRequestModal: React.FC = () => {
     return () => window.removeEventListener('keydown', handleEscape);
   }, []);
 
-  if (!isQuoteModalOpen) return null;
-
   const currentCategoryObj = CATEGORIES.find((c) => c.id === categoryId);
 
   const handleSubmit = async (e: React.FormEvent) => {
@@ -142,12 +142,28 @@ export const QuoteRequestModal: React.FC = () => {
   };
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-950/60 p-2 sm:p-4 backdrop-blur-xs overflow-y-auto">
-      {/* Background Overlay */}
-      <div className="fixed inset-0" onClick={handleClose} />
-      
-      {/* Modal Container */}
-      <div className="relative w-full max-w-xl bg-white rounded-2xl shadow-2xl border border-slate-100 animate-in fade-in zoom-in-95 flex flex-col max-h-[90vh] my-auto overflow-hidden">
+    <AnimatePresence>
+      {isQuoteModalOpen && (
+        <motion.div
+          key="quote-modal-backdrop"
+          variants={modalBackdropVariants}
+          initial="hidden"
+          animate="visible"
+          exit="exit"
+          className="fixed inset-0 z-50 flex items-center justify-center bg-slate-950/60 p-2 sm:p-4 backdrop-blur-xs overflow-y-auto"
+        >
+          {/* Background Overlay */}
+          <div className="fixed inset-0" onClick={handleClose} />
+          
+          {/* Modal Container */}
+          <motion.div
+            key="quote-modal-card"
+            variants={modalContentVariants}
+            initial="hidden"
+            animate="visible"
+            exit="exit"
+            className="relative w-full max-w-xl bg-white rounded-2xl shadow-2xl border border-slate-100 flex flex-col max-h-[90vh] my-auto overflow-hidden"
+          >
         
         {/* Header - Totalmente Fixo e Acessível */}
         <div className="sticky top-0 z-10 flex items-center justify-between px-5 py-4 sm:px-6 border-b border-slate-100 bg-white shrink-0">
@@ -430,8 +446,9 @@ export const QuoteRequestModal: React.FC = () => {
             </form>
           )}
         </div>
-
-      </div>
-    </div>
+      </motion.div>
+    </motion.div>
+  )}
+</AnimatePresence>
   );
 };

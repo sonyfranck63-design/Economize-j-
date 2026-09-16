@@ -2,6 +2,8 @@ import React, { useState } from 'react';
 import { useApp } from '../context/AppContext';
 import { CATEGORIES } from '../data/categories';
 import { X, Bell, Trash2, CheckCircle2, TrendingDown } from 'lucide-react';
+import { motion, AnimatePresence } from 'motion/react';
+import { modalBackdropVariants, modalContentVariants } from '../utils/motionVariants';
 
 export const PriceAlertModal: React.FC = () => {
   const {
@@ -16,8 +18,6 @@ export const PriceAlertModal: React.FC = () => {
   const [keyword, setKeyword] = useState('');
   const [maxPrice, setMaxPrice] = useState('');
   const [categoryId, setCategoryId] = useState('automotivo');
-
-  if (!isPriceAlertModalOpen) return null;
 
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
@@ -45,12 +45,28 @@ export const PriceAlertModal: React.FC = () => {
   }, [setIsPriceAlertModalOpen]);
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-950/60 p-2 sm:p-4 backdrop-blur-xs">
-      {/* Background Overlay */}
-      <div className="absolute inset-0" onClick={() => setIsPriceAlertModalOpen(false)} />
-      
-      {/* Modal Container */}
-      <div className="relative w-full max-w-lg bg-white rounded-2xl shadow-2xl border border-slate-100 animate-in fade-in zoom-in-95 flex flex-col max-h-[92vh] sm:max-h-[85vh] overflow-hidden">
+    <AnimatePresence>
+      {isPriceAlertModalOpen && (
+        <motion.div
+          key="price-alert-backdrop"
+          variants={modalBackdropVariants}
+          initial="hidden"
+          animate="visible"
+          exit="exit"
+          className="fixed inset-0 z-50 flex items-center justify-center bg-slate-950/60 p-2 sm:p-4 backdrop-blur-xs"
+        >
+          {/* Background Overlay */}
+          <div className="absolute inset-0" onClick={() => setIsPriceAlertModalOpen(false)} />
+          
+          {/* Modal Container */}
+          <motion.div
+            key="price-alert-card"
+            variants={modalContentVariants}
+            initial="hidden"
+            animate="visible"
+            exit="exit"
+            className="relative w-full max-w-lg bg-white rounded-2xl shadow-2xl border border-slate-100 flex flex-col max-h-[92vh] sm:max-h-[85vh] overflow-hidden"
+          >
         
         {/* Header - Totalmente Fixo */}
         <div className="flex items-start justify-between p-5 sm:p-6 border-b border-slate-100 bg-white shrink-0">
@@ -175,7 +191,9 @@ export const PriceAlertModal: React.FC = () => {
           </div>
         </div>
 
-      </div>
-    </div>
+          </motion.div>
+        </motion.div>
+      )}
+    </AnimatePresence>
   );
 };

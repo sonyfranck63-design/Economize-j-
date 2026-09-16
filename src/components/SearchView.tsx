@@ -17,7 +17,12 @@ import {
   X,
   PlusCircle,
   Bell,
+  Building2,
 } from 'lucide-react';
+import { motion } from 'motion/react';
+import { staggerContainerVariants, staggerItemVariants } from '../utils/motionVariants';
+import { BusinessCardSkeleton, OfferCardSkeleton } from './Skeleton';
+import { EmptyState } from './EmptyState';
 
 export const SearchView: React.FC = () => {
   const {
@@ -31,6 +36,7 @@ export const SearchView: React.FC = () => {
     setIsQuoteModalOpen,
     setIsPriceAlertModalOpen,
     currentLocation,
+    isLoadingData,
   } = useApp();
 
   const [activeSearchTab, setActiveSearchTab] = useState<'empresas' | 'ofertas' | 'produtos'>('empresas');
@@ -329,102 +335,129 @@ export const SearchView: React.FC = () => {
 
       {/* RESULTS SECTION */}
       {activeSearchTab === 'empresas' && (
-        <div className="space-y-4">
-          {filteredBusinesses.length === 0 ? (
-            <div className="bg-white rounded-2xl p-10 text-center border border-slate-100 shadow-sm space-y-3">
-              <p className="text-slate-500 text-sm">
-                Nenhuma empresa ou profissional encontrado para sua busca em <strong>{currentLocation.city}</strong>.
-              </p>
-              <button
-                onClick={() => setIsQuoteModalOpen(true)}
-                className="px-5 py-2.5 rounded-xl bg-emerald-600 text-white font-bold text-xs shadow-sm hover:bg-emerald-700 transition"
-              >
-                Pedir Orçamento Aberto para Outras Empresas
-              </button>
-            </div>
-          ) : (
-            filteredBusinesses.map((biz) => (
-              <div
-                key={biz.id}
-                className="bg-white rounded-2xl border border-slate-100 p-5 shadow-sm hover:shadow-md transition flex flex-col md:flex-row items-start md:items-center justify-between gap-4"
-              >
-                <div className="flex items-start gap-4">
-                  <BusinessAvatar
-                    src={biz.logo}
-                    name={biz.name}
-                    className="w-16 h-16 rounded-2xl border border-slate-100"
-                  />
-                  <div className="space-y-1">
-                    <div className="flex items-center gap-2 flex-wrap">
-                      {biz.featured && (
-                        <span className="text-[10px] font-bold uppercase bg-emerald-100 text-emerald-700 px-2 py-0.5 rounded-md">
-                          DESTAQUE
+        isLoadingData ? (
+          <div className="space-y-4">
+            {Array.from({ length: 4 }).map((_, i) => (
+              <BusinessCardSkeleton key={i} />
+            ))}
+          </div>
+        ) : (
+          <motion.div
+            variants={staggerContainerVariants}
+            initial="hidden"
+            animate="show"
+            className="space-y-4"
+          >
+            {filteredBusinesses.length === 0 ? (
+              <EmptyState
+                icon={Building2}
+                badge="Sem Resultados"
+                title="Nenhuma empresa ou profissional encontrado"
+                description={`Não encontramos resultados para sua busca em ${currentLocation.city}. Você pode solicitar um orçamento aberto e notificaremos empresas compatíveis.`}
+                action={{
+                  label: 'Pedir Orçamento Aberto',
+                  onClick: () => setIsQuoteModalOpen(true),
+                  icon: PlusCircle,
+                }}
+              />
+            ) : (
+              filteredBusinesses.map((biz) => (
+                <motion.div
+                  variants={staggerItemVariants}
+                  key={biz.id}
+                  className="bg-white rounded-2xl border border-slate-100 p-5 shadow-sm hover:shadow-md transition flex flex-col md:flex-row items-start md:items-center justify-between gap-4"
+                >
+                  <div className="flex items-start gap-4">
+                    <BusinessAvatar
+                      src={biz.logo}
+                      name={biz.name}
+                      className="w-16 h-16 rounded-2xl border border-slate-100"
+                    />
+                    <div className="space-y-1">
+                      <div className="flex items-center gap-2 flex-wrap">
+                        {biz.featured && (
+                          <span className="text-[10px] font-bold uppercase bg-emerald-100 text-emerald-700 px-2 py-0.5 rounded-md">
+                            DESTAQUE
+                          </span>
+                        )}
+                        {biz.verified && (
+                          <span className="flex items-center gap-0.5 text-[10px] text-emerald-700 font-semibold bg-emerald-50 px-1.5 py-0.5 rounded-md">
+                            <ShieldCheck className="w-3.5 h-3.5" />
+                            Verificada
+                          </span>
+                        )}
+                        <span className="text-[11px] text-slate-400 uppercase font-medium">
+                          {biz.subcategory}
                         </span>
-                      )}
-                      {biz.verified && (
-                        <span className="flex items-center gap-0.5 text-[10px] text-emerald-700 font-semibold bg-emerald-50 px-1.5 py-0.5 rounded-md">
-                          <ShieldCheck className="w-3.5 h-3.5" />
-                          Verificada
+                      </div>
+
+                      <h3 className="font-bold text-base text-slate-900">{biz.name}</h3>
+                      <p className="text-xs text-slate-600 line-clamp-1 max-w-xl">{biz.description}</p>
+
+                      <div className="flex items-center gap-3 text-xs text-slate-500 pt-1 flex-wrap">
+                        <span className="flex items-center gap-1 font-bold text-slate-800">
+                          <Star className="w-3.5 h-3.5 fill-amber-400 text-amber-400" />
+                          {biz.rating} ({biz.reviewCount} avaliações)
                         </span>
-                      )}
-                      <span className="text-[11px] text-slate-400 uppercase font-medium">
-                        {biz.subcategory}
-                      </span>
-                    </div>
-
-                    <h3 className="font-bold text-base text-slate-900">{biz.name}</h3>
-                    <p className="text-xs text-slate-600 line-clamp-1 max-w-xl">{biz.description}</p>
-
-                    <div className="flex items-center gap-3 text-xs text-slate-500 pt-1 flex-wrap">
-                      <span className="flex items-center gap-1 font-bold text-slate-800">
-                        <Star className="w-3.5 h-3.5 fill-amber-400 text-amber-400" />
-                        {biz.rating} ({biz.reviewCount} avaliações)
-                      </span>
-                      <span>•</span>
-                      <span className="flex items-center gap-1 text-slate-600">
-                        <MapPin className="w-3.5 h-3.5 text-slate-400" />
-                        {biz.neighborhood} (~{biz.distanceKm} km)
-                      </span>
-                      <span>•</span>
-                      <span className={biz.openNow ? 'text-emerald-600 font-bold' : 'text-slate-400'}>
-                        {biz.openNow ? 'Aberto agora' : 'Fechado no momento'}
-                      </span>
+                        <span>•</span>
+                        <span className="flex items-center gap-1 text-slate-600">
+                          <MapPin className="w-3.5 h-3.5 text-slate-400" />
+                          {biz.neighborhood} (~{biz.distanceKm} km)
+                        </span>
+                        <span>•</span>
+                        <span className={biz.openNow ? 'text-emerald-600 font-bold' : 'text-slate-400'}>
+                          {biz.openNow ? 'Aberto agora' : 'Fechado no momento'}
+                        </span>
+                      </div>
                     </div>
                   </div>
-                </div>
 
-                <div className="flex items-center gap-2 w-full md:w-auto shrink-0 pt-2 md:pt-0">
-                  <button
-                    onClick={() => setSelectedBusinessId(biz.id)}
-                    className="flex-1 md:flex-none px-4 py-2.5 rounded-xl bg-slate-900 hover:bg-slate-800 text-white text-xs font-bold transition text-center"
-                  >
-                    Ver Perfil & Serviços
-                  </button>
+                  <div className="flex items-center gap-2 w-full md:w-auto shrink-0 pt-2 md:pt-0">
+                    <button
+                      onClick={() => setSelectedBusinessId(biz.id)}
+                      className="flex-1 md:flex-none px-4 py-2.5 rounded-xl bg-slate-900 hover:bg-slate-800 text-white text-xs font-bold transition text-center"
+                    >
+                      Ver Perfil & Serviços
+                    </button>
 
-                  <a
-                    href={buildWhatsAppLink(biz.whatsapp, `Olá! Encontrei o perfil de ${biz.name} no EconomizaJá e gostaria de tirar uma dúvida sobre serviços.`)}
-                    target="_blank"
-                    rel="noreferrer"
-                    className="p-2.5 rounded-xl bg-emerald-500 hover:bg-emerald-600 text-white transition shrink-0"
-                    title="Falar no WhatsApp"
-                  >
-                    <MessageCircle className="w-4 h-4" />
-                  </a>
-                </div>
-              </div>
-            ))
-          )}
-        </div>
+                    <a
+                      href={buildWhatsAppLink(biz.whatsapp, `Olá! Encontrei o perfil de ${biz.name} no EconomizaJá e gostaria de tirar uma dúvida sobre serviços.`)}
+                      target="_blank"
+                      rel="noreferrer"
+                      className="p-2.5 rounded-xl bg-emerald-500 hover:bg-emerald-600 text-white transition shrink-0"
+                      title="Falar no WhatsApp"
+                    >
+                      <MessageCircle className="w-4 h-4" />
+                    </a>
+                  </div>
+                </motion.div>
+              ))
+            )}
+          </motion.div>
+        )
       )}
 
       {/* RESULTS: OFERTAS */}
       {activeSearchTab === 'ofertas' && (
-        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
-          {filteredOffers.map((offer) => (
-            <div
-              key={offer.id}
-              className="bg-white rounded-2xl border border-slate-100 overflow-hidden shadow-sm hover:shadow-md transition flex flex-col justify-between"
-            >
+        isLoadingData ? (
+          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
+            {Array.from({ length: 6 }).map((_, i) => (
+              <OfferCardSkeleton key={i} />
+            ))}
+          </div>
+        ) : (
+          <motion.div
+            variants={staggerContainerVariants}
+            initial="hidden"
+            animate="show"
+            className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4"
+          >
+            {filteredOffers.map((offer) => (
+              <motion.div
+                variants={staggerItemVariants}
+                key={offer.id}
+                className="bg-white rounded-2xl border border-slate-100 overflow-hidden shadow-sm hover:shadow-md transition flex flex-col justify-between"
+              >
               <div className="h-44 relative bg-slate-100">
                 <SafeImage
                   src={offer.imageUrl}
@@ -441,14 +474,19 @@ export const SearchView: React.FC = () => {
                 <span className="text-[11px] font-bold text-slate-400 uppercase tracking-wide">{offer.businessName}</span>
                 <h3 className="font-bold text-sm text-slate-900">{offer.title}</h3>
                 <p className="text-xs text-slate-500 line-clamp-2">{offer.description}</p>
-                <div className="flex items-baseline gap-2 pt-2 border-t border-slate-100">
+                <div className="flex items-baseline gap-2 pt-2 border-t border-slate-100 flex-wrap">
                   <span className="text-lg font-bold text-emerald-600">
                     R$ {offer.currentPrice.toFixed(2)}
                   </span>
                   {offer.originalPrice && (
-                    <span className="text-xs text-slate-400 line-through">
-                      R$ {offer.originalPrice.toFixed(2)}
-                    </span>
+                    <>
+                      <span className="text-xs text-slate-400 line-through">
+                        R$ {offer.originalPrice.toFixed(2)}
+                      </span>
+                      <span className="text-[10px] font-extrabold text-amber-800 bg-amber-50 border border-amber-200 px-1.5 py-0.2 rounded-md">
+                        -{Math.round(((offer.originalPrice - offer.currentPrice) / offer.originalPrice) * 100)}%
+                      </span>
+                    </>
                   )}
                 </div>
                 <div className="grid grid-cols-2 gap-2 pt-2">
@@ -469,16 +507,23 @@ export const SearchView: React.FC = () => {
                   </a>
                 </div>
               </div>
-            </div>
+            </motion.div>
           ))}
-        </div>
+        </motion.div>
+        )
       )}
 
       {/* RESULTS: PRODUTOS CADASTRADOS */}
       {activeSearchTab === 'produtos' && (
-        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
+        <motion.div
+          variants={staggerContainerVariants}
+          initial="hidden"
+          animate="show"
+          className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4"
+        >
           {matchingProducts.map(({ business, product }, idx) => (
-            <div
+            <motion.div
+              variants={staggerItemVariants}
               key={idx}
               className="bg-white rounded-2xl border border-slate-100 p-5 shadow-sm hover:shadow-md transition flex flex-col justify-between space-y-3"
             >
@@ -506,9 +551,9 @@ export const SearchView: React.FC = () => {
                   </button>
                 </div>
               </div>
-            </div>
+            </motion.div>
           ))}
-        </div>
+        </motion.div>
       )}
 
     </div>

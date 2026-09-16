@@ -3,6 +3,8 @@ import { useApp } from '../context/AppContext';
 import { triggerCelebrationFireworks } from '../utils/confetti';
 import { isCategoryMatch, isLocationMatch } from '../utils/quoteStorage';
 import { formatWhatsAppNumber, buildWhatsAppLink } from '../utils/whatsappUtils';
+import { motion, AnimatePresence } from 'motion/react';
+import { modalBackdropVariants, modalContentVariants } from '../utils/motionVariants';
 import {
   X,
   Star,
@@ -50,11 +52,16 @@ export const CompareQuotesModal: React.FC = () => {
   const [showDeleteConfirm, setShowDeleteConfirm] = React.useState(false);
   const [isProcessingAction, setIsProcessingAction] = React.useState(false);
 
-  if (!comparingQuoteRequestId) return null;
+  // Fechar modal com Escape para acessibilidade
+  React.useEffect(() => {
+    const handleEscape = (e: KeyboardEvent) => {
+      if (e.key === 'Escape') setComparingQuoteRequestId(null);
+    };
+    window.addEventListener('keydown', handleEscape);
+    return () => window.removeEventListener('keydown', handleEscape);
+  }, [setComparingQuoteRequestId]);
 
-  const quote = quoteRequests.find((q) => q.id === comparingQuoteRequestId);
-
-  if (!quote) return null;
+  const quote = comparingQuoteRequestId ? quoteRequests.find((q) => q.id === comparingQuoteRequestId) : null;
 
   // Identifica empresas pertencentes exclusivamente ao usuário logado (o admin supervisiona, não se passa por parceiro)
   const userBusinesses = currentUser?.id
@@ -62,48 +69,67 @@ export const CompareQuotesModal: React.FC = () => {
     : [];
 
   // Empresas que atendem à categoria do orçamento (com matching flexível e inteligente)
-  const myRelevantBusinesses = userBusinesses.filter((b) =>
-    isCategoryMatch(b.categoryId, quote.categoryId)
-  );
+  const myRelevantBusinesses = quote
+    ? userBusinesses.filter((b) => isCategoryMatch(b.categoryId, quote.categoryId))
+    : [];
 
   const hasRelevantBusiness = myRelevantBusinesses.length > 0;
 
   // Check if any business belonging to currentUser submitted a proposal
-  const myProposal = quote.proposals.find(
-    (p) =>
-      myRelevantBusinesses.some((mb) => mb.id === p.businessId) ||
-      businesses.some((b) => b.id === p.businessId && b.ownerId === currentUser?.id)
-  );
+  const myProposal = quote
+    ? quote.proposals.find(
+        (p) =>
+          myRelevantBusinesses.some((mb) => mb.id === p.businessId) ||
+          businesses.some((b) => b.id === p.businessId && b.ownerId === currentUser?.id)
+      )
+    : undefined;
 
   const alreadyResponded = Boolean(myProposal);
 
-  const isQuoteChosen =
-    quote.status === 'escolhido' ||
-    quote.status === 'finalizado' ||
-    quote.proposals.some((p) => p.status === 'escolhida');
+  const isQuoteChosen = Boolean(
+    quote &&
+      (quote.status === 'escolhido' ||
+        quote.status === 'finalizado' ||
+        quote.proposals.some((p) => p.status === 'escolhida'))
+  );
 
   // Partner's proposal is considered accepted if marked as 'escolhida' or if the quote is chosen and it's the sole proposal or marked
   const isMyProposalAccepted = Boolean(
     myProposal &&
       (myProposal.status === 'escolhida' ||
-        (isQuoteChosen && (quote.proposals.length === 1 || myProposal.status !== 'recusada')))
+        (isQuoteChosen && (quote?.proposals.length === 1 || myProposal.status !== 'recusada')))
   );
 
   // Clean WhatsApp numbers com DDI 55
-  const cleanClientWhatsapp = formatWhatsAppNumber(quote.userPhone);
+  const cleanClientWhatsapp = quote ? formatWhatsAppNumber(quote.userPhone) : '';
 
   // Sort proposals by price (lowest price first) for smart comparison
-  const sortedProposals = [...quote.proposals].sort((a, b) => a.price - b.price);
+  const sortedProposals = quote ? [...quote.proposals].sort((a, b) => a.price - b.price) : [];
   const lowestPrice = sortedProposals.length > 0 ? sortedProposals[0].price : 0;
   const highestPrice = sortedProposals.length > 0 ? sortedProposals[sortedProposals.length - 1].price : 0;
   const maxSavings = highestPrice - lowestPrice;
   const hasMultipleQuotes = sortedProposals.length > 1 && maxSavings > 0;
 
-  // Assume rating isn't explicitly in proposal yet, we can mock or just ignore highestRating if unavailable. Let's just do best price savings.
-  
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-950/60 p-4 backdrop-blur-xs overflow-y-auto">
-      <div className="w-full max-w-4xl bg-white rounded-2xl p-6 sm:p-8 shadow-2xl border border-slate-100 animate-in fade-in zoom-in-95 my-8">
+    <AnimatePresence>
+      {Boolean(comparingQuoteRequestId && quote) && (
+        <motion.div
+          key="compare-quotes-backdrop"
+          variants={modalBackdropVariants}
+          initial="hidden"
+          animate="visible"
+          exit="exit"
+          className="fixed inset-0 z-50 flex items-center justify-center bg-slate-950/60 p-4 backdrop-blur-xs overflow-y-auto"
+        >
+          <div className="fixed inset-0" onClick={() => setComparingQuoteRequestId(null)} />
+          <motion.div
+            key="compare-quotes-modal"
+            variants={modalContentVariants}
+            initial="hidden"
+            animate="visible"
+            exit="exit"
+            className="relative w-full max-w-4xl bg-white rounded-2xl p-6 sm:p-8 shadow-2xl border border-slate-100 my-8 overflow-hidden"
+          >
         
         {/* Header */}
         <div className="flex flex-col sm:flex-row sm:items-start justify-between pb-4 border-b border-slate-100 gap-4">
@@ -719,7 +745,9 @@ export const CompareQuotesModal: React.FC = () => {
           </div>
         )}
 
-      </div>
-    </div>
+          </motion.div>
+        </motion.div>
+      )}
+    </AnimatePresence>
   );
 };

@@ -1,4 +1,5 @@
 import confetti from 'canvas-confetti';
+import { hapticNotificationSuccess } from './haptics';
 
 /**
  * Dispara uma celebração visual com fogos de artifício e confetes multicoloridos.
@@ -6,6 +7,9 @@ import confetti from 'canvas-confetti';
  */
 export const triggerCelebrationFireworks = () => {
   try {
+    // Feedback tátil nativo
+    hapticNotificationSuccess();
+
     // 1. Canhão esquerdo subindo
     confetti({
       particleCount: 70,

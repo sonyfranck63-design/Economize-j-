@@ -1,9 +1,14 @@
 import React, { useState } from 'react';
 import { useApp } from '../context/AppContext';
 import { CATEGORIES } from '../data/categories';
-import { Tag, MapPin, Clock, MessageCircle, Heart, Info, ArrowUpDown } from 'lucide-react';
+import { Tag, MapPin, Clock, MessageCircle, Heart, Info, ArrowUpDown, Bell } from 'lucide-react';
 import { SafeImage } from './SafeImage';
 import { buildWhatsAppLink } from '../utils/whatsappUtils';
+import { motion } from 'motion/react';
+import { staggerContainerVariants, staggerItemVariants } from '../utils/motionVariants';
+import { OfferCardSkeleton } from './Skeleton';
+import { EmptyState } from './EmptyState';
+import { PullToRefresh } from './PullToRefresh';
 
 export const OffersView: React.FC = () => {
   const {
@@ -13,6 +18,8 @@ export const OffersView: React.FC = () => {
     favorites,
     currentLocation,
     setIsPriceAlertModalOpen,
+    isLoadingData,
+    refreshOffers,
   } = useApp();
 
   const [selectedCat, setSelectedCat] = useState<string | null>(null);
@@ -26,9 +33,10 @@ export const OffersView: React.FC = () => {
     });
 
   return (
-    <div className="space-y-6 pb-12">
-      
-      {/* Header */}
+    <PullToRefresh onRefresh={refreshOffers}>
+      <div className="space-y-6 pb-12">
+        
+        {/* Header */}
       <div className="bg-white rounded-2xl p-6 border border-slate-100 shadow-sm space-y-3">
         <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
           <div>
@@ -86,102 +94,147 @@ export const OffersView: React.FC = () => {
         </div>
       </div>
 
-      {/* Grid */}
-      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
-        {filtered.map((offer) => {
-          const isFav = favorites.offerIds.includes(offer.id);
-          return (
-            <div
-              key={offer.id}
-              className="bg-white rounded-2xl border border-slate-100 overflow-hidden shadow-sm hover:shadow-md transition flex flex-col justify-between group"
-            >
-              <div className="relative h-48 bg-slate-100 overflow-hidden">
-                <SafeImage
-                  src={offer.imageUrl}
-                  alt={offer.title}
-                  category={offer.categoryId}
-                  fallbackKeyword={`${offer.title} ${offer.businessName}`}
-                  className="w-full h-full object-cover group-hover:scale-105 transition duration-300"
-                />
+      {/* Grid ou Skeletons */}
+      {isLoadingData ? (
+        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
+          {Array.from({ length: 6 }).map((_, i) => (
+            <OfferCardSkeleton key={i} />
+          ))}
+        </div>
+      ) : filtered.length === 0 ? (
+        <EmptyState
+          icon={Tag}
+          badge="Sem Ofertas no Momento"
+          title={selectedCat ? 'Nenhuma oferta encontrada nesta categoria' : 'Nenhuma oferta cadastrada no momento'}
+          description={
+            selectedCat
+              ? 'Tente selecionar "Todas" para explorar outras promoções ou crie um alerta de preço para ser avisado quando surgir novidade.'
+              : 'Empresas da região estão preparando novas promoções. Ative um alerta para ser notificado em primeira mão.'
+          }
+          action={{
+            label: 'Criar Alerta de Preço',
+            onClick: () => setIsPriceAlertModalOpen(true),
+            icon: Bell,
+          }}
+          secondaryAction={
+            selectedCat
+              ? {
+                  label: 'Ver Todas as Categorias',
+                  onClick: () => setSelectedCat(null),
+                  variant: 'outline',
+                }
+              : undefined
+          }
+        />
+      ) : (
+        <motion.div
+          variants={staggerContainerVariants}
+          initial="hidden"
+          animate="show"
+          className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4"
+        >
+          {filtered.map((offer) => {
+            const isFav = favorites.offerIds.includes(offer.id);
+            return (
+              <motion.div
+                variants={staggerItemVariants}
+                key={offer.id}
+                className="bg-white rounded-2xl border border-slate-100 overflow-hidden shadow-sm hover:shadow-md transition flex flex-col justify-between group"
+              >
+                <div className="relative h-48 bg-slate-100 overflow-hidden">
+                  <SafeImage
+                    src={offer.imageUrl}
+                    alt={offer.title}
+                    category={offer.categoryId}
+                    fallbackKeyword={`${offer.title} ${offer.businessName}`}
+                    className="w-full h-full object-cover group-hover:scale-105 transition duration-300"
+                  />
 
-                <div className="absolute top-3 left-3 bg-slate-900/80 backdrop-blur-xs text-white text-[10px] font-bold px-2.5 py-1 rounded-md shadow-xs">
-                  {offer.businessNeighborhood}
-                </div>
-
-                <button
-                  onClick={() => toggleFavoriteOffer(offer.id)}
-                  className="absolute top-3 right-3 p-2 rounded-full bg-white/90 backdrop-blur-xs hover:bg-white text-slate-700 transition shadow-xs"
-                >
-                  <Heart className={`w-4 h-4 ${isFav ? 'fill-rose-500 text-rose-500' : ''}`} />
-                </button>
-
-                {offer.originalPrice && (
-                  <div className="absolute bottom-3 left-3 bg-rose-500 text-white text-[10px] font-bold px-2.5 py-1 rounded-md shadow-xs">
-                    DESCONTO: R$ {(offer.originalPrice - offer.currentPrice).toFixed(2)} OFF
+                  <div className="absolute top-3 left-3 bg-slate-900/80 backdrop-blur-xs text-white text-[10px] font-bold px-2.5 py-1 rounded-md shadow-xs">
+                    {offer.businessNeighborhood}
                   </div>
-                )}
-              </div>
 
-              <div className="p-5 flex-1 flex flex-col justify-between space-y-3">
-                <div>
                   <button
-                    onClick={() => setSelectedBusinessId(offer.businessId)}
-                    className="text-xs font-bold text-slate-400 uppercase tracking-wide hover:text-emerald-600 block text-left"
+                    onClick={() => toggleFavoriteOffer(offer.id)}
+                    className="absolute top-3 right-3 p-2 rounded-full bg-white/90 backdrop-blur-xs hover:bg-white text-slate-700 transition shadow-xs"
                   >
-                    {offer.businessName}
+                    <Heart className={`w-4 h-4 ${isFav ? 'fill-rose-500 text-rose-500' : ''}`} />
                   </button>
 
-                  <h3 className="font-bold text-base text-slate-900 mt-1">{offer.title}</h3>
-                  <p className="text-xs text-slate-500 mt-1 line-clamp-2 leading-relaxed">{offer.description}</p>
+                  {offer.originalPrice && (
+                    <div className="absolute bottom-3 left-3 bg-gradient-to-r from-amber-500 to-orange-500 text-white text-[10px] font-extrabold px-2.5 py-1 rounded-lg shadow-sm flex items-center gap-1">
+                      <span>Economize R$ {(offer.originalPrice - offer.currentPrice).toFixed(2)}</span>
+                    </div>
+                  )}
                 </div>
 
-                <div className="pt-3 border-t border-slate-100">
-                  <div className="flex items-baseline gap-2">
-                    <span className="text-2xl font-bold text-emerald-600">
-                      R$ {offer.currentPrice.toFixed(2)}
-                    </span>
-                    {offer.originalPrice && (
-                      <span className="text-xs text-slate-400 line-through">
-                        de R$ {offer.originalPrice.toFixed(2)}
-                      </span>
-                    )}
-                  </div>
-
-                  <div className="flex items-center justify-between text-xs text-slate-500 mt-2">
-                    <span className="flex items-center gap-1">
-                      <Clock className="w-3.5 h-3.5 text-slate-400" />
-                      Válido até {new Date(offer.validUntil).toLocaleDateString('pt-BR')}
-                    </span>
-                    <span className="flex items-center gap-1 font-medium text-slate-600">
-                      <MapPin className="w-3.5 h-3.5 text-emerald-500" />
-                      {offer.businessCity}
-                    </span>
-                  </div>
-
-                  <div className="grid grid-cols-2 gap-2 pt-3">
+                <div className="p-5 flex-1 flex flex-col justify-between space-y-3">
+                  <div>
                     <button
                       onClick={() => setSelectedBusinessId(offer.businessId)}
-                      className="py-2.5 rounded-xl bg-slate-100 hover:bg-slate-200 text-slate-700 text-xs font-semibold transition text-center"
+                      className="text-xs font-bold text-slate-400 uppercase tracking-wide hover:text-emerald-600 block text-left"
                     >
-                      Ver Perfil
+                      {offer.businessName}
                     </button>
-                    <a
-                      href={buildWhatsAppLink(offer.businessWhatsapp, `Olá! Vi a oferta "${offer.title}" por R$ ${offer.currentPrice.toFixed(2)} no EconomizaJá e gostaria de agendar ou retirar.`)}
-                      target="_blank"
-                      rel="noreferrer"
-                      className="py-2.5 rounded-xl bg-emerald-500 hover:bg-emerald-600 text-white text-xs font-bold transition flex items-center justify-center gap-1.5 text-center shadow-xs"
-                    >
-                      <MessageCircle className="w-4 h-4" />
-                      <span>WhatsApp</span>
-                    </a>
-                  </div>
-                </div>
 
-              </div>
-            </div>
-          );
-        })}
-      </div>
+                    <h3 className="font-bold text-base text-slate-900 mt-1">{offer.title}</h3>
+                    <p className="text-xs text-slate-500 mt-1 line-clamp-2 leading-relaxed">{offer.description}</p>
+                  </div>
+
+                  <div className="pt-3 border-t border-slate-100">
+                    <div className="flex items-baseline gap-2 flex-wrap">
+                      <span className="text-2xl font-bold text-emerald-600">
+                        R$ {offer.currentPrice.toFixed(2)}
+                      </span>
+                      {offer.originalPrice && (
+                        <>
+                          <span className="text-xs text-slate-400 line-through">
+                            de R$ {offer.originalPrice.toFixed(2)}
+                          </span>
+                          <span className="text-[10px] font-extrabold text-amber-800 bg-amber-50 border border-amber-200 px-1.5 py-0.5 rounded-md">
+                            -{Math.round(((offer.originalPrice - offer.currentPrice) / offer.originalPrice) * 100)}%
+                          </span>
+                        </>
+                      )}
+                    </div>
+
+                    <div className="flex items-center justify-between text-xs text-slate-500 mt-2">
+                      <span className="flex items-center gap-1">
+                        <Clock className="w-3.5 h-3.5 text-slate-400" />
+                        Válido até {new Date(offer.validUntil).toLocaleDateString('pt-BR')}
+                      </span>
+                      <span className="flex items-center gap-1 font-medium text-slate-600">
+                        <MapPin className="w-3.5 h-3.5 text-emerald-500" />
+                        {offer.businessCity}
+                      </span>
+                    </div>
+
+                    <div className="grid grid-cols-2 gap-2 pt-3">
+                      <button
+                        onClick={() => setSelectedBusinessId(offer.businessId)}
+                        className="py-2.5 rounded-xl bg-slate-100 hover:bg-slate-200 text-slate-700 text-xs font-semibold transition text-center"
+                      >
+                        Ver Perfil
+                      </button>
+                      <a
+                        href={buildWhatsAppLink(offer.businessWhatsapp, `Olá! Vi a oferta "${offer.title}" por R$ ${offer.currentPrice.toFixed(2)} no EconomizaJá e gostaria de agendar ou retirar.`)}
+                        target="_blank"
+                        rel="noreferrer"
+                        className="py-2.5 rounded-xl bg-emerald-500 hover:bg-emerald-600 text-white text-xs font-bold transition flex items-center justify-center gap-1.5 text-center shadow-xs"
+                      >
+                        <MessageCircle className="w-4 h-4" />
+                        <span>WhatsApp</span>
+                      </a>
+                    </div>
+                  </div>
+
+                </div>
+              </motion.div>
+            );
+          })}
+        </motion.div>
+      )}
     </div>
+    </PullToRefresh>
   );
 };

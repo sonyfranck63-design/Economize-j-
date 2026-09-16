@@ -14,6 +14,8 @@ import {
   ShieldCheck,
 } from 'lucide-react';
 import { UserRole } from '../types';
+import { motion, AnimatePresence } from 'motion/react';
+import { modalBackdropVariants, modalContentVariants } from '../utils/motionVariants';
 
 export const AuthModal: React.FC = () => {
   const { isAuthModalOpen, setIsAuthModalOpen, setCurrentUser, setUserRole } = useApp();
@@ -29,7 +31,14 @@ export const AuthModal: React.FC = () => {
   const [errorMessage, setErrorMessage] = useState('');
   const [successMessage, setSuccessMessage] = useState('');
 
-  if (!isAuthModalOpen) return null;
+  // Adiciona suporte a fechar com ESC para acessibilidade
+  React.useEffect(() => {
+    const handleEscape = (e: KeyboardEvent) => {
+      if (e.key === 'Escape') setIsAuthModalOpen(false);
+    };
+    window.addEventListener('keydown', handleEscape);
+    return () => window.removeEventListener('keydown', handleEscape);
+  }, [setIsAuthModalOpen]);
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -70,8 +79,25 @@ export const AuthModal: React.FC = () => {
   };
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/70 backdrop-blur-xs p-4 animate-in fade-in">
-      <div className="bg-white rounded-2xl max-w-md w-full p-6 shadow-2xl border border-slate-100 relative max-h-[92vh] overflow-y-auto">
+    <AnimatePresence>
+      {isAuthModalOpen && (
+        <motion.div
+          key="auth-modal-backdrop"
+          variants={modalBackdropVariants}
+          initial="hidden"
+          animate="visible"
+          exit="exit"
+          className="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/70 backdrop-blur-xs p-4"
+        >
+          <div className="fixed inset-0" onClick={() => setIsAuthModalOpen(false)} />
+          <motion.div
+            key="auth-modal-card"
+            variants={modalContentVariants}
+            initial="hidden"
+            animate="visible"
+            exit="exit"
+            className="bg-white rounded-2xl max-w-md w-full p-6 shadow-2xl border border-slate-100 relative max-h-[92vh] overflow-y-auto"
+          >
         <button
           onClick={() => setIsAuthModalOpen(false)}
           className="absolute top-4 right-4 p-2 text-slate-400 hover:text-slate-700 rounded-full transition"
@@ -284,7 +310,9 @@ export const AuthModal: React.FC = () => {
           <span className="font-semibold text-slate-700">Termos de Uso</span> e nossa{' '}
           <span className="font-semibold text-slate-700">Política de Privacidade</span> sob a LGPD.
         </p>
-      </div>
-    </div>
+          </motion.div>
+        </motion.div>
+      )}
+    </AnimatePresence>
   );
 };

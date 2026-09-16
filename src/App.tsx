@@ -27,6 +27,8 @@ import { TermsOfServiceView } from './components/TermsOfServiceView';
 import { DeleteAccountView } from './components/DeleteAccountView';
 import { ErrorBoundary } from './components/ErrorBoundary';
 import { useNativeAndroid } from './hooks/useNativeAndroid';
+import { AnimatePresence, MotionConfig } from 'motion/react';
+import { PageTransition } from './components/PageTransition';
 
 const MainContent: React.FC = () => {
   const { activeTab, publicRoute, setPublicRoute, userRole } = useApp();
@@ -54,21 +56,35 @@ const MainContent: React.FC = () => {
 
       {/* Main Container */}
       <main className="flex-1 max-w-7xl w-full mx-auto px-3 sm:px-6 lg:px-8 pt-3 sm:pt-6 pb-24 md:pb-8">
-        {publicRoute === 'privacy' && <PrivacyPolicyView onBack={resetToApp} />}
-        {publicRoute === 'terms' && <TermsOfServiceView onBack={resetToApp} />}
-        {publicRoute === 'delete_account' && <DeleteAccountView onBack={resetToApp} />}
+        <AnimatePresence mode="wait">
+          {publicRoute === 'privacy' && (
+            <PageTransition key="privacy" id="privacy">
+              <PrivacyPolicyView onBack={resetToApp} />
+            </PageTransition>
+          )}
+          {publicRoute === 'terms' && (
+            <PageTransition key="terms" id="terms">
+              <TermsOfServiceView onBack={resetToApp} />
+            </PageTransition>
+          )}
+          {publicRoute === 'delete_account' && (
+            <PageTransition key="delete_account" id="delete_account">
+              <DeleteAccountView onBack={resetToApp} />
+            </PageTransition>
+          )}
 
-        {publicRoute === 'app' && (
-          <>
-            {activeTab === 'home' && <HomeView />}
-            {activeTab === 'search' && <SearchView />}
-            {activeTab === 'offers' && <OffersView />}
-            {activeTab === 'quotes' && <QuotesView />}
-            {activeTab === 'favorites' && <FavoritesView />}
-            {activeTab === 'business_portal' && <BusinessPortalView />}
-            {activeTab === 'admin_portal' && (isAdmin ? <AdminPortalView /> : <HomeView />)}
-          </>
-        )}
+          {publicRoute === 'app' && (
+            <PageTransition key={activeTab} id={activeTab}>
+              {activeTab === 'home' && <HomeView />}
+              {activeTab === 'search' && <SearchView />}
+              {activeTab === 'offers' && <OffersView />}
+              {activeTab === 'quotes' && <QuotesView />}
+              {activeTab === 'favorites' && <FavoritesView />}
+              {activeTab === 'business_portal' && <BusinessPortalView />}
+              {activeTab === 'admin_portal' && (isAdmin ? <AdminPortalView /> : <HomeView />)}
+            </PageTransition>
+          )}
+        </AnimatePresence>
       </main>
 
       {/* Footer */}
@@ -92,9 +108,11 @@ const MainContent: React.FC = () => {
 export default function App() {
   return (
     <ErrorBoundary>
-      <AppProvider>
-        <MainContent />
-      </AppProvider>
+      <MotionConfig reducedMotion="user">
+        <AppProvider>
+          <MainContent />
+        </AppProvider>
+      </MotionConfig>
     </ErrorBoundary>
   );
 }
