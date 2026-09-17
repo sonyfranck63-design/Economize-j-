@@ -1265,6 +1265,41 @@ export const dataService = {
     return data;
   },
 
+  /**
+   * Ativa e persiste a assinatura confirmada via Google Play Billing.
+   */
+  async activateGooglePlaySubscription(params: {
+    businessId: string;
+    planTier: 'pro' | 'premium';
+    transactionId?: string;
+    purchaseToken?: string;
+  }): Promise<void> {
+    if (!isSupabaseConfigured || !supabase) return;
+
+    try {
+      const initData = await this.initiatePlanSubscription(
+        params.businessId,
+        params.planTier,
+        'google_play_billing'
+      );
+      const subId = initData?.subscription_id || initData?.id;
+      if (subId) {
+        await this.confirmPlanSubscription(subId, params.purchaseToken || params.transactionId);
+      }
+    } catch (rpcErr) {
+      console.warn('Fallback ao registrar transação da assinatura no Supabase:', rpcErr);
+    }
+
+    try {
+      await supabase
+        .from('businesses')
+        .update({ plan: params.planTier })
+        .eq('id', params.businessId);
+    } catch (bizErr) {
+      console.warn('Erro ao atualizar plano na tabela businesses:', bizErr);
+    }
+  },
+
   async initiateFeaturedListing(businessId: string, days: number, offerId?: string): Promise<any> {
     if (!isSupabaseConfigured || !supabase) throw new Error('Supabase não configurado');
 

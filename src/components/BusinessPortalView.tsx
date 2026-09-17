@@ -7,6 +7,8 @@ import { getSmartImage, isInvalidOrDeadImageUrl, OFFER_IMAGE_SUGGESTIONS } from 
 import { isQuoteMatchingBusiness, isLocationMatch } from '../utils/quoteStorage';
 import { buildWhatsAppLink, formatWhatsAppNumber } from '../utils/whatsappUtils';
 import { isThisMonth } from '../utils/dateUtils';
+import { triggerCelebrationFireworks } from '../utils/confetti';
+import { billingService } from '../services/billingService';
 import { Capacitor } from '@capacitor/core';
 import { dataService } from '../services/dataService';
 import {
@@ -141,6 +143,56 @@ export const BusinessPortalView: React.FC = () => {
   const [proposalPrice, setProposalPrice] = useState('');
   const [proposalDeadline, setProposalDeadline] = useState('Execução em até 2 dias úteis');
   const [proposalDescription, setProposalDescription] = useState('');
+
+  // Google Play Billing native state
+  const [isPurchasingPlan, setIsPurchasingPlan] = useState<'pro' | 'premium' | null>(null);
+  const [isRestoringPurchases, setIsRestoringPurchases] = useState(false);
+
+  // Inicializa o serviço Google Play Billing no Android
+  React.useEffect(() => {
+    if (isNativeAndroid) {
+      billingService.init();
+    }
+  }, [isNativeAndroid]);
+
+  const handleNativePurchase = async (plan: 'pro' | 'premium') => {
+    if (!currentBiz) return;
+    setIsPurchasingPlan(plan);
+    try {
+      const res = await billingService.purchasePlan(plan, currentBiz.id);
+      if (res.success) {
+        await upgradeBusinessPlan(currentBiz.id, plan, true);
+        triggerCelebrationFireworks();
+        alert(`Parabéns! Sua empresa agora é ${plan === 'premium' ? 'PREMIUM' : 'PRÓ'}! Propostas ilimitadas foram liberadas no Google Play.`);
+      } else if (res.error && !res.error.toLowerCase().includes('cancel')) {
+        alert(`Google Play Billing: ${res.error}`);
+      }
+    } catch (err: any) {
+      alert(err?.message || 'Não foi possível processar a compra no Google Play.');
+    } finally {
+      setIsPurchasingPlan(null);
+    }
+  };
+
+  const handleRestorePurchases = async () => {
+    if (!currentBiz) return;
+    setIsRestoringPurchases(true);
+    try {
+      const res = await billingService.restorePurchases();
+      if (res.activePlans && res.activePlans.length > 0) {
+        const highestPlan = res.activePlans.includes('premium') ? 'premium' : 'pro';
+        await upgradeBusinessPlan(currentBiz.id, highestPlan, true);
+        triggerCelebrationFireworks();
+        alert(`Assinatura encontrada no Google Play! Seu plano ${highestPlan.toUpperCase()} foi restaurado com sucesso.`);
+      } else {
+        alert('Nenhuma assinatura ativa encontrada na sua conta da Google Play Store.');
+      }
+    } catch (err: any) {
+      alert('Erro ao consultar assinaturas anteriores no Google Play.');
+    } finally {
+      setIsRestoringPurchases(false);
+    }
+  };
 
   // New Offer state
   const [newOfferTitle, setNewOfferTitle] = useState('');
@@ -1193,20 +1245,32 @@ export const BusinessPortalView: React.FC = () => {
             </p>
           </div>
 
-          {/* PROBLEMA 1: Card informativo em ambiente Android Nativo (Google Play Compliance - Sem Links Externos) */}
+          {/* Google Play Billing Status no Android Nativo */}
           {isNativeAndroid && (
-            <div className="bg-linear-to-r from-blue-50 via-sky-50 to-indigo-50 border-2 border-blue-200/80 rounded-2xl p-5 shadow-xs flex items-center gap-4">
-              <div className="w-10 h-10 rounded-xl bg-blue-600 text-white flex items-center justify-center shrink-0 shadow-xs">
-                <Smartphone className="w-5 h-5" />
+            <div className="bg-linear-to-r from-emerald-50 via-teal-50 to-blue-50 border-2 border-emerald-200/80 rounded-2xl p-4 shadow-xs flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+              <div className="flex items-center gap-3">
+                <div className="w-10 h-10 rounded-xl bg-emerald-600 text-white flex items-center justify-center shrink-0 shadow-xs">
+                  <Smartphone className="w-5 h-5" />
+                </div>
+                <div>
+                  <h4 className="text-emerald-950 font-bold text-sm flex items-center gap-1.5">
+                    <span>Google Play Billing Ativo</span>
+                    <ShieldCheck className="w-4 h-4 text-emerald-600" />
+                  </h4>
+                  <p className="text-xs text-emerald-900/90 leading-relaxed">
+                    Assinaturas processadas de forma segura diretamente pela sua conta Google Play Store.
+                  </p>
+                </div>
               </div>
-              <div className="space-y-0.5">
-                <h4 className="text-blue-950 font-bold text-sm">
-                  Gerenciamento de Assinaturas
-                </h4>
-                <p className="text-xs text-blue-900/90 leading-relaxed">
-                  Em conformidade com as diretrizes da Google Play Store, a contratação e alteração dos planos <strong>Pró</strong> e <strong>Premium</strong> são realizadas através do portal web corporativo do EconomizaJá.
-                </p>
-              </div>
+              <button
+                type="button"
+                disabled={isRestoringPurchases}
+                onClick={handleRestorePurchases}
+                className="px-3.5 py-2 rounded-xl bg-white border border-emerald-300 text-emerald-800 hover:bg-emerald-50 text-xs font-semibold transition shrink-0 flex items-center justify-center gap-1.5 shadow-2xs cursor-pointer active:scale-95"
+              >
+                <RefreshCw className={`w-3.5 h-3.5 ${isRestoringPurchases ? 'animate-spin' : ''}`} />
+                <span>Restaurar Assinatura</span>
+              </button>
             </div>
           )}
 
@@ -1227,7 +1291,7 @@ export const BusinessPortalView: React.FC = () => {
               <button
                 disabled={isGratis}
                 onClick={() => upgradeBusinessPlan(currentBiz.id, 'free')}
-                className="w-full py-2.5 rounded-xl border border-slate-200 text-xs font-bold text-slate-700 hover:bg-slate-50 transition"
+                className="w-full py-2.5 rounded-xl border border-slate-200 text-xs font-bold text-slate-700 hover:bg-slate-50 transition cursor-pointer"
               >
                 {isGratis ? 'Plano Atual' : 'Migrar para Gratuito'}
               </button>
@@ -1250,14 +1314,31 @@ export const BusinessPortalView: React.FC = () => {
                 </ul>
               </div>
               {isNativeAndroid ? (
-                <div className="w-full py-2.5 px-3 rounded-xl bg-slate-800 text-slate-300 text-xs font-semibold text-center border border-slate-700 select-none">
-                  Disponível no portal web corporativo
-                </div>
+                <button
+                  type="button"
+                  disabled={isPro || isPurchasingPlan !== null}
+                  onClick={() => handleNativePurchase('pro')}
+                  className="w-full py-2.5 rounded-xl bg-emerald-500 text-white text-xs font-bold hover:bg-emerald-600 disabled:opacity-50 transition shadow-sm shadow-emerald-500/20 flex items-center justify-center gap-1.5 active:scale-95 cursor-pointer"
+                >
+                  {isPurchasingPlan === 'pro' ? (
+                    <>
+                      <RefreshCw className="w-3.5 h-3.5 animate-spin" />
+                      <span>Processando no Google Play...</span>
+                    </>
+                  ) : isPro ? (
+                    'Plano Atual Ativo'
+                  ) : (
+                    <>
+                      <CreditCard className="w-3.5 h-3.5" />
+                      <span>Assinar via Google Play</span>
+                    </>
+                  )}
+                </button>
               ) : (
                 <button
                   disabled={isPro}
                   onClick={() => setCheckoutPlan('pro')}
-                  className="w-full py-2.5 rounded-xl bg-emerald-500 text-white text-xs font-bold hover:bg-emerald-600 transition shadow-sm shadow-emerald-500/20"
+                  className="w-full py-2.5 rounded-xl bg-emerald-500 text-white text-xs font-bold hover:bg-emerald-600 transition shadow-sm shadow-emerald-500/20 cursor-pointer"
                 >
                   {isPro ? 'Plano Atual Ativo' : 'Assinar Plano Pró'}
                 </button>
@@ -1282,14 +1363,31 @@ export const BusinessPortalView: React.FC = () => {
                 </ul>
               </div>
               {isNativeAndroid ? (
-                <div className="w-full py-2.5 px-3 rounded-xl bg-slate-100 text-slate-600 text-xs font-semibold text-center border border-slate-200 select-none">
-                  Disponível no portal web corporativo
-                </div>
+                <button
+                  type="button"
+                  disabled={isPremium || isPurchasingPlan !== null}
+                  onClick={() => handleNativePurchase('premium')}
+                  className="w-full py-2.5 rounded-xl bg-slate-900 hover:bg-slate-800 disabled:opacity-50 text-white text-xs font-bold transition flex items-center justify-center gap-1.5 active:scale-95 cursor-pointer shadow-xs"
+                >
+                  {isPurchasingPlan === 'premium' ? (
+                    <>
+                      <RefreshCw className="w-3.5 h-3.5 animate-spin" />
+                      <span>Processando no Google Play...</span>
+                    </>
+                  ) : isPremium ? (
+                    'Plano Atual Ativo'
+                  ) : (
+                    <>
+                      <CreditCard className="w-3.5 h-3.5" />
+                      <span>Assinar via Google Play</span>
+                    </>
+                  )}
+                </button>
               ) : (
                 <button
                   disabled={isPremium}
                   onClick={() => setCheckoutPlan('premium')}
-                  className="w-full py-2.5 rounded-xl bg-slate-900 hover:bg-slate-800 text-white text-xs font-bold transition"
+                  className="w-full py-2.5 rounded-xl bg-slate-900 hover:bg-slate-800 text-white text-xs font-bold transition cursor-pointer"
                 >
                   {isPremium ? 'Plano Atual Ativo' : 'Assinar Plano Premium'}
                 </button>
@@ -1617,19 +1715,25 @@ export const BusinessPortalView: React.FC = () => {
             </div>
 
             {isNativeAndroid ? (
-              <div className="space-y-3 pt-2">
-                <div className="p-3.5 bg-blue-50 border border-blue-200 rounded-xl text-left text-xs text-blue-900 space-y-1">
-                  <strong className="block font-bold">Portal Web Corporativo</strong>
-                  <p className="text-[11px] leading-relaxed text-blue-800">
-                    Para fazer upgrade da sua conta e desbloquear propostas comerciais ilimitadas, acesse o portal web corporativo do EconomizaJá pelo navegador do seu computador ou celular.
-                  </p>
-                </div>
+              <div className="space-y-2 pt-2">
+                <button
+                  type="button"
+                  disabled={isPurchasingPlan !== null}
+                  onClick={async () => {
+                    setShowProposalLimitModal(false);
+                    await handleNativePurchase('pro');
+                  }}
+                  className="w-full py-2.5 rounded-xl bg-emerald-600 hover:bg-emerald-700 text-white text-xs font-bold transition flex items-center justify-center gap-2 shadow-sm cursor-pointer"
+                >
+                  <CreditCard className="w-4 h-4" />
+                  <span>Assinar Plano Pró via Google Play</span>
+                </button>
                 <button
                   type="button"
                   onClick={() => setShowProposalLimitModal(false)}
-                  className="w-full py-2.5 rounded-xl bg-slate-900 hover:bg-slate-800 text-white text-xs font-bold transition shadow-xs cursor-pointer"
+                  className="w-full py-2 rounded-xl text-slate-500 hover:bg-slate-100 text-xs font-medium transition cursor-pointer"
                 >
-                  Entendido
+                  Fechar
                 </button>
               </div>
             ) : (

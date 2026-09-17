@@ -97,7 +97,7 @@ interface AppContextType {
   toggleBusinessFeatured: (businessId: string, days?: number, notes?: string) => Promise<void>;
   removeOffer: (offerId: string) => void;
   deleteBusiness: (businessId: string) => void;
-  upgradeBusinessPlan: (businessId: string, planTier: 'free' | 'pro' | 'premium') => void;
+  upgradeBusinessPlan: (businessId: string, planTier: 'free' | 'pro' | 'premium', immediateActive?: boolean) => Promise<void>;
   markNotificationRead: (id: string) => void;
   refreshNotifications: () => Promise<void>;
   deleteAccountAndData: () => void;
@@ -1127,21 +1127,40 @@ const getInitialUserLocation = (): UserLocation => {
     }
   };
 
-  const upgradeBusinessPlan = async (businessId: string, planTier: 'free' | 'pro' | 'premium') => {
+  const upgradeBusinessPlan = async (
+    businessId: string,
+    planTier: 'free' | 'pro' | 'premium',
+    immediateActive = false
+  ) => {
     if (planTier === 'free') {
       alert('Sua empresa já está no plano Gratuito.');
       return;
     }
 
+    if (immediateActive) {
+      setBusinesses((prev) =>
+        prev.map((b) => (b.id === businessId ? { ...b, plan: planTier, planTier: planTier } : b))
+      );
+    }
+
     try {
       if (isSupabaseConfigured) {
-        await dataService.initiatePlanSubscription(businessId, planTier);
+        if (immediateActive) {
+          await dataService.activateGooglePlaySubscription({
+            businessId,
+            planTier,
+          });
+        } else {
+          await dataService.initiatePlanSubscription(businessId, planTier);
+        }
       }
       setNotifications((prev) => [
         {
           id: `upgrade-${Date.now()}`,
-          title: `Solicitação do Plano ${planTier.toUpperCase()} Registrada`,
-          message: `O pedido de assinatura foi gerado no status PENDING. A ativação ocorrerá automaticamente após a confirmação do pagamento no provedor.`,
+          title: `Plano ${planTier.toUpperCase()} ${immediateActive ? 'Ativado' : 'Registrado'}`,
+          message: immediateActive
+            ? `Parabéns! O Plano ${planTier.toUpperCase()} foi ativado com sucesso. Propostas comerciais ilimitadas liberadas!`
+            : `O pedido de assinatura foi gerado no status PENDING. A ativação ocorrerá automaticamente após a confirmação do pagamento no provedor.`,
           timestamp: 'Agora',
           type: 'system',
           read: false,

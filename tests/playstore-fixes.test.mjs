@@ -27,16 +27,23 @@ test('Validação dos 5 Ajustes Prioritários para a Google Play Store', async (
     assert.equal(isThisMonth('data-invalida'), false, 'Data inválida retorna false');
   });
 
-  await t.test('2. Problema 1: BusinessPortalView oculta botões Pro/Premium no Android nativo e exibe card web', async () => {
+  await t.test('2. Google Play Billing: Integração nativa de assinaturas no Android e PIX na Web', async () => {
     const portalPath = path.join(rootDir, 'src', 'components', 'BusinessPortalView.tsx');
     const content = fs.readFileSync(portalPath, 'utf8');
 
     assert.match(content, /Capacitor\.isNativePlatform\(\)/, 'Deve verificar plataforma nativa com Capacitor.isNativePlatform()');
     assert.match(content, /isNativeAndroid/, 'Deve conter a constante ou flag isNativeAndroid');
-    assert.match(content, /Gerenciamento de Assinaturas/, 'Deve exibir o card explicativo para gestão na web');
-    assert.match(content, /Disponível no portal web corporativo/, 'Deve ocultar o botão de compra direta e orientar para a web');
-    assert.match(content, /checkoutPlan && !isNativeAndroid/, 'Modal de checkout de plano não deve ser aberto no Android nativo');
+    assert.match(content, /billingService\.purchasePlan/, 'Deve chamar billingService.purchasePlan ao assinar no Android');
+    assert.match(content, /Assinar via Google Play/, 'Deve exibir botão para assinatura direta via Google Play no Android');
+    assert.match(content, /Restaurar Assinatura/, 'Deve permitir restaurar compras no Google Play');
+    assert.match(content, /checkoutPlan && !isNativeAndroid/, 'Modal de checkout PIX não deve ser aberto no Android nativo');
     assert.match(content, /Destaque Patrocinado da Empresa/, 'Destaque patrocinado B2B deve permanecer visível');
+
+    const billingServicePath = path.join(rootDir, 'src', 'services', 'billingService.ts');
+    assert.ok(fs.existsSync(billingServicePath), 'billingService.ts deve existir');
+    const billingContent = fs.readFileSync(billingServicePath, 'utf8');
+    assert.match(billingContent, /economizaja_pro_monthly/, 'Deve configurar ID do plano pro');
+    assert.match(billingContent, /economizaja_premium_monthly/, 'Deve configurar ID do plano premium');
   });
 
   await t.test('3. Problema 2: AppContext persiste localização por até 24 horas no localStorage', async () => {

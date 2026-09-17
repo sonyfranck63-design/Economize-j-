@@ -81,3 +81,35 @@ Ao preencher o formulário na Play Console:
 | `npm run build:android` | Compila o front-end e sincroniza os assets com o Android |
 | `npm run open:android` | Abre o projeto diretamente no Android Studio |
 | `npm run lint` | Validação estrita de tipos TypeScript |
+
+---
+
+## 7. Configuração das Assinaturas no Google Play Console
+
+Para que as cobranças com cartão funcionem no app, cadastre as assinaturas na Play Console:
+
+1. Acesse o [Google Play Console](https://play.google.com/console) e selecione o **EconomizaJá**.
+2. No menu lateral, acesse: **Monetizar com o Google Play** > **Produtos** > **Assinaturas**.
+3. Clique em **Criar assinatura** e preencha:
+
+### Produto 1: Plano Pró
+- **ID do Produto:** `economizaja_pro_monthly`
+- **Nome:** Plano Pró Mensal
+- **Descrição:** Propostas ilimitadas para orçamentos e selo de empresa verificada.
+- Clique em **Salvar** e depois em **Adicionar plano base**:
+  - **ID do plano base:** `pro-monthly`
+  - **Tipo de renovação:** Renovação automática mensal
+  - **Preço:** R$ 79,90 BRL
+  - **Ativar plano base**.
+
+### Produto 2: Plano Premium
+- **ID do Produto:** `economizaja_premium_monthly`
+- **Nome:** Plano Premium Mensal
+- **Descrição:** Propostas e ofertas ilimitadas, selo corporativo e suporte VIP.
+- Clique em **Salvar** e depois em **Adicionar plano base**:
+  - **ID do plano base:** `premium-monthly`
+  - **Tipo de renovação:** Renovação automática mensal
+  - **Preço:** R$ 159,90 BRL
+  - **Ativar plano base**.
+
+> 💡 **Dica de Teste:** Em **Configurar** > **Testadores de licença**, adicione seu endereço de e-mail do Gmail para poder assinar os planos gratuitamente no app sem ser debitado do cartão durante os testes!
