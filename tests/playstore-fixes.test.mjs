@@ -33,8 +33,8 @@ test('Validação dos 5 Ajustes Prioritários para a Google Play Store', async (
 
     assert.match(content, /Capacitor\.isNativePlatform\(\)/, 'Deve verificar plataforma nativa com Capacitor.isNativePlatform()');
     assert.match(content, /isNativeAndroid/, 'Deve conter a constante ou flag isNativeAndroid');
-    assert.match(content, /Gerencie seu plano em economizaja\.com\.br/, 'Deve exibir o card explicativo para gestão na web');
-    assert.match(content, /Disponível em economizaja\.com\.br/, 'Deve ocultar o botão de compra direta e orientar para a web');
+    assert.match(content, /Gerenciamento de Assinaturas/, 'Deve exibir o card explicativo para gestão na web');
+    assert.match(content, /Disponível no portal web corporativo/, 'Deve ocultar o botão de compra direta e orientar para a web');
     assert.match(content, /checkoutPlan && !isNativeAndroid/, 'Modal de checkout de plano não deve ser aberto no Android nativo');
     assert.match(content, /Destaque Patrocinado da Empresa/, 'Destaque patrocinado B2B deve permanecer visível');
   });

@@ -1193,26 +1193,20 @@ export const BusinessPortalView: React.FC = () => {
             </p>
           </div>
 
-          {/* PROBLEMA 1: Card explicativo em ambiente Android Nativo (Google Play Compliance) */}
+          {/* PROBLEMA 1: Card informativo em ambiente Android Nativo (Google Play Compliance - Sem Links Externos) */}
           {isNativeAndroid && (
-            <div className="bg-linear-to-r from-blue-50 via-sky-50 to-indigo-50 border-2 border-blue-200/80 rounded-2xl p-5 shadow-xs flex flex-col sm:flex-row sm:items-center justify-between gap-4">
-              <div className="space-y-1">
-                <div className="flex items-center gap-2 text-blue-900 font-bold text-sm">
-                  <Smartphone className="w-4 h-4 text-blue-600 shrink-0" />
-                  <span>Gerencie seu plano em economizaja.com.br</span>
-                </div>
-                <p className="text-xs text-blue-800/90 leading-relaxed max-w-2xl">
-                  No aplicativo Android, os upgrades de planos e gerenciamento de assinaturas (Pró e Premium) são realizados exclusivamente através do nosso portal web em <strong>economizaja.com.br</strong>. Acesse pelo navegador para assinar e desbloquear propostas ilimitadas!
+            <div className="bg-linear-to-r from-blue-50 via-sky-50 to-indigo-50 border-2 border-blue-200/80 rounded-2xl p-5 shadow-xs flex items-center gap-4">
+              <div className="w-10 h-10 rounded-xl bg-blue-600 text-white flex items-center justify-center shrink-0 shadow-xs">
+                <Smartphone className="w-5 h-5" />
+              </div>
+              <div className="space-y-0.5">
+                <h4 className="text-blue-950 font-bold text-sm">
+                  Gerenciamento de Assinaturas
+                </h4>
+                <p className="text-xs text-blue-900/90 leading-relaxed">
+                  Em conformidade com as diretrizes da Google Play Store, a contratação e alteração dos planos <strong>Pró</strong> e <strong>Premium</strong> são realizadas através do portal web corporativo do EconomizaJá.
                 </p>
               </div>
-              <button
-                type="button"
-                onClick={() => window.open('https://economizaja.com.br', '_blank')}
-                className="px-4 py-2.5 rounded-xl bg-blue-600 hover:bg-blue-700 text-white text-xs font-bold transition shrink-0 flex items-center justify-center gap-1.5 shadow-sm active:scale-95 cursor-pointer"
-              >
-                <span>Acessar economizaja.com.br</span>
-                <ExternalLink className="w-3.5 h-3.5" />
-              </button>
             </div>
           )}
 
@@ -1256,8 +1250,8 @@ export const BusinessPortalView: React.FC = () => {
                 </ul>
               </div>
               {isNativeAndroid ? (
-                <div className="w-full py-2.5 px-3 rounded-xl bg-slate-800 text-slate-300 text-xs font-semibold text-center border border-slate-700">
-                  Disponível em economizaja.com.br
+                <div className="w-full py-2.5 px-3 rounded-xl bg-slate-800 text-slate-300 text-xs font-semibold text-center border border-slate-700 select-none">
+                  Disponível no portal web corporativo
                 </div>
               ) : (
                 <button
@@ -1288,8 +1282,8 @@ export const BusinessPortalView: React.FC = () => {
                 </ul>
               </div>
               {isNativeAndroid ? (
-                <div className="w-full py-2.5 px-3 rounded-xl bg-slate-100 text-slate-600 text-xs font-semibold text-center border border-slate-200">
-                  Disponível em economizaja.com.br
+                <div className="w-full py-2.5 px-3 rounded-xl bg-slate-100 text-slate-600 text-xs font-semibold text-center border border-slate-200 select-none">
+                  Disponível no portal web corporativo
                 </div>
               ) : (
                 <button
@@ -1623,25 +1617,19 @@ export const BusinessPortalView: React.FC = () => {
             </div>
 
             {isNativeAndroid ? (
-              <div className="space-y-2 pt-2">
-                <div className="p-3 bg-blue-50 border border-blue-200 rounded-xl text-left text-xs text-blue-900">
-                  <strong className="block font-bold mb-0.5">Gerenciamento no Portal Web</strong>
-                  <span>Para fazer upgrade da sua conta e desbloquear propostas ilimitadas, acesse <strong>economizaja.com.br</strong> pelo navegador.</span>
+              <div className="space-y-3 pt-2">
+                <div className="p-3.5 bg-blue-50 border border-blue-200 rounded-xl text-left text-xs text-blue-900 space-y-1">
+                  <strong className="block font-bold">Portal Web Corporativo</strong>
+                  <p className="text-[11px] leading-relaxed text-blue-800">
+                    Para fazer upgrade da sua conta e desbloquear propostas comerciais ilimitadas, acesse o portal web corporativo do EconomizaJá pelo navegador do seu computador ou celular.
+                  </p>
                 </div>
                 <button
                   type="button"
-                  onClick={() => window.open('https://economizaja.com.br', '_blank')}
-                  className="w-full py-2.5 rounded-xl bg-blue-600 hover:bg-blue-700 text-white text-xs font-bold transition flex items-center justify-center gap-2 shadow-sm"
-                >
-                  <span>Acessar economizaja.com.br</span>
-                  <ExternalLink className="w-3.5 h-3.5" />
-                </button>
-                <button
-                  type="button"
                   onClick={() => setShowProposalLimitModal(false)}
-                  className="w-full py-2 rounded-xl text-slate-500 hover:bg-slate-100 text-xs font-medium transition"
+                  className="w-full py-2.5 rounded-xl bg-slate-900 hover:bg-slate-800 text-white text-xs font-bold transition shadow-xs cursor-pointer"
                 >
-                  Fechar
+                  Entendido
                 </button>
               </div>
             ) : (
