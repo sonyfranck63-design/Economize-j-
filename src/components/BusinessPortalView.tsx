@@ -6,6 +6,8 @@ import { SafeImage } from './SafeImage';
 import { getSmartImage, isInvalidOrDeadImageUrl, OFFER_IMAGE_SUGGESTIONS } from '../utils/imageUtils';
 import { isQuoteMatchingBusiness, isLocationMatch } from '../utils/quoteStorage';
 import { buildWhatsAppLink, formatWhatsAppNumber } from '../utils/whatsappUtils';
+import { isThisMonth } from '../utils/dateUtils';
+import { Capacitor } from '@capacitor/core';
 import { dataService } from '../services/dataService';
 import {
   Building2,
@@ -132,7 +134,10 @@ export const BusinessPortalView: React.FC = () => {
   };
 
   // Proposal modal state
+  const isNativeAndroid = Capacitor.isNativePlatform();
   const [activeQuoteId, setActiveQuoteId] = useState<string | null>(null);
+  const [isSendingProposal, setIsSendingProposal] = useState(false);
+  const [showProposalLimitModal, setShowProposalLimitModal] = useState(false);
   const [proposalPrice, setProposalPrice] = useState('');
   const [proposalDeadline, setProposalDeadline] = useState('Execução em até 2 dias úteis');
   const [proposalDescription, setProposalDescription] = useState('');
@@ -335,11 +340,32 @@ export const BusinessPortalView: React.FC = () => {
   const isPro = activePlan === 'pro';
   const isPremium = activePlan === 'premium';
 
+  // PROBLEMA 3: Contagem de propostas enviadas pela empresa no mês vigente
+  const monthlyProposalsCount = currentBiz
+    ? (quoteRequests || [])
+        .flatMap((q) => q.proposals || [])
+        .filter(
+          (p) =>
+            (p.businessId || '').toLowerCase() === (currentBiz.id || '').toLowerCase() &&
+            isThisMonth(p.createdAt)
+        ).length
+    : 0;
+
+  const hasReachedProposalLimit = isGratis && monthlyProposalsCount >= 3;
+
+  // PROBLEMA 4: Prevenção de duplo clique no envio de propostas
   const handleSendProposal = async (e: React.FormEvent) => {
     e.preventDefault();
+    if (isSendingProposal) return;
     if (!activeQuoteId || !proposalPrice) return;
 
+    if (hasReachedProposalLimit) {
+      setShowProposalLimitModal(true);
+      return;
+    }
+
     try {
+      setIsSendingProposal(true);
       await submitProposal(activeQuoteId, {
         businessId: currentBiz.id,
         businessName: currentBiz.name,
@@ -359,6 +385,8 @@ export const BusinessPortalView: React.FC = () => {
     } catch (err: any) {
       console.error('Erro ao submeter proposta:', err);
       alert(err.message || 'Não foi possível enviar a proposta. Verifique sua conexão e tente novamente.');
+    } finally {
+      setIsSendingProposal(false);
     }
   };
 
@@ -830,7 +858,13 @@ export const BusinessPortalView: React.FC = () => {
                           </>
                         ) : !alreadySent ? (
                           <button
-                            onClick={() => setActiveQuoteId(q.id)}
+                            onClick={() => {
+                              if (hasReachedProposalLimit) {
+                                setShowProposalLimitModal(true);
+                              } else {
+                                setActiveQuoteId(q.id);
+                              }
+                            }}
                             className="w-full sm:w-auto px-5 py-2.5 rounded-xl bg-emerald-600 hover:bg-emerald-700 text-white text-xs font-bold shadow-xs transition flex items-center justify-center gap-1.5 active:scale-95 cursor-pointer"
                           >
                             <Send className="w-3.5 h-3.5" />
@@ -921,16 +955,25 @@ export const BusinessPortalView: React.FC = () => {
               <div className="flex gap-2 pt-2">
                 <button
                   type="button"
+                  disabled={isSendingProposal}
                   onClick={() => setActiveQuoteId(null)}
-                  className="flex-1 py-2.5 rounded-xl bg-slate-100 hover:bg-slate-200 text-slate-700 text-xs font-semibold transition"
+                  className="flex-1 py-2.5 rounded-xl bg-slate-100 hover:bg-slate-200 disabled:opacity-50 text-slate-700 text-xs font-semibold transition"
                 >
                   Cancelar
                 </button>
                 <button
                   type="submit"
-                  className="flex-1 py-2.5 rounded-xl bg-emerald-600 hover:bg-emerald-700 text-white text-xs font-bold transition shadow-sm shadow-emerald-600/20"
+                  disabled={isSendingProposal}
+                  className="flex-1 py-2.5 rounded-xl bg-emerald-600 hover:bg-emerald-700 disabled:opacity-50 disabled:cursor-not-allowed text-white text-xs font-bold transition shadow-sm shadow-emerald-600/20 flex items-center justify-center gap-2"
                 >
-                  Confirmar Envio
+                  {isSendingProposal ? (
+                    <>
+                      <RefreshCw className="w-4 h-4 animate-spin" />
+                      <span>Enviando Proposta...</span>
+                    </>
+                  ) : (
+                    'Confirmar Envio'
+                  )}
                 </button>
               </div>
             </form>
@@ -1150,6 +1193,29 @@ export const BusinessPortalView: React.FC = () => {
             </p>
           </div>
 
+          {/* PROBLEMA 1: Card explicativo em ambiente Android Nativo (Google Play Compliance) */}
+          {isNativeAndroid && (
+            <div className="bg-linear-to-r from-blue-50 via-sky-50 to-indigo-50 border-2 border-blue-200/80 rounded-2xl p-5 shadow-xs flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+              <div className="space-y-1">
+                <div className="flex items-center gap-2 text-blue-900 font-bold text-sm">
+                  <Smartphone className="w-4 h-4 text-blue-600 shrink-0" />
+                  <span>Gerencie seu plano em economizaja.com.br</span>
+                </div>
+                <p className="text-xs text-blue-800/90 leading-relaxed max-w-2xl">
+                  No aplicativo Android, os upgrades de planos e gerenciamento de assinaturas (Pró e Premium) são realizados exclusivamente através do nosso portal web em <strong>economizaja.com.br</strong>. Acesse pelo navegador para assinar e desbloquear propostas ilimitadas!
+                </p>
+              </div>
+              <button
+                type="button"
+                onClick={() => window.open('https://economizaja.com.br', '_blank')}
+                className="px-4 py-2.5 rounded-xl bg-blue-600 hover:bg-blue-700 text-white text-xs font-bold transition shrink-0 flex items-center justify-center gap-1.5 shadow-sm active:scale-95 cursor-pointer"
+              >
+                <span>Acessar economizaja.com.br</span>
+                <ExternalLink className="w-3.5 h-3.5" />
+              </button>
+            </div>
+          )}
+
           <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
             {/* Gratuito */}
             <div className="bg-white rounded-2xl border border-slate-200 p-6 space-y-4 flex flex-col justify-between shadow-sm">
@@ -1189,13 +1255,19 @@ export const BusinessPortalView: React.FC = () => {
                   <li>✓ Selo de Empresa Verificada</li>
                 </ul>
               </div>
-              <button
-                disabled={isPro}
-                onClick={() => setCheckoutPlan('pro')}
-                className="w-full py-2.5 rounded-xl bg-emerald-500 text-white text-xs font-bold hover:bg-emerald-600 transition shadow-sm shadow-emerald-500/20"
-              >
-                {isPro ? 'Plano Atual Ativo' : 'Assinar Plano Pró'}
-              </button>
+              {isNativeAndroid ? (
+                <div className="w-full py-2.5 px-3 rounded-xl bg-slate-800 text-slate-300 text-xs font-semibold text-center border border-slate-700">
+                  Disponível em economizaja.com.br
+                </div>
+              ) : (
+                <button
+                  disabled={isPro}
+                  onClick={() => setCheckoutPlan('pro')}
+                  className="w-full py-2.5 rounded-xl bg-emerald-500 text-white text-xs font-bold hover:bg-emerald-600 transition shadow-sm shadow-emerald-500/20"
+                >
+                  {isPro ? 'Plano Atual Ativo' : 'Assinar Plano Pró'}
+                </button>
+              )}
             </div>
 
             {/* Premium */}
@@ -1215,13 +1287,19 @@ export const BusinessPortalView: React.FC = () => {
                   <li>✓ Suporte VIP dedicado</li>
                 </ul>
               </div>
-              <button
-                disabled={isPremium}
-                onClick={() => setCheckoutPlan('premium')}
-                className="w-full py-2.5 rounded-xl bg-slate-900 hover:bg-slate-800 text-white text-xs font-bold transition"
-              >
-                {isPremium ? 'Plano Atual Ativo' : 'Assinar Plano Premium'}
-              </button>
+              {isNativeAndroid ? (
+                <div className="w-full py-2.5 px-3 rounded-xl bg-slate-100 text-slate-600 text-xs font-semibold text-center border border-slate-200">
+                  Disponível em economizaja.com.br
+                </div>
+              ) : (
+                <button
+                  disabled={isPremium}
+                  onClick={() => setCheckoutPlan('premium')}
+                  className="w-full py-2.5 rounded-xl bg-slate-900 hover:bg-slate-800 text-white text-xs font-bold transition"
+                >
+                  {isPremium ? 'Plano Atual Ativo' : 'Assinar Plano Premium'}
+                </button>
+              )}
             </div>
           </div>
 
@@ -1365,8 +1443,8 @@ export const BusinessPortalView: React.FC = () => {
         </div>
       </div>
 
-      {/* MODAL DE CHECKOUT E PAGAMENTO PIX / GOOGLE PLAY */}
-      {checkoutPlan && (
+      {/* MODAL: CHECKOUT DE PLANO (APENAS WEB - BLOQUEADO NO ANDROID NATIVO) */}
+      {checkoutPlan && !isNativeAndroid && (
         <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/60 backdrop-blur-xs animate-fade-in">
           {/* Overlay Click */}
           <div className="absolute inset-0" onClick={() => setCheckoutPlan(null)} />
@@ -1511,6 +1589,82 @@ export const BusinessPortalView: React.FC = () => {
                 Fechar
               </button>
             </div>
+          </div>
+        </div>
+      )}
+
+      {/* PROBLEMA 3: MODAL DE LIMITE DE PROPOSTAS DO PLANO GRATUITO */}
+      {showProposalLimitModal && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-950/60 p-4 backdrop-blur-xs animate-fade-in">
+          <div className="absolute inset-0" onClick={() => setShowProposalLimitModal(false)} />
+          <div className="relative w-full max-w-md bg-white rounded-3xl p-6 shadow-2xl border border-slate-100 text-center space-y-4">
+            <div className="w-12 h-12 rounded-2xl bg-amber-100 text-amber-600 flex items-center justify-center mx-auto">
+              <Sparkles className="w-6 h-6" />
+            </div>
+            <div className="space-y-1">
+              <h4 className="text-lg font-bold text-slate-900">
+                Limite Mensal de Propostas Atingido
+              </h4>
+              <p className="text-xs text-slate-600 leading-relaxed">
+                No plano <strong>Gratuito</strong>, sua empresa tem direito a até <strong>3 propostas por mês</strong>. Você já enviou <strong>{monthlyProposalsCount} de 3</strong> propostas neste mês.
+              </p>
+            </div>
+
+            <div className="p-4 rounded-2xl bg-slate-50 border border-slate-200 text-xs text-slate-700 text-left space-y-2">
+              <div className="font-bold text-slate-900 flex items-center gap-1.5">
+                <Crown className="w-4 h-4 text-emerald-600" />
+                <span>Vantagens do Plano Pró:</span>
+              </div>
+              <ul className="space-y-1 text-slate-600 text-[11px]">
+                <li>✓ Envio de propostas <strong>ilimitadas</strong> todos os meses</li>
+                <li>✓ Notificações prioritárias de novos pedidos</li>
+                <li>✓ Selo de Empresa Verificada no catálogo</li>
+              </ul>
+            </div>
+
+            {isNativeAndroid ? (
+              <div className="space-y-2 pt-2">
+                <div className="p-3 bg-blue-50 border border-blue-200 rounded-xl text-left text-xs text-blue-900">
+                  <strong className="block font-bold mb-0.5">Gerenciamento no Portal Web</strong>
+                  <span>Para fazer upgrade da sua conta e desbloquear propostas ilimitadas, acesse <strong>economizaja.com.br</strong> pelo navegador.</span>
+                </div>
+                <button
+                  type="button"
+                  onClick={() => window.open('https://economizaja.com.br', '_blank')}
+                  className="w-full py-2.5 rounded-xl bg-blue-600 hover:bg-blue-700 text-white text-xs font-bold transition flex items-center justify-center gap-2 shadow-sm"
+                >
+                  <span>Acessar economizaja.com.br</span>
+                  <ExternalLink className="w-3.5 h-3.5" />
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setShowProposalLimitModal(false)}
+                  className="w-full py-2 rounded-xl text-slate-500 hover:bg-slate-100 text-xs font-medium transition"
+                >
+                  Fechar
+                </button>
+              </div>
+            ) : (
+              <div className="flex gap-2 pt-2">
+                <button
+                  type="button"
+                  onClick={() => setShowProposalLimitModal(false)}
+                  className="flex-1 py-2.5 rounded-xl bg-slate-100 hover:bg-slate-200 text-slate-700 text-xs font-semibold transition"
+                >
+                  Voltar
+                </button>
+                <button
+                  type="button"
+                  onClick={() => {
+                    setShowProposalLimitModal(false);
+                    setActiveTab('planos');
+                  }}
+                  className="flex-1 py-2.5 rounded-xl bg-emerald-600 hover:bg-emerald-700 text-white text-xs font-bold transition shadow-sm"
+                >
+                  Conhecer Planos
+                </button>
+              </div>
+            )}
           </div>
         </div>
       )}

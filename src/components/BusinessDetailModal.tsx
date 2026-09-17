@@ -33,6 +33,7 @@ export const BusinessDetailModal: React.FC = () => {
     toggleFavoriteBusiness,
     favorites,
     addReview,
+    reviews,
     currentUser,
     setIsAuthModalOpen,
   } = useApp();
@@ -57,7 +58,7 @@ export const BusinessDetailModal: React.FC = () => {
   const bizOffers = biz ? offers.filter((o) => o.businessId === biz.id) : [];
   const isFav = biz ? favorites.businessIds.includes(biz.id) : false;
 
-  const handleReviewSubmit = (e: React.FormEvent) => {
+  const handleReviewSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!currentUser) {
       setIsAuthModalOpen(true);
@@ -65,11 +66,24 @@ export const BusinessDetailModal: React.FC = () => {
     }
     if (!reviewComment.trim() || !biz) return;
 
-    addReview(biz.id, {
-      authorName: currentUser.fullName,
-      rating: reviewRating,
-      comment: reviewComment.trim(),
+    // PROBLEMA 5: 1. Antes de chamar addReview, verificar se já existe review com businessId === businessId e userName === currentUser.fullName no array reviews do contexto
+    const currentName = currentUser.fullName?.trim().toLowerCase();
+    const currentId = currentUser.id;
+
+    const alreadyReviewed = reviews.some((r) => {
+      if (r.businessId !== biz.id) return false;
+      const matchName = Boolean(currentName && r.userName?.trim().toLowerCase() === currentName);
+      const matchId = Boolean(currentId && (r as any).userId === currentId);
+      return matchName || matchId;
     });
+
+    // 2. Se existir, mostrar mensagem "Você já avaliou esta empresa"
+    if (alreadyReviewed) {
+      alert('Você já avaliou esta empresa');
+      return;
+    }
+
+    await addReview(biz.id, reviewRating, reviewComment.trim());
 
     setReviewComment('');
     setShowReviewForm(false);

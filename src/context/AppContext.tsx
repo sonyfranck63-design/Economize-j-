@@ -139,11 +139,57 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
   const [isLoadingData, setIsLoadingData] = useState(false);
   const [isDatabaseConnected, setIsDatabaseConnected] = useState(isSupabaseConfigured);
 
-  const [currentLocation, setCurrentLocation] = useState<UserLocation>({
+const STORAGE_KEY_LOCATION = 'economizaja_user_location';
+const LOCATION_MAX_AGE_MS = 24 * 60 * 60 * 1000; // 24 horas
+
+interface CachedLocationData {
+  location: UserLocation;
+  timestamp: number;
+}
+
+// Recupera localização persistida se tiver menos de 24 horas
+const getInitialUserLocation = (): UserLocation => {
+  try {
+    const raw = localStorage.getItem(STORAGE_KEY_LOCATION);
+    if (raw) {
+      const parsed: CachedLocationData = JSON.parse(raw);
+      if (parsed && parsed.timestamp && parsed.location) {
+        const age = Date.now() - parsed.timestamp;
+        if (age < LOCATION_MAX_AGE_MS) {
+          return parsed.location;
+        } else {
+          // Mais de 24h: remove do storage e força nova detecção
+          localStorage.removeItem(STORAGE_KEY_LOCATION);
+        }
+      }
+    }
+  } catch (err) {
+    console.error('Erro ao ler localização salva no cache:', err);
+  }
+
+  return {
     city: '',
     state: '',
     neighborhood: '',
-  });
+  };
+};
+
+  const [currentLocation, setCurrentLocation] = useState<UserLocation>(getInitialUserLocation);
+
+  // Sincroniza currentLocation com o localStorage com timestamp sempre que for atualizado
+  useEffect(() => {
+    try {
+      if (currentLocation && (currentLocation.city || currentLocation.state || currentLocation.neighborhood)) {
+        const payload: CachedLocationData = {
+          location: currentLocation,
+          timestamp: Date.now(),
+        };
+        localStorage.setItem(STORAGE_KEY_LOCATION, JSON.stringify(payload));
+      }
+    } catch (err) {
+      console.error('Erro ao salvar localização no localStorage:', err);
+    }
+  }, [currentLocation]);
 
   // Auth
   const [currentUser, setCurrentUser] = useState<AuthUserProfile | null>(() => authService.getInitialUser());
@@ -726,7 +772,27 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     }
   };
 
-  const addReview = async (businessId: string, rating: number, comment: string) => {
+  const addReview = async (businessId: string, ratingOrObj: number | any, commentArg?: string) => {
+    // Normalização para aceitar tanto (businessId, rating, comment) quanto chamada com objeto
+    const rating = typeof ratingOrObj === 'number' ? ratingOrObj : Number(ratingOrObj?.rating || 5);
+    const comment = typeof ratingOrObj === 'number' ? (commentArg || '') : (ratingOrObj?.comment || '');
+
+    // PROBLEMA 5: Validação para impedir avaliações duplicadas da mesma empresa pelo mesmo usuário
+    const currentName = currentUser?.fullName?.trim().toLowerCase();
+    const currentId = currentUser?.id;
+
+    const alreadyReviewed = reviews.some((r) => {
+      if (r.businessId !== businessId) return false;
+      const matchName = Boolean(currentName && r.userName?.trim().toLowerCase() === currentName);
+      const matchId = Boolean(currentId && (r as any).userId === currentId);
+      return matchName || matchId;
+    });
+
+    if (alreadyReviewed) {
+      alert('Você já avaliou esta empresa');
+      return;
+    }
+
     const newReview: Review = {
       id: `rev-${Date.now()}`,
       businessId,
