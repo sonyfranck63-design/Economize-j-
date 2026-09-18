@@ -9,19 +9,54 @@
   "orientation": "portrait",
   "background_color": "#0f766e",
   "theme_color": "#0f766e",
-  "categories": ["shopping", "business", "finance", "lifestyle"],
+  "categories": [
+    "shopping",
+    "business",
+    "finance",
+    "lifestyle"
+  ],
   "icons": [
     {
-      "src": "/pwa-192x192.png",
-      "sizes": "192x192 512x512",
+      "src": "../icons/icon-48.webp",
       "type": "image/png",
-      "purpose": "any"
+      "sizes": "48x48",
+      "purpose": "any maskable"
     },
     {
-      "src": "/pwa-192x192.png",
-      "sizes": "512x512",
+      "src": "../icons/icon-72.webp",
       "type": "image/png",
-      "purpose": "maskable"
+      "sizes": "72x72",
+      "purpose": "any maskable"
+    },
+    {
+      "src": "../icons/icon-96.webp",
+      "type": "image/png",
+      "sizes": "96x96",
+      "purpose": "any maskable"
+    },
+    {
+      "src": "../icons/icon-128.webp",
+      "type": "image/png",
+      "sizes": "128x128",
+      "purpose": "any maskable"
+    },
+    {
+      "src": "../icons/icon-192.webp",
+      "type": "image/png",
+      "sizes": "192x192",
+      "purpose": "any maskable"
+    },
+    {
+      "src": "../icons/icon-256.webp",
+      "type": "image/png",
+      "sizes": "256x256",
+      "purpose": "any maskable"
+    },
+    {
+      "src": "../icons/icon-512.webp",
+      "type": "image/png",
+      "sizes": "512x512",
+      "purpose": "any maskable"
     }
   ],
   "shortcuts": [
@@ -30,14 +65,24 @@
       "short_name": "Orçamento",
       "description": "Peça cotações gratuitas de serviços e produtos",
       "url": "/?action=quote",
-      "icons": [{ "src": "/pwa-192x192.png", "sizes": "192x192" }]
+      "icons": [
+        {
+          "src": "/pwa-192x192.png",
+          "sizes": "192x192"
+        }
+      ]
     },
     {
       "name": "Ofertas Próximas",
       "short_name": "Ofertas",
       "description": "Veja descontos perto de você",
       "url": "/?tab=offers",
-      "icons": [{ "src": "/pwa-192x192.png", "sizes": "192x192" }]
+      "icons": [
+        {
+          "src": "/pwa-192x192.png",
+          "sizes": "192x192"
+        }
+      ]
     }
   ]
 }

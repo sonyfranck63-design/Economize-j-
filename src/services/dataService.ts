@@ -1706,4 +1706,28 @@ export const dataService = {
       }
     }
   },
+
+  /**
+   * Inicia o processo de assinatura gerando uma cobrança.
+   */
+  async initiatePlanSubscription(businessId: string, planTier: string): Promise<void> {
+    if (!isSupabaseConfigured || !supabase) return;
+    const planValue = planTier === 'free' ? 'gratis' : planTier;
+    await supabase.from('businesses').update({
+      plan: planValue,
+      planTier: planValue
+    }).eq('id', businessId);
+  },
+
+  /**
+   * Ativa imediatamente a assinatura Google Play.
+   */
+  async activateGooglePlaySubscription(data: { businessId: string; planTier: string }): Promise<void> {
+    if (!isSupabaseConfigured || !supabase) return;
+    const planValue = data.planTier === 'free' ? 'gratis' : data.planTier;
+    await supabase.from('businesses').update({
+      plan: planValue,
+      planTier: planValue
+    }).eq('id', data.businessId);
+  }
 };
