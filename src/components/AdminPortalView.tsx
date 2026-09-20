@@ -48,15 +48,10 @@ export const AdminPortalView: React.FC = () => {
     addLeadCredits,
   } = useApp();
 
-  if (currentUser?.role !== 'admin') {
-    return (
-      <div className="flex flex-col items-center justify-center py-20 text-center">
-        <ShieldAlert className="w-16 h-16 text-red-500 mb-4" />
-        <h2 className="text-2xl font-bold text-slate-800">Acesso Negado</h2>
-        <p className="text-slate-500 mt-2">Esta área é restrita a administradores do sistema.</p>
-      </div>
-    );
-  }
+  // ╔══════════════════════════════════════════════════════════════════╗
+  // ║  ATENÇÃO: TODOS OS HOOKS DEVEM VIR ANTES DE QUALQUER RETURN     ║
+  // ║  Regra dos Hooks do React: nunca chame hooks condicionalmente.   ║
+  // ╚══════════════════════════════════════════════════════════════════╝
 
   const [adminTab, setAdminTab] = useState<'empresas' | 'ofertas' | 'leads' | 'assinaturas' | 'monetizacao' | 'auditoria'>('empresas');
   const [expandedQuoteId, setExpandedQuoteId] = useState<string | null>(null);
@@ -64,28 +59,6 @@ export const AdminPortalView: React.FC = () => {
   // Cotações globais para auditoria administrativa independente
   const [adminQuotes, setAdminQuotes] = useState<any[]>([]);
   const [isLoadingAdminQuotes, setIsLoadingAdminQuotes] = useState<boolean>(false);
-
-  const fetchAdminQuotes = async () => {
-    setIsLoadingAdminQuotes(true);
-    try {
-      const data = await dataService.getAllQuoteRequestsForAdmin();
-      setAdminQuotes(data || []);
-    } catch (e) {
-      console.warn('Erro ao carregar cotações de auditoria do admin:', e);
-    } finally {
-      setIsLoadingAdminQuotes(false);
-    }
-  };
-
-  React.useEffect(() => {
-    fetchAdminQuotes();
-  }, []);
-
-  React.useEffect(() => {
-    if (adminTab === 'leads') {
-      fetchAdminQuotes();
-    }
-  }, [adminTab]);
 
   // Estado dos logs de auditoria
   const [auditLogs, setAuditLogs] = useState<any[]>([]);
@@ -106,19 +79,38 @@ export const AdminPortalView: React.FC = () => {
   const [highlightNotes, setHighlightNotes] = useState<string>('PIX conferido pelo administrador');
   const [isSubmittingHighlight, setIsSubmittingHighlight] = useState<boolean>(false);
 
-  const handleConfirmAdminHighlight = async () => {
-    if (!highlightTargetBiz) return;
-    setIsSubmittingHighlight(true);
+  // Form state for monetization & PIX settings
+  const [formData, setFormData] = useState({
+    costPerLead: monetization.costPerLead,
+    packLeads5: monetization.packLeads5,
+    packLeads20: monetization.packLeads20,
+    planProMonthly: monetization.planProMonthly,
+    planPremiumMonthly: monetization.planPremiumMonthly,
+    featuredDailyRate: monetization.featuredDailyRate,
+    platformCommissionPercent: monetization.platformCommissionPercent,
+    adminPixKey: monetization.adminPixKey || 'pix@economizaja.com.br',
+    adminPixKeyType: monetization.adminPixKeyType || 'email',
+    adminPixBeneficiary: monetization.adminPixBeneficiary || 'EconomizaJá Intermediações e Tecnologia LTDA',
+    adminPixBank: monetization.adminPixBank || 'Banco Inter / Nubank PJ',
+    adminWhatsapp: monetization.adminWhatsapp || '5511999998888',
+    adminReceiptInstructions:
+      monetization.adminReceiptInstructions ||
+      'Após efetuar o PIX, envie o comprovante para nosso WhatsApp com o nome da sua empresa para ativação em até 15 minutos.',
+  });
+
+  const [saveSuccess, setSaveSuccess] = useState(false);
+
+  // --- Funções de busca de dados (definidas antes dos useEffect) ---
+
+  const fetchAdminQuotes = async () => {
+    setIsLoadingAdminQuotes(true);
     try {
-      await toggleBusinessFeatured(highlightTargetBiz.id, highlightDays, highlightNotes);
-      await refreshBusinesses?.();
-      alert(`Destaque para a empresa "${highlightTargetBiz.name}" ativado com sucesso por ${highlightDays} dias!`);
-      setHighlightTargetBiz(null);
-      await fetchPendingMonetization();
-    } catch (err: any) {
-      alert(`Erro ao ativar destaque: ${err.message}`);
+      const data = await dataService.getAllQuoteRequestsForAdmin();
+      setAdminQuotes(data || []);
+    } catch (e) {
+      console.warn('Erro ao carregar cotações de auditoria do admin:', e);
     } finally {
-      setIsSubmittingHighlight(false);
+      setIsLoadingAdminQuotes(false);
     }
   };
 
@@ -134,10 +126,6 @@ export const AdminPortalView: React.FC = () => {
     }
   };
 
-  React.useEffect(() => {
-    fetchPendingMonetization();
-  }, []);
-
   const fetchAuditLogs = async () => {
     setIsLoadingAudit(true);
     try {
@@ -150,11 +138,53 @@ export const AdminPortalView: React.FC = () => {
     }
   };
 
+  // --- useEffects (todos antes do early return) ---
+
   React.useEffect(() => {
+    // Só carrega dados se o usuário for admin — evita chamadas desnecessárias
+    if (currentUser?.role !== 'admin') return;
+    fetchAdminQuotes();
+    fetchPendingMonetization();
+  }, []);
+
+  React.useEffect(() => {
+    if (currentUser?.role !== 'admin') return;
+    if (adminTab === 'leads') {
+      fetchAdminQuotes();
+    }
     if (adminTab === 'auditoria' && auditLogs.length === 0) {
       fetchAuditLogs();
     }
   }, [adminTab]);
+
+  // --- Guard: acesso negado (APÓS todos os hooks) ---
+  if (currentUser?.role !== 'admin') {
+    return (
+      <div className="flex flex-col items-center justify-center py-20 text-center">
+        <ShieldAlert className="w-16 h-16 text-red-500 mb-4" />
+        <h2 className="text-2xl font-bold text-slate-800">Acesso Negado</h2>
+        <p className="text-slate-500 mt-2">Esta área é restrita a administradores do sistema.</p>
+      </div>
+    );
+  }
+
+  // --- Handlers (após o guard, pois não são hooks) ---
+
+  const handleConfirmAdminHighlight = async () => {
+    if (!highlightTargetBiz) return;
+    setIsSubmittingHighlight(true);
+    try {
+      await toggleBusinessFeatured(highlightTargetBiz.id, highlightDays, highlightNotes);
+      await refreshBusinesses?.();
+      alert(`Destaque para a empresa "${highlightTargetBiz.name}" ativado com sucesso por ${highlightDays} dias!`);
+      setHighlightTargetBiz(null);
+      await fetchPendingMonetization();
+    } catch (err: any) {
+      alert(`Erro ao ativar destaque: ${err.message}`);
+    } finally {
+      setIsSubmittingHighlight(false);
+    }
+  };
 
   const handleApproveSubscription = async (subId: string) => {
     if (!confirm('Deseja confirmar o pagamento e ATIVAR esta assinatura?')) return;
@@ -213,27 +243,6 @@ export const AdminPortalView: React.FC = () => {
       setProcessingId(null);
     }
   };
-
-  // Form state for monetization & PIX settings
-  const [formData, setFormData] = useState({
-    costPerLead: monetization.costPerLead,
-    packLeads5: monetization.packLeads5,
-    packLeads20: monetization.packLeads20,
-    planProMonthly: monetization.planProMonthly,
-    planPremiumMonthly: monetization.planPremiumMonthly,
-    featuredDailyRate: monetization.featuredDailyRate,
-    platformCommissionPercent: monetization.platformCommissionPercent,
-    adminPixKey: monetization.adminPixKey || 'pix@economizaja.com.br',
-    adminPixKeyType: monetization.adminPixKeyType || 'email',
-    adminPixBeneficiary: monetization.adminPixBeneficiary || 'EconomizaJá Intermediações e Tecnologia LTDA',
-    adminPixBank: monetization.adminPixBank || 'Banco Inter / Nubank PJ',
-    adminWhatsapp: monetization.adminWhatsapp || '5511999998888',
-    adminReceiptInstructions:
-      monetization.adminReceiptInstructions ||
-      'Após efetuar o PIX, envie o comprovante para nosso WhatsApp com o nome da sua empresa para ativação em até 15 minutos.',
-  });
-
-  const [saveSuccess, setSaveSuccess] = useState(false);
 
   const handleSaveMonetization = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -396,12 +405,18 @@ export const AdminPortalView: React.FC = () => {
 
       {/* TAB: EMPRESAS */}
       {adminTab === 'empresas' && (
-        <div className="bg-white rounded-2xl p-6 border border-slate-100 shadow-sm space-y-4">
-          <div className="flex items-center justify-between">
+        <div className="bg-white rounded-2xl p-4 sm:p-6 border border-slate-100 shadow-sm space-y-4">
+          {/* Cabeçalho responsivo */}
+          <div className="flex flex-col gap-1.5">
             <h3 className="text-base font-bold text-slate-900">Gerenciar Parceiros &amp; Moderação</h3>
-
             <span className="text-xs text-slate-500">
-              Ative selos de verificação. Destaques pagos são gerenciados na aba <strong>Cobranças</strong>
+              Ative selos de verificação. Destaques pagos são gerenciados na aba{' '}
+              <button
+                onClick={() => setAdminTab('assinaturas')}
+                className="underline font-semibold text-emerald-700 hover:text-emerald-900"
+              >
+                Cobranças
+              </button>
             </span>
           </div>
 
@@ -431,41 +446,43 @@ export const AdminPortalView: React.FC = () => {
           ) : (
             <div className="divide-y divide-slate-100">
               {businesses.map((b) => (
-              <div key={b.id} className="py-4 flex flex-col sm:flex-row sm:items-center justify-between gap-4">
-                <div className="flex items-center gap-3">
+              <div key={b.id} className="py-4 flex flex-col gap-3">
+                {/* Linha 1: Avatar + Informações da empresa */}
+                <div className="flex items-start gap-3">
                   <BusinessAvatar
                     src={b.logo}
                     name={b.name}
-                    className="w-12 h-12 rounded-xl border border-slate-100 shadow-xs"
+                    className="w-11 h-11 rounded-xl border border-slate-100 shadow-xs flex-shrink-0"
                     iconClassName="w-5 h-5 text-emerald-600"
                   />
-                  <div>
-                    <div className="flex items-center gap-2 flex-wrap">
-                      <h4 className="font-bold text-sm text-slate-900">{b.name}</h4>
-                      <span className="text-[10px] uppercase font-bold bg-slate-100 text-slate-700 px-2 py-0.5 rounded-md">
-                        Plano: {b.plan || b.planTier || 'gratis'}
+                  <div className="flex-1 min-w-0">
+                    <div className="flex items-center gap-1.5 flex-wrap">
+                      <h4 className="font-bold text-sm text-slate-900 truncate max-w-[140px] sm:max-w-none">{b.name}</h4>
+                      <span className="text-[10px] uppercase font-bold bg-slate-100 text-slate-700 px-2 py-0.5 rounded-md whitespace-nowrap">
+                        PLANO: {(b.plan || b.planTier || 'gratis').toUpperCase()}
                       </span>
-                      <span className="text-[10px] uppercase font-bold bg-emerald-50 text-emerald-800 border border-emerald-200 px-2 py-0.5 rounded-md">
-                        Leads: {b.leadCredits || 0} créditos
+                      <span className="text-[10px] uppercase font-bold bg-emerald-50 text-emerald-800 border border-emerald-200 px-2 py-0.5 rounded-md whitespace-nowrap">
+                        LEADS: {b.leadCredits || 0} CRÉDITOS
                       </span>
                       {/* Destaque: somente indicador visual — ativação é feita via pagamento confirmado */}
                       {b.featured && (
-                        <span className="text-[10px] uppercase font-bold bg-amber-100 text-amber-800 px-2 py-0.5 rounded-md border border-amber-200 flex items-center gap-1">
-                          ⭐ Destaque Ativo
-                          {b.featuredUntil && <span className="text-amber-600">até {b.featuredUntil}</span>}
+                        <span className="text-[10px] uppercase font-bold bg-amber-100 text-amber-800 px-2 py-0.5 rounded-md border border-amber-200 flex items-center gap-1 whitespace-nowrap">
+                          ⭐ DESTAQUE ATIVO
+                          {b.featuredUntil && <span className="text-amber-600 font-semibold">ATÉ {b.featuredUntil}</span>}
                         </span>
                       )}
                     </div>
-                    <p className="text-xs text-slate-500">
+                    <p className="text-xs text-slate-500 mt-0.5 truncate">
                       {b.subcategory} • {b.neighborhood}, {b.city} • WhatsApp: {b.whatsapp}
                     </p>
                   </div>
                 </div>
 
-                <div className="flex items-center gap-2">
+                {/* Linha 2: Botões de ação — flex-wrap para nunca transbordar no mobile */}
+                <div className="flex flex-wrap items-center gap-2">
                   <button
                     onClick={() => toggleBusinessActive(b.id)}
-                    className={`px-3 py-1.5 rounded-xl text-xs font-bold transition ${
+                    className={`px-3 py-1.5 rounded-xl text-xs font-bold transition flex-shrink-0 ${
                       b.active !== false
                         ? 'bg-emerald-50 text-emerald-800 border border-emerald-200 hover:bg-emerald-100'
                         : 'bg-rose-50 text-rose-700 border border-rose-200 hover:bg-rose-100'
@@ -477,7 +494,7 @@ export const AdminPortalView: React.FC = () => {
 
                   <button
                     onClick={() => toggleBusinessVerified(b.id)}
-                    className={`px-3 py-1.5 rounded-xl text-xs font-bold transition ${
+                    className={`px-3 py-1.5 rounded-xl text-xs font-bold transition flex-shrink-0 ${
                       b.verified
                         ? 'bg-emerald-50 text-emerald-800 border border-emerald-200 hover:bg-emerald-100'
                         : 'bg-slate-100 text-slate-600 hover:bg-slate-200'
@@ -503,7 +520,7 @@ export const AdminPortalView: React.FC = () => {
                         alert(`Erro ao adicionar créditos: ${err.message}`);
                       }
                     }}
-                    className="px-3 py-1.5 rounded-xl bg-emerald-50 hover:bg-emerald-100 text-emerald-800 border border-emerald-300 text-xs font-bold transition flex items-center gap-1"
+                    className="px-3 py-1.5 rounded-xl bg-emerald-50 hover:bg-emerald-100 text-emerald-800 border border-emerald-300 text-xs font-bold transition flex items-center gap-1 flex-shrink-0"
                     title="Adicionar créditos de leads após confirmação de PIX"
                   >
                     ⚡ + Créditos
@@ -516,7 +533,7 @@ export const AdminPortalView: React.FC = () => {
                           await toggleBusinessFeatured(b.id, 0, 'Destaque revogado pelo administrador');
                         }
                       }}
-                      className="px-3 py-1.5 rounded-xl bg-amber-100 hover:bg-amber-200 text-amber-900 border border-amber-300 text-xs font-bold transition flex items-center gap-1"
+                      className="px-3 py-1.5 rounded-xl bg-amber-100 hover:bg-amber-200 text-amber-900 border border-amber-300 text-xs font-bold transition flex items-center gap-1 flex-shrink-0"
                       title="Revogar destaque patrocinado"
                     >
                       ⭐ Revogar Destaque
@@ -528,7 +545,7 @@ export const AdminPortalView: React.FC = () => {
                         setHighlightDays(7);
                         setHighlightNotes('PIX confirmado manualmente pelo administrador');
                       }}
-                      className="px-3 py-1.5 rounded-xl bg-slate-100 hover:bg-amber-50 hover:text-amber-800 hover:border-amber-300 text-slate-700 border border-slate-200 text-xs font-bold transition flex items-center gap-1"
+                      className="px-3 py-1.5 rounded-xl bg-slate-100 hover:bg-amber-50 hover:text-amber-800 hover:border-amber-300 text-slate-700 border border-slate-200 text-xs font-bold transition flex items-center gap-1 flex-shrink-0"
                       title="Ativar destaque após confirmação de pagamento PIX"
                     >
                       ⭐ Destacar (PIX)
@@ -541,7 +558,7 @@ export const AdminPortalView: React.FC = () => {
                         deleteBusiness(b.id);
                       }
                     }}
-                    className="px-3 py-1.5 rounded-xl bg-rose-50 text-rose-700 border border-rose-200 hover:bg-rose-100 text-xs font-bold transition"
+                    className="px-3 py-1.5 rounded-xl bg-rose-50 text-rose-700 border border-rose-200 hover:bg-rose-100 text-xs font-bold transition flex-shrink-0"
                     title="Excluir parceiro"
                   >
                     Excluir Parceiro

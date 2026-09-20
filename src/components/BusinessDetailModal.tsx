@@ -217,16 +217,28 @@ export const BusinessDetailModal: React.FC = () => {
                 <span>PEDIR ORÇAMENTO</span>
               </button>
 
-              <a
+              {/* Bug 3 Fix (Opção B): WhatsApp exige login antes de redirecionar */}
+              <button
                 id="biz-btn-whatsapp"
-                href={buildWhatsAppLink(biz.whatsapp, `Olá! Vi o perfil de ${biz.name} no EconomizaJá e gostaria de falar com um atendente.`)}
-                target="_blank"
-                rel="noreferrer"
+                onClick={() => {
+                  if (!currentUser) {
+                    // Usuário não logado: abre modal de autenticação
+                    setSelectedBusinessId(null);
+                    setIsAuthModalOpen(true);
+                    return;
+                  }
+                  // Usuário logado: abre WhatsApp diretamente
+                  const url = buildWhatsAppLink(
+                    biz.whatsapp,
+                    `Olá! Vi o perfil de ${biz.name} no EconomizaJá e gostaria de falar com um atendente.`
+                  );
+                  window.open(url, '_blank', 'noreferrer');
+                }}
                 className="flex-1 sm:flex-none px-5 py-2.5 rounded-xl bg-emerald-500 hover:bg-emerald-600 text-white font-bold text-xs shadow-sm transition flex items-center justify-center gap-1.5"
               >
                 <MessageCircle className="w-4 h-4" />
                 <span>FALAR NO WHATSAPP</span>
-              </a>
+              </button>
 
               <button
                 id="biz-btn-ver-mapa"
@@ -239,11 +251,11 @@ export const BusinessDetailModal: React.FC = () => {
             </div>
           </div>
 
-          {/* Sub-tabs */}
-          <div className="flex items-center gap-2 mt-4 pt-3 border-t border-slate-100 text-xs">
+          {/* Sub-tabs — overflow-x-auto para não transbordar no mobile */}
+          <div className="flex items-center gap-1 mt-4 pt-3 border-t border-slate-100 text-xs overflow-x-auto scrollbar-none -mx-1 px-1">
             <button
               onClick={() => setActiveTab('servicos')}
-              className={`px-3 py-1.5 rounded-lg font-bold transition ${
+              className={`px-3 py-1.5 rounded-lg font-bold transition whitespace-nowrap flex-shrink-0 ${
                 activeTab === 'servicos' ? 'bg-slate-900 text-white' : 'text-slate-600 hover:bg-slate-100'
               }`}
             >
@@ -251,7 +263,7 @@ export const BusinessDetailModal: React.FC = () => {
             </button>
             <button
               onClick={() => setActiveTab('produtos')}
-              className={`px-3 py-1.5 rounded-lg font-bold transition ${
+              className={`px-3 py-1.5 rounded-lg font-bold transition whitespace-nowrap flex-shrink-0 ${
                 activeTab === 'produtos' ? 'bg-slate-900 text-white' : 'text-slate-600 hover:bg-slate-100'
               }`}
             >
@@ -259,7 +271,7 @@ export const BusinessDetailModal: React.FC = () => {
             </button>
             <button
               onClick={() => setActiveTab('ofertas')}
-              className={`px-3 py-1.5 rounded-lg font-bold transition ${
+              className={`px-3 py-1.5 rounded-lg font-bold transition whitespace-nowrap flex-shrink-0 ${
                 activeTab === 'ofertas' ? 'bg-slate-900 text-white' : 'text-slate-600 hover:bg-slate-100'
               }`}
             >
@@ -267,7 +279,7 @@ export const BusinessDetailModal: React.FC = () => {
             </button>
             <button
               onClick={() => setActiveTab('avaliacoes')}
-              className={`px-3 py-1.5 rounded-lg font-bold transition ${
+              className={`px-3 py-1.5 rounded-lg font-bold transition whitespace-nowrap flex-shrink-0 ${
                 activeTab === 'avaliacoes' ? 'bg-slate-900 text-white' : 'text-slate-600 hover:bg-slate-100'
               }`}
             >
@@ -281,68 +293,86 @@ export const BusinessDetailModal: React.FC = () => {
           {/* SERVIÇOS */}
           {activeTab === 'servicos' && (
             <div className="space-y-3">
-              {(biz.services || []).map((svc) => (
-                <div
-                  key={svc.id}
-                  className="flex items-start justify-between p-4 rounded-xl bg-slate-50 border border-slate-100 gap-3"
-                >
-                  <div>
-                    <h4 className="font-bold text-sm text-slate-900">{svc.title}</h4>
-                    <p className="text-xs text-slate-500 mt-0.5">{svc.description}</p>
-                    <span className="text-[11px] text-emerald-700 font-medium mt-1 block">
-                      Prazo estimado: {svc.estimatedTime}
-                    </span>
-                  </div>
+              {(biz.services || []).length === 0 ? (
+                <p className="text-xs text-slate-500 text-center py-6">Nenhum serviço cadastrado para esta empresa.</p>
+              ) : (
+                (biz.services || []).map((svc) => (
+                  <div
+                    key={svc.id}
+                    className="flex items-start justify-between p-4 rounded-xl bg-slate-50 border border-slate-100 gap-3"
+                  >
+                    <div>
+                      <h4 className="font-bold text-sm text-slate-900">{svc.title}</h4>
+                      <p className="text-xs text-slate-500 mt-0.5">{svc.description}</p>
+                      <span className="text-[11px] text-emerald-700 font-medium mt-1 block">
+                        Prazo estimado: {svc.estimatedTime}
+                      </span>
+                    </div>
 
-                  <div className="text-right shrink-0">
-                    <span className="text-sm font-bold text-slate-900 block">
-                      {svc.priceEstimate}
-                    </span>
-                    <button
-                      onClick={() => {
-                        setQuoteCategoryPreset(biz.categoryId);
-                  setQuoteTargetBusinessId(biz.id);
-                        setSelectedBusinessId(null);
-                        setIsQuoteModalOpen(true);
-                      }}
-                      className="mt-1 text-xs font-bold text-emerald-600 hover:underline"
-                    >
-                      Cotar Este
-                    </button>
+                    <div className="text-right shrink-0">
+                      <span className="text-sm font-bold text-slate-900 block">
+                        {svc.priceEstimate}
+                      </span>
+                      <button
+                        onClick={() => {
+                          setQuoteCategoryPreset(biz.categoryId);
+                          setQuoteTargetBusinessId(biz.id);
+                          setSelectedBusinessId(null);
+                          setIsQuoteModalOpen(true);
+                        }}
+                        className="mt-1 text-xs font-bold text-emerald-600 hover:underline"
+                      >
+                        Cotar Este
+                      </button>
+                    </div>
                   </div>
-                </div>
-              ))}
+                ))
+              )}
             </div>
           )}
 
           {/* PRODUTOS */}
           {activeTab === 'produtos' && (
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-              {(biz.products || []).map((prod) => (
-                <div
-                  key={prod.id}
-                  className="p-4 rounded-xl bg-slate-50 border border-slate-100 space-y-2 flex flex-col justify-between"
-                >
-                  <div>
-                    <span className="text-[10px] font-bold uppercase text-emerald-600">{prod.category}</span>
-                    <h4 className="font-bold text-sm text-slate-900">{prod.title}</h4>
-                    <p className="text-xs text-slate-500 mt-0.5">{prod.description}</p>
+              {(biz.products || []).length === 0 ? (
+                <p className="text-xs text-slate-500 text-center py-6 col-span-2">Nenhum produto cadastrado para esta empresa.</p>
+              ) : (
+                (biz.products || []).map((prod) => (
+                  <div
+                    key={prod.id}
+                    className="p-4 rounded-xl bg-slate-50 border border-slate-100 space-y-2 flex flex-col justify-between"
+                  >
+                    <div>
+                      <span className="text-[10px] font-bold uppercase text-emerald-600">{prod.category}</span>
+                      <h4 className="font-bold text-sm text-slate-900">{prod.title}</h4>
+                      <p className="text-xs text-slate-500 mt-0.5">{prod.description}</p>
+                    </div>
+                    <div className="pt-2 border-t border-slate-200/60 flex items-center justify-between">
+                      <span className="text-base font-bold text-slate-900">
+                        R$ {prod.price.toFixed(2)}
+                      </span>
+                      {/* Bug 3 Fix (Opção B): produto também exige login antes de abrir WhatsApp */}
+                      <button
+                        onClick={() => {
+                          if (!currentUser) {
+                            setSelectedBusinessId(null);
+                            setIsAuthModalOpen(true);
+                            return;
+                          }
+                          const url = buildWhatsAppLink(
+                            biz.whatsapp,
+                            `Olá! Gostaria de reservar o produto "${prod.title}" por R$ ${prod.price.toFixed(2)} anunciado no EconomizaJá.`
+                          );
+                          window.open(url, '_blank', 'noreferrer');
+                        }}
+                        className="text-xs font-bold text-emerald-600 hover:underline"
+                      >
+                        Consultar Disponibilidade
+                      </button>
+                    </div>
                   </div>
-                  <div className="pt-2 border-t border-slate-200/60 flex items-center justify-between">
-                    <span className="text-base font-bold text-slate-900">
-                      R$ {prod.price.toFixed(2)}
-                    </span>
-                    <a
-                      href={buildWhatsAppLink(biz.whatsapp, `Olá! Gostaria de reservar o produto "${prod.title}" por R$ ${prod.price.toFixed(2)} anunciado no EconomizaJá.`)}
-                      target="_blank"
-                      rel="noreferrer"
-                      className="text-xs font-bold text-emerald-600 hover:underline"
-                    >
-                      Consultar Disponibilidade
-                    </a>
-                  </div>
-                </div>
-              ))}
+                ))
+              )}
             </div>
           )}
 
@@ -380,14 +410,24 @@ export const BusinessDetailModal: React.FC = () => {
                         )}
                       </div>
 
-                      <a
-                        href={buildWhatsAppLink(o.businessWhatsapp, `Olá! Vi a promoção "${o.title}" por R$ ${o.currentPrice.toFixed(2)} no EconomizaJá e quero garantir.`)}
-                        target="_blank"
-                        rel="noreferrer"
+                      {/* Bug 3 Fix (Opção B): oferta também exige login antes de abrir WhatsApp */}
+                      <button
+                        onClick={() => {
+                          if (!currentUser) {
+                            setSelectedBusinessId(null);
+                            setIsAuthModalOpen(true);
+                            return;
+                          }
+                          const url = buildWhatsAppLink(
+                            o.businessWhatsapp,
+                            `Olá! Vi a promoção "${o.title}" por R$ ${o.currentPrice.toFixed(2)} no EconomizaJá e quero garantir.`
+                          );
+                          window.open(url, '_blank', 'noreferrer');
+                        }}
                         className="inline-block mt-2 px-3 py-1.5 rounded-xl bg-emerald-500 hover:bg-emerald-600 text-white text-xs font-bold shadow-xs"
                       >
                         Garantir Oferta
-                      </a>
+                      </button>
                     </div>
                   </div>
                 ))

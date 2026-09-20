@@ -80,8 +80,26 @@ const MainContent: React.FC = () => {
               {activeTab === 'offers' && <OffersView />}
               {activeTab === 'quotes' && <QuotesView />}
               {activeTab === 'favorites' && <FavoritesView />}
-              {activeTab === 'business_portal' && <BusinessPortalView />}
-              {activeTab === 'admin_portal' && (isAdmin ? <AdminPortalView /> : <HomeView />)}
+              {activeTab === 'business_portal' && (
+                <ErrorBoundary
+                  fallbackTitle="Erro no Portal da Empresa"
+                  onReset={() => window.location.reload()}
+                >
+                  <BusinessPortalView />
+                </ErrorBoundary>
+              )}
+              {activeTab === 'admin_portal' && (
+                isAdmin ? (
+                  <ErrorBoundary
+                    fallbackTitle="Erro no Painel Administrativo"
+                    onReset={() => window.location.reload()}
+                  >
+                    <AdminPortalView />
+                  </ErrorBoundary>
+                ) : (
+                  <HomeView />
+                )
+              )}
             </PageTransition>
           )}
         </AnimatePresence>
