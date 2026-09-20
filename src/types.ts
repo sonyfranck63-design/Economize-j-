@@ -55,6 +55,7 @@ export interface Business {
   planTier?: 'gratis' | 'pro' | 'premium';
   coverImage?: string;
   leadsReceivedCount: number;
+  leadCredits?: number;
   isDemo: boolean;
   services: BusinessService[];
   products: BusinessProduct[];

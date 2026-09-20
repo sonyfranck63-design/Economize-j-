@@ -98,6 +98,7 @@ interface AppContextType {
   removeOffer: (offerId: string) => void;
   deleteBusiness: (businessId: string) => void;
   upgradeBusinessPlan: (businessId: string, planTier: 'free' | 'pro' | 'premium', immediateActive?: boolean) => Promise<void>;
+  addLeadCredits: (businessId: string, credits: number, notes?: string) => Promise<any>;
   markNotificationRead: (id: string) => void;
   refreshNotifications: () => Promise<void>;
   deleteAccountAndData: () => void;
@@ -618,7 +619,10 @@ const getInitialUserLocation = (): UserLocation => {
         description: proposalData.description,
       });
       // 2. Sincroniza imediatamente com o banco para garantir consistência em todas as visões
-      await refreshQuoteRequests();
+      await Promise.all([
+        refreshQuoteRequests(),
+        refreshBusinesses()
+      ]);
     } else {
       const newProposal: QuoteProposal = {
         ...proposalData,
@@ -638,6 +642,20 @@ const getInitialUserLocation = (): UserLocation => {
             };
           }
           return qr;
+        })
+      );
+
+      // Desconta 1 crédito local se empresa for plano gratuito e já passou de 3
+      setBusinesses((prev) =>
+        prev.map((b) => {
+          if (b.id === proposalData.businessId && (b.plan === 'gratis' || b.planTier === 'gratis')) {
+            const currentCredits = b.leadCredits || 0;
+            return {
+              ...b,
+              leadCredits: currentCredits > 0 ? currentCredits - 1 : 0,
+            };
+          }
+          return b;
         })
       );
     }
@@ -1182,6 +1200,24 @@ const getInitialUserLocation = (): UserLocation => {
     }
   };
 
+  const addLeadCredits = async (businessId: string, credits: number, notes?: string) => {
+    try {
+      const result = await dataService.addLeadCredits(businessId, credits, notes);
+      setBusinesses((prev) =>
+        prev.map((b) =>
+          b.id === businessId
+            ? { ...b, leadCredits: (b.leadCredits || 0) + credits }
+            : b
+        )
+      );
+      hapticNotificationSuccess();
+      return result;
+    } catch (err) {
+      console.error('Erro ao adicionar créditos de leads:', err);
+      throw err;
+    }
+  };
+
   const markNotificationRead = (id: string) => {
     setNotifications((prev) =>
       prev.map((n) => (n.id === id ? { ...n, read: true } : n))
@@ -1299,6 +1335,7 @@ const getInitialUserLocation = (): UserLocation => {
         removeOffer,
         deleteBusiness,
         upgradeBusinessPlan,
+        addLeadCredits,
         markNotificationRead,
         refreshNotifications,
         deleteAccountAndData,

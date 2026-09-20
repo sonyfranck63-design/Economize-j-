@@ -100,6 +100,7 @@ export const dataService = {
         ? b.logo_url 
         : getSmartImage(b.category_id, `${b.subcategory || ''} ${b.name || ''}`),
       leadsReceivedCount: b.leads_count || 0,
+      leadCredits: b.lead_credits || 0,
       isDemo: false,
       reviews: [],
       services: (b.business_services || []).map((s: any) => ({
@@ -657,6 +658,83 @@ export const dataService = {
   },
 
   /**
+   * Busca todas as cotações e propostas do sistema para auditoria global do Administrador
+   */
+  async getAllQuoteRequestsForAdmin(): Promise<QuoteRequest[]> {
+    if (!isSupabaseConfigured || !supabase) return [];
+
+    const { data, error } = await supabase
+      .from('quote_requests')
+      .select(`
+        *,
+        profiles:user_id (
+          full_name
+        ),
+        quote_proposals (
+          id,
+          quote_request_id,
+          business_id,
+          price,
+          deadline_text,
+          description,
+          status,
+          created_at,
+          businesses (
+            name,
+            whatsapp,
+            rating,
+            review_count
+          )
+        )
+      `)
+      .order('created_at', { ascending: false });
+
+    if (error || !data) {
+      console.warn('Aviso ao carregar cotações para auditoria do admin:', error?.message);
+      return [];
+    }
+
+    const deletedIds = getDeletedQuoteIds();
+    return data
+      .filter((qr: any) => !deletedIds.has(qr.id))
+      .map((qr: any) => ({
+        id: qr.id,
+        userId: qr.user_id,
+        targetBusinessId: qr.target_business_id,
+        userName: (qr as any).profiles?.full_name || qr.user_name || 'Cliente Consumidor',
+        userPhone: qr.user_phone,
+        userEmail: qr.user_email,
+        city: qr.city,
+        state: qr.state,
+        neighborhood: qr.neighborhood,
+        categoryId: qr.category_id,
+        subcategory: qr.subcategory,
+        title: qr.title,
+        description: qr.description,
+        desiredDeadline: qr.desired_deadline,
+        budgetRange: qr.budget_range,
+        photos: qr.photos || [],
+        createdAt: qr.created_at,
+        status: qr.status,
+        proposals: (qr.quote_proposals || []).map((p: any) => ({
+          id: p.id,
+          quoteRequestId: p.quote_request_id,
+          businessId: p.business_id,
+          businessName: p.businesses?.name || 'Empresa Parceira',
+          businessRating: Number(p.businesses?.rating) || 5,
+          businessReviewCount: p.businesses?.review_count || 0,
+          businessDistanceKm: 2.1,
+          businessWhatsapp: p.businesses?.whatsapp || '',
+          price: Number(p.price),
+          deadlineText: p.deadline_text,
+          description: p.description,
+          createdAt: p.created_at,
+          status: p.status,
+        })),
+      }));
+  },
+
+  /**
    * Busca orçamentos direcionados diretamente para as empresas do usuário logado
    */
   async getBusinessDirectQuoteRequests(businessIds: string[]): Promise<QuoteRequest[]> {
@@ -991,6 +1069,25 @@ export const dataService = {
     }
 
     return rpcData.proposal_id;
+  },
+
+  async addLeadCredits(businessId: string, credits: number, notes?: string): Promise<any> {
+    if (!isSupabaseConfigured || !supabase) {
+      return { success: true, business_id: businessId, credits_added: credits, total_lead_credits: credits };
+    }
+
+    const { data, error } = await supabase.rpc('add_lead_credits', {
+      p_business_id: businessId,
+      p_credits: credits,
+      p_notes: notes || null,
+    });
+
+    if (error) {
+      console.error('Erro na RPC add_lead_credits:', error);
+      throw new Error(error.message || 'Não foi possível adicionar créditos de leads.');
+    }
+
+    return data;
   },
 
   async acceptProposal(quoteRequestId: string, proposalId: string): Promise<any> {
@@ -1705,29 +1802,5 @@ export const dataService = {
         console.warn('Aviso ao marcar todas notificações como lidas:', fbErr);
       }
     }
-  },
-
-  /**
-   * Inicia o processo de assinatura gerando uma cobrança.
-   */
-  async initiatePlanSubscription(businessId: string, planTier: string): Promise<void> {
-    if (!isSupabaseConfigured || !supabase) return;
-    const planValue = planTier === 'free' ? 'gratis' : planTier;
-    await supabase.from('businesses').update({
-      plan: planValue,
-      planTier: planValue
-    }).eq('id', businessId);
-  },
-
-  /**
-   * Ativa imediatamente a assinatura Google Play.
-   */
-  async activateGooglePlaySubscription(data: { businessId: string; planTier: string }): Promise<void> {
-    if (!isSupabaseConfigured || !supabase) return;
-    const planValue = data.planTier === 'free' ? 'gratis' : data.planTier;
-    await supabase.from('businesses').update({
-      plan: planValue,
-      planTier: planValue
-    }).eq('id', data.businessId);
   }
 };

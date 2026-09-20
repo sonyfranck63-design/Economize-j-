@@ -71,28 +71,30 @@ export const QuotesView: React.FC = () => {
     : [];
 
   // Orçamentos onde as empresas do usuário participam
-  const businessQuotes = quoteRequests.filter((qr) => {
-    const hasMyProposal = qr.proposals.some((p) =>
-      userBusinesses.some((b) => (b.id || '').toLowerCase() === (p.businessId || '').toLowerCase())
-    );
-    const isTargeted = userBusinesses.some(
-      (b) => (b.id || '').toLowerCase() === (qr.targetBusinessId || '').toLowerCase()
-    );
-    return hasMyProposal || isTargeted;
-  });
+  const businessQuotes = userBusinesses.length > 0 
+    ? quoteRequests.filter((qr) => {
+        const hasMyProposal = (qr.proposals || []).some((p) =>
+          userBusinesses.some((b) => (b.id || '').toLowerCase() === (p.businessId || '').toLowerCase())
+        );
+        const isTargeted = userBusinesses.some(
+          (b) => (b.id || '').toLowerCase() === (qr.targetBusinessId || '').toLowerCase()
+        );
+        return hasMyProposal || isTargeted;
+      })
+    : [];
 
   const wonBusinessQuotes = businessQuotes.filter((qr) => {
-    return qr.proposals.some(
+    return (qr.proposals || []).some(
       (p) =>
         userBusinesses.some((b) => (b.id || '').toLowerCase() === (p.businessId || '').toLowerCase()) &&
         (p.status === 'escolhida' || (qr.status === 'escolhido' && p.status !== 'recusada'))
     );
   });
 
-  // Filtra as cotações pessoais do solicitante (o Admin não herda cotações alheias como pessoais)
+  // Filtra as cotações pessoais do solicitante (o Admin ou anônimo não herda cotações alheias como pessoais)
   const myQuotes = currentUser?.id
     ? quoteRequests.filter((qr) => qr.userId === currentUser.id)
-    : quoteRequests;
+    : [];
 
   // Contadores para as abas baseadas nas cotações pessoais
   const totalCount = myQuotes.length;

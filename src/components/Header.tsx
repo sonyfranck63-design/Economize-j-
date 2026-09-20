@@ -17,6 +17,7 @@ import {
   CheckCircle2,
   Trash2,
   LogOut,
+  X,
 } from 'lucide-react';
 
 export const Header: React.FC = () => {
@@ -145,12 +146,12 @@ export const Header: React.FC = () => {
               </button>
             )}
 
-            {/* Botão de Notificações - Área de toque confortável 40x40px */}
+            {/* Botão de Notificações - Área de toque confortável 44x44px */}
             <div className="relative">
               <button
                 id="btn-header-notifs"
                 onClick={() => setIsNotifOpen(!isNotifOpen)}
-                className={`relative w-10 h-10 rounded-full flex items-center justify-center transition border ${
+                className={`relative w-11 h-11 rounded-full flex items-center justify-center transition border ${
                   isNotifOpen 
                     ? 'bg-emerald-50 text-emerald-800 border-emerald-300 ring-2 ring-emerald-500/20' 
                     : 'bg-slate-50 hover:bg-slate-100 text-slate-700 border-slate-200'
@@ -166,64 +167,86 @@ export const Header: React.FC = () => {
                 )}
               </button>
 
-              {/* Dropdown de Notificações - Responsivo e sem overflow */}
+              {/* Dropdown de Notificações - Responsivo, sem overflow e com Backdrop Mobile */}
               {isNotifOpen && (
-                <div 
-                  className="fixed sm:absolute right-3 sm:right-0 top-16 mt-1 w-[calc(100vw-24px)] max-w-sm bg-white rounded-2xl shadow-2xl border border-slate-200 p-4 z-50 animate-in fade-in zoom-in-95"
-                >
-                  <div className="flex items-center justify-between pb-3 border-b border-slate-100">
-                    <div className="flex items-center gap-2">
-                      <Bell className="w-4 h-4 text-emerald-600" />
-                      <span className="font-bold text-sm text-slate-900">Notificações</span>
-                    </div>
-                    <span className="text-xs text-slate-500 font-medium bg-slate-100 px-2 py-0.5 rounded-full">
-                      {unreadCount} nova{unreadCount === 1 ? '' : 's'}
-                    </span>
-                  </div>
+                <>
+                  {/* Backdrop para toque fora no mobile e clique fora */}
+                  <div
+                    className="fixed inset-0 z-40 bg-slate-900/20 backdrop-blur-2xs transition-opacity"
+                    onClick={() => setIsNotifOpen(false)}
+                    onTouchStart={() => setIsNotifOpen(false)}
+                    aria-hidden="true"
+                  />
 
-                  <div className="max-h-72 overflow-y-auto divide-y divide-slate-100 mt-2 -mr-1 pr-1">
-                    {isLoadingData ? (
-                      <div className="py-2 space-y-2">
-                        <NotificationItemSkeleton />
-                        <NotificationItemSkeleton />
-                        <NotificationItemSkeleton />
+                  <div 
+                    className="fixed sm:absolute right-3 sm:right-0 top-16 mt-1 w-[calc(100vw-24px)] max-w-sm bg-white rounded-2xl shadow-2xl border border-slate-200 p-4 z-50 animate-in fade-in zoom-in-95"
+                    onClick={(e) => e.stopPropagation()}
+                  >
+                    <div className="flex items-center justify-between pb-3 border-b border-slate-100">
+                      <div className="flex items-center gap-2">
+                        <Bell className="w-4 h-4 text-emerald-600" />
+                        <span className="font-bold text-sm text-slate-900">Notificações</span>
+                        <span className="text-xs text-slate-500 font-medium bg-slate-100 px-2 py-0.5 rounded-full">
+                          {unreadCount} nova{unreadCount === 1 ? '' : 's'}
+                        </span>
                       </div>
-                    ) : notifications.length === 0 ? (
-                      <div className="text-center py-8 text-slate-400 space-y-1.5">
-                        <CheckCircle2 className="w-8 h-8 text-slate-300 mx-auto" />
-                        <p className="text-xs font-semibold text-slate-700">Tudo em dia!</p>
-                        <p className="text-[11px] text-slate-400">Você não possui notificações no momento.</p>
-                      </div>
-                    ) : (
-                      notifications.map((n) => (
-                        <div
-                          key={n.id}
-                          onClick={() => {
-                            markNotificationRead(n.id);
-                            if (n.linkAction) {
-                              setActiveTab(n.linkAction as any);
-                              setIsNotifOpen(false);
-                            }
-                          }}
-                          className={`p-3 rounded-xl cursor-pointer transition text-left my-1 ${
-                            (n.read || false) 
-                              ? 'bg-transparent hover:bg-slate-50 opacity-80' 
-                              : 'bg-emerald-50/80 hover:bg-emerald-50 border border-emerald-100'
-                          }`}
-                        >
-                          <div className="flex items-start justify-between gap-2">
-                            <h4 className="text-xs font-bold text-slate-900 flex items-center gap-1.5">
-                              {!n.read && <span className="w-2 h-2 rounded-full bg-emerald-500 shrink-0" />}
-                              <span>{n.title}</span>
-                            </h4>
-                            <span className="text-[10px] text-slate-400 shrink-0 font-medium">{n.timestamp}</span>
-                          </div>
-                          <p className="text-xs text-slate-600 mt-1 leading-relaxed">{n.message}</p>
+
+                      {/* Botão Fechar Explícito ("X") com área de toque mínima 44x44px */}
+                      <button
+                        type="button"
+                        onClick={() => setIsNotifOpen(false)}
+                        className="w-11 h-11 -mr-2 -my-2 flex items-center justify-center rounded-full text-slate-400 hover:text-slate-700 hover:bg-slate-100 transition active:scale-95"
+                        title="Fechar notificações"
+                        aria-label="Fechar notificações"
+                      >
+                        <X className="w-5 h-5" />
+                      </button>
+                    </div>
+
+                    <div className="max-h-72 overflow-y-auto divide-y divide-slate-100 mt-2 -mr-1 pr-1">
+                      {isLoadingData ? (
+                        <div className="py-2 space-y-2">
+                          <NotificationItemSkeleton />
+                          <NotificationItemSkeleton />
+                          <NotificationItemSkeleton />
                         </div>
-                      ))
-                    )}
+                      ) : notifications.length === 0 ? (
+                        <div className="text-center py-8 text-slate-400 space-y-1.5">
+                          <CheckCircle2 className="w-8 h-8 text-slate-300 mx-auto" />
+                          <p className="text-xs font-semibold text-slate-700">Tudo em dia!</p>
+                          <p className="text-[11px] text-slate-400">Você não possui notificações no momento.</p>
+                        </div>
+                      ) : (
+                        notifications.map((n) => (
+                          <div
+                            key={n.id}
+                            onClick={() => {
+                              markNotificationRead(n.id);
+                              if (n.linkAction) {
+                                setActiveTab(n.linkAction as any);
+                                setIsNotifOpen(false);
+                              }
+                            }}
+                            className={`p-3 rounded-xl cursor-pointer transition text-left my-1 ${
+                              (n.read || false) 
+                                ? 'bg-transparent hover:bg-slate-50 opacity-80' 
+                                : 'bg-emerald-50/80 hover:bg-emerald-50 border border-emerald-100'
+                            }`}
+                          >
+                            <div className="flex items-start justify-between gap-2">
+                              <h4 className="text-xs font-bold text-slate-900 flex items-center gap-1.5">
+                                {!n.read && <span className="w-2 h-2 rounded-full bg-emerald-500 shrink-0" />}
+                                <span>{n.title}</span>
+                              </h4>
+                              <span className="text-[10px] text-slate-400 shrink-0 font-medium">{n.timestamp}</span>
+                            </div>
+                            <p className="text-xs text-slate-600 mt-1 leading-relaxed">{n.message}</p>
+                          </div>
+                        ))
+                      )}
+                    </div>
                   </div>
-                </div>
+                </>
               )}
             </div>
 
@@ -232,7 +255,7 @@ export const Header: React.FC = () => {
               <div className="relative">
                 <button
                   onClick={() => setIsUserMenuOpen(!isUserMenuOpen)}
-                  className="flex items-center gap-1.5 h-10 px-2 sm:px-3 bg-slate-50 hover:bg-slate-100 text-slate-800 rounded-full border border-slate-200 transition shrink-0 active:scale-95"
+                  className="flex items-center gap-1.5 h-11 px-2.5 sm:px-3 bg-slate-50 hover:bg-slate-100 text-slate-800 rounded-full border border-slate-200 transition shrink-0 active:scale-95 min-h-[44px]"
                   title="Opções da minha conta"
                   aria-label="Menu da conta"
                 >
@@ -247,17 +270,25 @@ export const Header: React.FC = () => {
 
                 {/* Dropdown Menu do Usuário */}
                 {isUserMenuOpen && (
-                  <div 
-                    className="absolute right-0 mt-2 w-64 bg-white rounded-2xl shadow-2xl border border-slate-200 py-2.5 z-50 animate-in fade-in zoom-in-95"
-                    onClick={() => setIsUserMenuOpen(false)}
-                  >
-                    <div className="px-4 py-2.5 border-b border-slate-100">
-                      <p className="text-xs font-bold text-slate-900 truncate">{currentUser.fullName}</p>
-                      <p className="text-[11px] text-slate-400 truncate">{currentUser.email}</p>
-                      <span className="inline-block mt-1.5 text-[10px] font-bold uppercase tracking-wider px-2 py-0.5 bg-emerald-50 text-emerald-700 rounded-md border border-emerald-100">
-                        {currentUser.role === 'admin' ? '🛡️ Administrador' : currentUser.role === 'business' ? '🏢 Parceiro' : '👤 Consumidor'}
-                      </span>
-                    </div>
+                  <>
+                    {/* Backdrop para toque fora no mobile */}
+                    <div
+                      className="fixed inset-0 z-40 bg-slate-900/10 backdrop-blur-2xs transition-opacity"
+                      onClick={() => setIsUserMenuOpen(false)}
+                      onTouchStart={() => setIsUserMenuOpen(false)}
+                      aria-hidden="true"
+                    />
+                    <div 
+                      className="absolute right-0 mt-2 w-64 bg-white rounded-2xl shadow-2xl border border-slate-200 py-2.5 z-50 animate-in fade-in zoom-in-95"
+                      onClick={() => setIsUserMenuOpen(false)}
+                    >
+                      <div className="px-4 py-2.5 border-b border-slate-100">
+                        <p className="text-xs font-bold text-slate-900 truncate">{currentUser.fullName}</p>
+                        <p className="text-[11px] text-slate-400 truncate">{currentUser.email}</p>
+                        <span className="inline-block mt-1.5 text-[10px] font-bold uppercase tracking-wider px-2 py-0.5 bg-emerald-50 text-emerald-700 rounded-md border border-emerald-100">
+                          {currentUser.role === 'admin' ? '🛡️ Administrador' : currentUser.role === 'business' ? '🏢 Parceiro' : '👤 Consumidor'}
+                        </span>
+                      </div>
 
                     {/* Acessos Rápidos no Mobile */}
                     <div className="py-1">
@@ -318,8 +349,9 @@ export const Header: React.FC = () => {
                       </button>
                     </div>
                   </div>
-                )}
-              </div>
+                </>
+              )}
+            </div>
             ) : (
               <button
                 id="btn-open-auth-modal"

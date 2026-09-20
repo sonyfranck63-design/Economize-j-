@@ -37,8 +37,10 @@ import {
   Trash2,
   RefreshCw,
   Star,
+  Zap,
 } from 'lucide-react';
 import { EmptyState } from './EmptyState';
+import { LeadCreditsModal } from './LeadCreditsModal';
 
 export const BusinessPortalView: React.FC = () => {
   const {
@@ -140,6 +142,7 @@ export const BusinessPortalView: React.FC = () => {
   const [activeQuoteId, setActiveQuoteId] = useState<string | null>(null);
   const [isSendingProposal, setIsSendingProposal] = useState(false);
   const [showProposalLimitModal, setShowProposalLimitModal] = useState(false);
+  const [isLeadCreditsModalOpen, setIsLeadCreditsModalOpen] = useState(false);
   const [proposalPrice, setProposalPrice] = useState('');
   const [proposalDeadline, setProposalDeadline] = useState('Execução em até 2 dias úteis');
   const [proposalDescription, setProposalDescription] = useState('');
@@ -403,7 +406,7 @@ export const BusinessPortalView: React.FC = () => {
         ).length
     : 0;
 
-  const hasReachedProposalLimit = isGratis && monthlyProposalsCount >= 3;
+  const hasReachedProposalLimit = isGratis && monthlyProposalsCount >= 3 && (!currentBiz.leadCredits || currentBiz.leadCredits <= 0);
 
   // PROBLEMA 4: Prevenção de duplo clique no envio de propostas
   const handleSendProposal = async (e: React.FormEvent) => {
@@ -525,9 +528,17 @@ export const BusinessPortalView: React.FC = () => {
               ))}
             </select>
             <button
+              onClick={() => setIsLeadCreditsModalOpen(true)}
+              title="Comprar Saldo de Leads para responder cotações"
+              className="text-xs font-bold px-3 py-2.5 bg-emerald-600 hover:bg-emerald-700 text-white rounded-xl transition-all shadow-xs flex items-center gap-1.5 shrink-0 active:scale-95 cursor-pointer min-h-[44px]"
+            >
+              <Zap className="w-3.5 h-3.5 fill-amber-300 text-amber-300" />
+              <span>Comprar Leads</span>
+            </button>
+            <button
               onClick={handleStartRegistration}
               title="Cadastrar outra empresa"
-              className="text-xs font-bold px-3 py-2.5 bg-emerald-50 hover:bg-emerald-100 text-emerald-700 border border-emerald-200 rounded-xl transition-colors flex items-center gap-1 shrink-0"
+              className="text-xs font-bold px-3 py-2.5 bg-emerald-50 hover:bg-emerald-100 text-emerald-700 border border-emerald-200 rounded-xl transition-colors flex items-center gap-1 shrink-0 min-h-[44px]"
             >
               <PlusCircle className="w-3.5 h-3.5" />
               <span className="hidden sm:inline">Nova Empresa</span>
@@ -540,7 +551,7 @@ export const BusinessPortalView: React.FC = () => {
                 setIsRefreshing(false);
               }}
               title="Atualizar dados do negócio e plano"
-              className="text-xs font-bold px-3 py-2.5 bg-slate-100 hover:bg-slate-200 text-slate-700 border border-slate-200 rounded-xl transition-colors flex items-center gap-1 shrink-0"
+              className="text-xs font-bold px-3 py-2.5 bg-slate-100 hover:bg-slate-200 text-slate-700 border border-slate-200 rounded-xl transition-colors flex items-center gap-1 shrink-0 min-h-[44px]"
             >
               <RefreshCw className={`w-3.5 h-3.5 ${isRefreshing ? 'animate-spin text-emerald-600' : ''}`} />
               <span className="hidden sm:inline">Atualizar</span>
@@ -632,22 +643,34 @@ export const BusinessPortalView: React.FC = () => {
                 </p>
               </div>
 
-              <button
-                onClick={async () => {
-                  setIsRefreshing(true);
-                  try {
-                    await refreshQuoteRequests();
-                  } finally {
-                    setIsRefreshing(false);
-                  }
-                }}
-                disabled={isRefreshing}
-                className="text-xs font-bold px-3 py-2 rounded-xl border border-slate-200 hover:bg-slate-50 text-slate-700 transition flex items-center gap-1.5 self-start sm:self-auto cursor-pointer"
-                title="Atualizar orçamentos em tempo real"
-              >
-                <RefreshCw className={`w-3.5 h-3.5 ${isRefreshing ? 'animate-spin text-emerald-600' : 'text-slate-500'}`} />
-                <span>{isRefreshing ? 'Atualizando...' : 'Atualizar'}</span>
-              </button>
+              <div className="flex items-center gap-2 self-start sm:self-auto">
+                <button
+                  type="button"
+                  onClick={() => setIsLeadCreditsModalOpen(true)}
+                  className="text-xs font-bold px-3 py-2 rounded-xl bg-emerald-50 hover:bg-emerald-100 text-emerald-800 border border-emerald-300 transition flex items-center gap-1.5 cursor-pointer min-h-[44px]"
+                  title="Adquirir créditos de leads avulsos"
+                >
+                  <Zap className="w-3.5 h-3.5 text-amber-600 fill-amber-500" />
+                  <span>Comprar Saldo de Leads</span>
+                </button>
+
+                <button
+                  onClick={async () => {
+                    setIsRefreshing(true);
+                    try {
+                      await refreshQuoteRequests();
+                    } finally {
+                      setIsRefreshing(false);
+                    }
+                  }}
+                  disabled={isRefreshing}
+                  className="text-xs font-bold px-3 py-2 rounded-xl border border-slate-200 hover:bg-slate-50 text-slate-700 transition flex items-center gap-1.5 cursor-pointer min-h-[44px]"
+                  title="Atualizar orçamentos em tempo real"
+                >
+                  <RefreshCw className={`w-3.5 h-3.5 ${isRefreshing ? 'animate-spin text-emerald-600' : 'text-slate-500'}`} />
+                  <span>{isRefreshing ? 'Atualizando...' : 'Atualizar'}</span>
+                </button>
+              </div>
             </div>
 
             {/* Abas de Status (Segmented Pills) */}
@@ -736,6 +759,49 @@ export const BusinessPortalView: React.FC = () => {
               </div>
             )}
           </div>
+
+          {/* Status de Cotações Gratuitas & Saldo de Leads */}
+          {isGratis && (
+            <div className="p-4 bg-gradient-to-r from-emerald-50 to-teal-50 border border-emerald-200 rounded-2xl flex flex-col sm:flex-row sm:items-center justify-between gap-3 text-xs">
+              <div className="space-y-1">
+                <div className="flex items-center gap-2 flex-wrap">
+                  <span className="font-bold text-emerald-950 flex items-center gap-1.5">
+                    <Sparkles className="w-4 h-4 text-emerald-600" />
+                    <span>Cotações Mensais (Plano Gratuito)</span>
+                  </span>
+                  <span className="px-2 py-0.5 bg-white text-emerald-800 rounded-md font-extrabold border border-emerald-200 text-[10px]">
+                    {monthlyProposalsCount}/3 gratuitas usadas
+                  </span>
+                  {(currentBiz.leadCredits || 0) > 0 && (
+                    <span className="px-2 py-0.5 bg-amber-100 text-amber-900 rounded-md font-extrabold border border-amber-300 text-[10px] flex items-center gap-1">
+                      <Zap className="w-3 h-3 fill-amber-500 text-amber-500" />
+                      {currentBiz.leadCredits} crédito(s) de lead
+                    </span>
+                  )}
+                </div>
+                <p className="text-slate-600 text-[11px]">
+                  {monthlyProposalsCount < 3
+                    ? `Você tem ${3 - monthlyProposalsCount} cotação(ões) gratuita(s) restante(s) neste mês.${
+                        (currentBiz.leadCredits || 0) > 0 ? ` Saldo extra: ${currentBiz.leadCredits} lead(s).` : ''
+                      }`
+                    : (currentBiz.leadCredits || 0) > 0
+                    ? `Limite gratuito de 3 cotações atingido. Cada proposta enviada consumirá 1 crédito de lead (Saldo: ${currentBiz.leadCredits}).`
+                    : 'Limite de 3 propostas gratuitas do mês atingido. Adquira saldo de leads avulso ou assine o Plano Pró para continuar respondendo.'}
+                </p>
+              </div>
+
+              <div className="flex items-center gap-2 shrink-0">
+                <button
+                  type="button"
+                  onClick={() => setIsLeadCreditsModalOpen(true)}
+                  className="px-3.5 py-2 rounded-xl bg-emerald-600 hover:bg-emerald-700 text-white font-bold text-xs transition shadow-xs flex items-center gap-1.5 active:scale-95 cursor-pointer min-h-[40px]"
+                >
+                  <Zap className="w-3.5 h-3.5 fill-amber-300 text-amber-300" />
+                  <span>Comprar Saldo de Leads</span>
+                </button>
+              </div>
+            </div>
+          )}
 
           {otherBizDirectQuotes.length > 0 && (
             <div className="p-4 bg-amber-50 border border-amber-200 rounded-2xl space-y-2">
@@ -912,12 +978,12 @@ export const BusinessPortalView: React.FC = () => {
                           <button
                             onClick={() => {
                               if (hasReachedProposalLimit) {
-                                setShowProposalLimitModal(true);
+                                setIsLeadCreditsModalOpen(true);
                               } else {
                                 setActiveQuoteId(q.id);
                               }
                             }}
-                            className="w-full sm:w-auto px-5 py-2.5 rounded-xl bg-emerald-600 hover:bg-emerald-700 text-white text-xs font-bold shadow-xs transition flex items-center justify-center gap-1.5 active:scale-95 cursor-pointer"
+                            className="w-full sm:w-auto px-5 py-2.5 rounded-xl bg-emerald-600 hover:bg-emerald-700 text-white text-xs font-bold shadow-xs transition flex items-center justify-center gap-1.5 active:scale-95 cursor-pointer min-h-[44px]"
                           >
                             <Send className="w-3.5 h-3.5" />
                             <span>Enviar Proposta</span>
@@ -999,6 +1065,15 @@ export const BusinessPortalView: React.FC = () => {
                   className="w-full px-3.5 py-2 rounded-xl border border-slate-200 text-xs focus:ring-2 focus:ring-emerald-500 focus:outline-hidden text-slate-800"
                 />
               </div>
+
+              {isGratis && monthlyProposalsCount >= 3 && (currentBiz.leadCredits || 0) > 0 && (
+                <div className="bg-amber-50 p-3 rounded-xl text-[11px] text-amber-800 border border-amber-200 flex items-center justify-between">
+                  <span>⚡ Limite mensal gratuito atingido. O envio desta proposta consumirá <strong>1 crédito de lead</strong>.</span>
+                  <span className="font-extrabold bg-amber-200 text-amber-900 px-2 py-0.5 rounded-md text-[10px] shrink-0 ml-2">
+                    Saldo: {currentBiz.leadCredits}
+                  </span>
+                </div>
+              )}
 
               <div className="bg-slate-50 p-3 rounded-xl text-[11px] text-slate-500 border border-slate-100">
                 Ao enviar a proposta, o cliente verá o valor, sua avaliação ({currentBiz.rating} ⭐) e poderá escolher sua empresa ou clicar no WhatsApp.
@@ -1395,6 +1470,30 @@ export const BusinessPortalView: React.FC = () => {
             </div>
           </div>
 
+          {/* CARD DE COMPRA AVULSA DE LEADS NA ABA DE PLANOS */}
+          <div className="bg-slate-50 border border-slate-200 rounded-3xl p-5 sm:p-6 flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+            <div className="space-y-1">
+              <span className="text-[10px] font-extrabold uppercase bg-emerald-100 text-emerald-800 px-2 py-0.5 rounded-md">
+                Sem Mensalidade
+              </span>
+              <h4 className="text-base font-bold text-slate-900 flex items-center gap-2 mt-1">
+                <Zap className="w-4 h-4 text-amber-500 fill-amber-400" />
+                <span>Prefere comprar pacotes de leads sob demanda?</span>
+              </h4>
+              <p className="text-xs text-slate-500 max-w-xl leading-relaxed">
+                Adquira créditos avulsos (1 Lead, Pacote de 5 Leads ou Pacote de 20 Leads) para responder orçamentos específicos quando quiser, pagando via PIX sem compromisso mensal.
+              </p>
+            </div>
+            <button
+              type="button"
+              onClick={() => setIsLeadCreditsModalOpen(true)}
+              className="px-5 py-3 bg-emerald-600 hover:bg-emerald-700 text-white font-bold text-xs rounded-xl shadow-xs transition shrink-0 active:scale-95 cursor-pointer flex items-center justify-center gap-1.5 min-h-[44px]"
+            >
+              <Zap className="w-4 h-4 fill-amber-300 text-amber-300" />
+              <span>Ver Pacotes de Leads</span>
+            </button>
+          </div>
+
           {/* SEÇÃO INDEPENDENTE: DESTAQUE PATROCINADO (PLANO ≠ DESTAQUE) */}
           <div className="mt-8 bg-linear-to-br from-amber-500/10 via-amber-500/5 to-transparent border-2 border-amber-400/40 rounded-3xl p-6 sm:p-8 space-y-6">
             <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
@@ -1723,10 +1822,21 @@ export const BusinessPortalView: React.FC = () => {
                     setShowProposalLimitModal(false);
                     await handleNativePurchase('pro');
                   }}
-                  className="w-full py-2.5 rounded-xl bg-emerald-600 hover:bg-emerald-700 text-white text-xs font-bold transition flex items-center justify-center gap-2 shadow-sm cursor-pointer"
+                  className="w-full py-2.5 rounded-xl bg-emerald-600 hover:bg-emerald-700 text-white text-xs font-bold transition flex items-center justify-center gap-2 shadow-sm cursor-pointer min-h-[44px]"
                 >
                   <CreditCard className="w-4 h-4" />
                   <span>Assinar Plano Pró via Google Play</span>
+                </button>
+                <button
+                  type="button"
+                  onClick={() => {
+                    setShowProposalLimitModal(false);
+                    setIsLeadCreditsModalOpen(true);
+                  }}
+                  className="w-full py-2.5 rounded-xl bg-slate-100 hover:bg-slate-200 text-slate-800 text-xs font-bold transition flex items-center justify-center gap-1.5 min-h-[44px]"
+                >
+                  <Zap className="w-3.5 h-3.5 fill-amber-500 text-amber-500" />
+                  <span>Comprar Saldo de Leads Avulso</span>
                 </button>
                 <button
                   type="button"
@@ -1737,13 +1847,17 @@ export const BusinessPortalView: React.FC = () => {
                 </button>
               </div>
             ) : (
-              <div className="flex gap-2 pt-2">
+              <div className="flex flex-col sm:flex-row gap-2 pt-2">
                 <button
                   type="button"
-                  onClick={() => setShowProposalLimitModal(false)}
-                  className="flex-1 py-2.5 rounded-xl bg-slate-100 hover:bg-slate-200 text-slate-700 text-xs font-semibold transition"
+                  onClick={() => {
+                    setShowProposalLimitModal(false);
+                    setIsLeadCreditsModalOpen(true);
+                  }}
+                  className="flex-1 py-2.5 rounded-xl bg-emerald-600 hover:bg-emerald-700 text-white text-xs font-bold transition shadow-sm flex items-center justify-center gap-1.5 min-h-[44px]"
                 >
-                  Voltar
+                  <Zap className="w-3.5 h-3.5 fill-amber-300 text-amber-300" />
+                  <span>Comprar Saldo de Leads</span>
                 </button>
                 <button
                   type="button"
@@ -1751,15 +1865,23 @@ export const BusinessPortalView: React.FC = () => {
                     setShowProposalLimitModal(false);
                     setActiveTab('planos');
                   }}
-                  className="flex-1 py-2.5 rounded-xl bg-emerald-600 hover:bg-emerald-700 text-white text-xs font-bold transition shadow-sm"
+                  className="flex-1 py-2.5 rounded-xl bg-slate-900 hover:bg-slate-800 text-white text-xs font-bold transition min-h-[44px]"
                 >
-                  Conhecer Planos
+                  Ver Planos Mensais
                 </button>
               </div>
             )}
           </div>
         </div>
       )}
+
+      {/* MODAL DE COMPRA DE SALDO DE LEADS (AVULSO, 5 LEADS, 20 LEADS) */}
+      <LeadCreditsModal
+        isOpen={isLeadCreditsModalOpen}
+        onClose={() => setIsLeadCreditsModalOpen(false)}
+        business={currentBiz}
+        onOpenPlansTab={() => setActiveTab('planos')}
+      />
 
     </div>
   );

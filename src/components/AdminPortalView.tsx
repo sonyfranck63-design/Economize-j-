@@ -45,6 +45,7 @@ export const AdminPortalView: React.FC = () => {
     removeOffer,
     deleteBusiness,
     refreshBusinesses,
+    addLeadCredits,
   } = useApp();
 
   if (currentUser?.role !== 'admin') {
@@ -59,6 +60,32 @@ export const AdminPortalView: React.FC = () => {
 
   const [adminTab, setAdminTab] = useState<'empresas' | 'ofertas' | 'leads' | 'assinaturas' | 'monetizacao' | 'auditoria'>('empresas');
   const [expandedQuoteId, setExpandedQuoteId] = useState<string | null>(null);
+
+  // Cotações globais para auditoria administrativa independente
+  const [adminQuotes, setAdminQuotes] = useState<any[]>([]);
+  const [isLoadingAdminQuotes, setIsLoadingAdminQuotes] = useState<boolean>(false);
+
+  const fetchAdminQuotes = async () => {
+    setIsLoadingAdminQuotes(true);
+    try {
+      const data = await dataService.getAllQuoteRequestsForAdmin();
+      setAdminQuotes(data || []);
+    } catch (e) {
+      console.warn('Erro ao carregar cotações de auditoria do admin:', e);
+    } finally {
+      setIsLoadingAdminQuotes(false);
+    }
+  };
+
+  React.useEffect(() => {
+    fetchAdminQuotes();
+  }, []);
+
+  React.useEffect(() => {
+    if (adminTab === 'leads') {
+      fetchAdminQuotes();
+    }
+  }, [adminTab]);
 
   // Estado dos logs de auditoria
   const [auditLogs, setAuditLogs] = useState<any[]>([]);
@@ -241,7 +268,8 @@ export const AdminPortalView: React.FC = () => {
     return acc;
   }, 0);
 
-  const totalProposalsCount = quoteRequests.reduce((acc, q) => acc + q.proposals.length, 0);
+  const displayQuotes = adminQuotes.length > 0 ? adminQuotes : quoteRequests;
+  const totalProposalsCount = displayQuotes.reduce((acc, q) => acc + (q.proposals || []).length, 0);
   const estimatedLeadsRevenue = totalProposalsCount * monetization.costPerLead;
 
   return (
@@ -335,7 +363,7 @@ export const AdminPortalView: React.FC = () => {
               adminTab === 'leads' ? 'bg-white text-slate-900' : 'text-slate-300 hover:bg-slate-800'
             }`}
           >
-            Orçamentos / Leads ({quoteRequests.length})
+            Orçamentos / Leads ({displayQuotes.length})
           </button>
           <button
             onClick={() => setAdminTab('assinaturas')}
@@ -412,10 +440,13 @@ export const AdminPortalView: React.FC = () => {
                     iconClassName="w-5 h-5 text-emerald-600"
                   />
                   <div>
-                    <div className="flex items-center gap-2">
+                    <div className="flex items-center gap-2 flex-wrap">
                       <h4 className="font-bold text-sm text-slate-900">{b.name}</h4>
                       <span className="text-[10px] uppercase font-bold bg-slate-100 text-slate-700 px-2 py-0.5 rounded-md">
                         Plano: {b.plan || b.planTier || 'gratis'}
+                      </span>
+                      <span className="text-[10px] uppercase font-bold bg-emerald-50 text-emerald-800 border border-emerald-200 px-2 py-0.5 rounded-md">
+                        Leads: {b.leadCredits || 0} créditos
                       </span>
                       {/* Destaque: somente indicador visual — ativação é feita via pagamento confirmado */}
                       {b.featured && (
@@ -453,6 +484,29 @@ export const AdminPortalView: React.FC = () => {
                     }`}
                   >
                     {b.verified ? '✓ Verificada' : 'Não Verificada'}
+                  </button>
+
+                  <button
+                    onClick={async () => {
+                      const input = window.prompt(`Quantos créditos de leads deseja creditar para "${b.name}"?`, '5');
+                      if (!input) return;
+                      const count = parseInt(input, 10);
+                      if (isNaN(count) || count <= 0) {
+                        alert('Informe uma quantidade válida maior que zero.');
+                        return;
+                      }
+                      try {
+                        await addLeadCredits(b.id, count, `Créditos adicionados manualmente pelo administrador (${count} leads)`);
+                        await refreshBusinesses?.();
+                        alert(`${count} créditos de leads adicionados para ${b.name} com sucesso!`);
+                      } catch (err: any) {
+                        alert(`Erro ao adicionar créditos: ${err.message}`);
+                      }
+                    }}
+                    className="px-3 py-1.5 rounded-xl bg-emerald-50 hover:bg-emerald-100 text-emerald-800 border border-emerald-300 text-xs font-bold transition flex items-center gap-1"
+                    title="Adicionar créditos de leads após confirmação de PIX"
+                  >
+                    ⚡ + Créditos
                   </button>
 
                   {b.featured ? (
@@ -554,18 +608,29 @@ export const AdminPortalView: React.FC = () => {
             <div>
               <h3 className="text-base font-bold text-slate-900 flex items-center gap-2">
                 <FileText className="w-5 h-5 text-emerald-600" />
-                <span>Supervisão de Solicitações &amp; Propostas Comerciais</span>
+                <span>Supervisão Global de Solicitações &amp; Propostas Comerciais</span>
               </h3>
               <p className="text-xs text-slate-500 mt-0.5">
-                Audite todos os orçamentos solicitados na plataforma, empresas concorrentes e contratos definidos
+                Auditoria completa de todas as cotações da plataforma, propostas de empresas e contratos fechados
               </p>
             </div>
-            <span className="text-xs font-bold px-3 py-1 bg-slate-100 text-slate-700 rounded-full self-start sm:self-auto">
-              Total: {quoteRequests.length} solicitações
-            </span>
+            <div className="flex items-center gap-2 self-start sm:self-auto">
+              <button
+                onClick={fetchAdminQuotes}
+                disabled={isLoadingAdminQuotes}
+                className="px-3 py-1.5 rounded-xl border border-slate-200 hover:bg-slate-50 text-slate-700 text-xs font-bold transition flex items-center gap-1.5"
+                title="Atualizar cotações do sistema"
+              >
+                <RefreshCw className={`w-3.5 h-3.5 ${isLoadingAdminQuotes ? 'animate-spin text-emerald-600' : ''}`} />
+                <span>{isLoadingAdminQuotes ? 'Atualizando...' : 'Atualizar'}</span>
+              </button>
+              <span className="text-xs font-bold px-3 py-1.5 bg-slate-100 text-slate-700 rounded-full">
+                Total: {displayQuotes.length} solicitações
+              </span>
+            </div>
           </div>
 
-          {quoteRequests.length === 0 ? (
+          {displayQuotes.length === 0 ? (
             <div className="py-12 flex flex-col items-center justify-center text-center bg-slate-50 rounded-xl border border-dashed border-slate-200">
               <FileText className="w-8 h-8 text-slate-400 mb-3" />
               <h4 className="text-sm font-bold text-slate-900">Nenhum orçamento no histórico</h4>
@@ -575,7 +640,7 @@ export const AdminPortalView: React.FC = () => {
             </div>
           ) : (
             <div className="space-y-3">
-              {quoteRequests.map((q) => {
+              {displayQuotes.map((q) => {
                 const isExpanded = expandedQuoteId === q.id;
                 const proposals = q.proposals || [];
                 const chosenProposal = proposals.find((p) => p.status === 'escolhida');
@@ -1215,6 +1280,7 @@ export const AdminPortalView: React.FC = () => {
                   DESTAQUE_ATIVADO: 'bg-amber-100 text-amber-800',
                   DESTAQUE_REVOGADO: 'bg-orange-100 text-orange-800',
                   OFERTA_REMOVIDA: 'bg-red-100 text-red-800',
+                  CREDITOS_LEAD_ADICIONADOS: 'bg-emerald-100 text-emerald-800',
                   ACTIVATED: 'bg-amber-100 text-amber-800',
                   DEACTIVATED: 'bg-slate-100 text-slate-700',
                 };
