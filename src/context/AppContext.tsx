@@ -97,7 +97,16 @@ interface AppContextType {
   toggleBusinessFeatured: (businessId: string, days?: number, notes?: string) => Promise<void>;
   removeOffer: (offerId: string) => void;
   deleteBusiness: (businessId: string) => void;
-  upgradeBusinessPlan: (businessId: string, planTier: 'free' | 'pro' | 'premium', immediateActive?: boolean) => Promise<void>;
+  upgradeBusinessPlan: (
+    businessId: string,
+    planTier: 'free' | 'pro' | 'premium',
+    immediateActive?: boolean,
+    purchaseToken?: string,
+    orderId?: string
+  ) => Promise<void>;
+  adminActivatePlan: (businessId: string, planTier: 'free' | 'pro' | 'premium', reason: string, durationDays?: number) => Promise<void>;
+  submitContentReport: (params: { contentType: 'review' | 'business' | 'offer' | 'quote' | 'user'; contentId: string; reason: string; details?: string }) => Promise<any>;
+  blockUser: (blockedUserId: string) => Promise<any>;
   addLeadCredits: (businessId: string, credits: number, notes?: string) => Promise<any>;
   markNotificationRead: (id: string) => void;
   refreshNotifications: () => Promise<void>;
@@ -1148,36 +1157,43 @@ const getInitialUserLocation = (): UserLocation => {
   const upgradeBusinessPlan = async (
     businessId: string,
     planTier: 'free' | 'pro' | 'premium',
-    immediateActive = false
+    immediateActive = false,
+    purchaseToken?: string,
+    orderId?: string
   ) => {
     if (planTier === 'free') {
       alert('Sua empresa já está no plano Gratuito.');
       return;
     }
 
-    if (immediateActive) {
-      setBusinesses((prev) =>
-        prev.map((b) => (b.id === businessId ? { ...b, plan: planTier, planTier: planTier } : b))
-      );
-    }
-
     try {
       if (isSupabaseConfigured) {
         if (immediateActive) {
+          // Validação e persistência server-side com anti-replay
           await dataService.activateGooglePlaySubscription({
             businessId,
             planTier,
+            purchaseToken,
+            transactionId: orderId,
           });
         } else {
           await dataService.initiatePlanSubscription(businessId, planTier);
         }
       }
+
+      // REGRA: Atualiza o estado da empresa SOMENTE após a confirmação do backend
+      if (immediateActive) {
+        setBusinesses((prev) =>
+          prev.map((b) => (b.id === businessId ? { ...b, plan: planTier, planTier: planTier } : b))
+        );
+      }
+
       setNotifications((prev) => [
         {
           id: `upgrade-${Date.now()}`,
           title: `Plano ${planTier.toUpperCase()} ${immediateActive ? 'Ativado' : 'Registrado'}`,
           message: immediateActive
-            ? `Parabéns! O Plano ${planTier.toUpperCase()} foi ativado com sucesso. Propostas comerciais ilimitadas liberadas!`
+            ? `Parabéns! O Plano ${planTier.toUpperCase()} foi ativado com sucesso via Google Play. Propostas comerciais ilimitadas liberadas!`
             : `O pedido de assinatura foi gerado no status PENDING. A ativação ocorrerá automaticamente após a confirmação do pagamento no provedor.`,
           timestamp: 'Agora',
           type: 'system',
@@ -1186,18 +1202,62 @@ const getInitialUserLocation = (): UserLocation => {
         ...prev,
       ]);
     } catch (err: any) {
+      console.error('[upgradeBusinessPlan] Erro ao registrar assinatura no backend:', err);
       setNotifications((prev) => [
         {
           id: `upgrade-err-${Date.now()}`,
-          title: 'Assinatura Pendente de Confirmação',
-          message: err.message || `A assinatura do plano ${planTier.toUpperCase()} está registrada como pendente.`,
+          title: 'Falha na Validação da Assinatura',
+          message: err.message || `Não foi possível confirmar a assinatura do plano ${planTier.toUpperCase()}.`,
           timestamp: 'Agora',
           type: 'system',
           read: false,
         },
         ...prev,
       ]);
+      throw err;
     }
+  };
+
+  const adminActivatePlan = async (
+    businessId: string,
+    planTier: 'free' | 'pro' | 'premium',
+    reason: string,
+    durationDays = 30
+  ) => {
+    if (!reason || reason.trim().length < 3) {
+      throw new Error('Informe o motivo/justificativa para a ativação administrativa.');
+    }
+    if (isSupabaseConfigured) {
+      await dataService.adminActivateBusinessPlan({
+        businessId,
+        planTier,
+        reason,
+        durationDays,
+      });
+      // Sincroniza o estado local após a confirmação do banco
+      setBusinesses((prev) =>
+        prev.map((b) => (b.id === businessId ? { ...b, plan: planTier, planTier: planTier } : b))
+      );
+    }
+  };
+
+  const submitContentReport = async (params: {
+    contentType: 'review' | 'business' | 'offer' | 'quote' | 'user';
+    contentId: string;
+    reason: string;
+    details?: string;
+  }) => {
+    if (isSupabaseConfigured) {
+      return await dataService.submitContentReport(params);
+    }
+    return { success: true };
+  };
+
+  const blockUser = async (blockedUserId: string) => {
+    if (isSupabaseConfigured) {
+      return await dataService.blockUser(blockedUserId);
+    }
+    return { success: true };
   };
 
   const addLeadCredits = async (businessId: string, credits: number, notes?: string) => {
@@ -1335,6 +1395,9 @@ const getInitialUserLocation = (): UserLocation => {
         removeOffer,
         deleteBusiness,
         upgradeBusinessPlan,
+        adminActivatePlan,
+        submitContentReport,
+        blockUser,
         addLeadCredits,
         markNotificationRead,
         refreshNotifications,

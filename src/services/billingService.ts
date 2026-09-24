@@ -25,6 +25,16 @@ export const BILLING_PLANS = {
   },
 } as const;
 
+export interface PurchaseResult {
+  success: boolean;
+  purchaseToken?: string;
+  orderId?: string;
+  productId?: string;
+  isPending?: boolean;
+  transaction?: any;
+  error?: string;
+}
+
 class BillingService {
   private productsCache: Map<string, BillingProductInfo> = new Map();
   private isInitialized = false;
@@ -94,14 +104,15 @@ class BillingService {
 
   /**
    * Executa a compra nativa de um plano via Google Play Billing.
+   * Retorna o purchaseToken e identificadores necessários para validação server-side.
    *
    * @param plan 'pro' ou 'premium'
-   * @param accountToken identificador do usuário ou empresa para auditoria (opcional)
+   * @param accountToken identificador da empresa compradora
    */
   async purchasePlan(
     plan: 'pro' | 'premium',
     accountToken?: string
-  ): Promise<{ success: boolean; transaction?: any; error?: string }> {
+  ): Promise<PurchaseResult> {
     if (!Capacitor.isNativePlatform()) {
       return {
         success: false,
@@ -112,7 +123,7 @@ class BillingService {
     const config = BILLING_PLANS[plan];
 
     try {
-      const transaction = await NativePurchases.purchaseProduct({
+      const transaction: any = await NativePurchases.purchaseProduct({
         productIdentifier: config.productId,
         planIdentifier: config.basePlanId,
         productType: PURCHASE_TYPE.SUBS,
@@ -121,15 +132,41 @@ class BillingService {
         autoAcknowledgePurchases: true,
       });
 
+      // Extrai campos do comprovante da Google Play
+      const purchaseToken =
+        transaction?.purchaseToken ||
+        transaction?.token ||
+        transaction?.transactionId ||
+        '';
+
+      const orderId =
+        transaction?.orderId ||
+        transaction?.transactionId ||
+        `gp-${Date.now()}`;
+
+      const isPending =
+        transaction?.purchaseState === 4 || // 4 = PENDING no Billing v5/v6
+        transaction?.isPending === true;
+
       return {
         success: true,
+        purchaseToken,
+        orderId,
+        productId: config.productId,
+        isPending,
         transaction,
       };
     } catch (err: any) {
       console.error('[BillingService] Falha ao processar assinatura no Google Play:', err);
+      const isCancelled =
+        err?.message?.toLowerCase().includes('cancel') ||
+        err?.code === 'USER_CANCELED';
+
       return {
         success: false,
-        error: err?.message || 'A compra foi cancelada ou não pôde ser concluída no Google Play.',
+        error: isCancelled
+          ? 'Operação cancelada pelo usuário.'
+          : err?.message || 'A compra não pôde ser concluída no Google Play.',
       };
     }
   }
@@ -137,9 +174,13 @@ class BillingService {
   /**
    * Restaura compras/assinaturas ativas do usuário no Google Play.
    */
-  async restorePurchases(): Promise<{ activePlans: ('pro' | 'premium')[]; error?: string }> {
+  async restorePurchases(): Promise<{
+    activePlans: ('pro' | 'premium')[];
+    purchases: Array<{ plan: 'pro' | 'premium'; purchaseToken: string; orderId?: string }>;
+    error?: string;
+  }> {
     if (!Capacitor.isNativePlatform()) {
-      return { activePlans: [] };
+      return { activePlans: [], purchases: [] };
     }
 
     try {
@@ -152,20 +193,37 @@ class BillingService {
       });
 
       const activePlans: ('pro' | 'premium')[] = [];
+      const purchasesList: Array<{ plan: 'pro' | 'premium'; purchaseToken: string; orderId?: string }> = [];
       const purchases = res?.purchases || [];
 
       for (const purchase of purchases) {
+        let plan: 'pro' | 'premium' | null = null;
         if (purchase.productIdentifier === BILLING_PLANS.premium.productId) {
-          activePlans.push('premium');
+          plan = 'premium';
         } else if (purchase.productIdentifier === BILLING_PLANS.pro.productId) {
-          activePlans.push('pro');
+          plan = 'pro';
+        }
+
+        if (plan) {
+          if (!activePlans.includes(plan)) {
+            activePlans.push(plan);
+          }
+          purchasesList.push({
+            plan,
+            purchaseToken: purchase.purchaseToken || purchase.token || '',
+            orderId: purchase.orderId,
+          });
         }
       }
 
-      return { activePlans };
+      return { activePlans, purchases: purchasesList };
     } catch (err: any) {
       console.warn('[BillingService] Erro ao restaurar compras:', err);
-      return { activePlans: [], error: err?.message || 'Erro ao consultar compras anteriores.' };
+      return {
+        activePlans: [],
+        purchases: [],
+        error: err?.message || 'Erro ao consultar compras anteriores no Google Play.',
+      };
     }
   }
 }

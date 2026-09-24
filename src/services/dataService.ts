@@ -1255,9 +1255,82 @@ export const dataService = {
     if (error) throw new Error(error.message);
   },
 
-  async reportReview(reviewId: string): Promise<void> {
+  async reportReview(reviewId: string, reason = 'Avaliação com conteúdo impróprio ou ofensivo'): Promise<void> {
     if (!isSupabaseConfigured || !supabase) return;
-    await supabase.from('reviews').update({ reported: true }).eq('id', reviewId);
+    try {
+      await this.submitContentReport({
+        contentType: 'review',
+        contentId: reviewId,
+        reason,
+      });
+    } catch (e) {
+      console.warn('[dataService] Fallback ao denunciar avaliação:', e);
+      // Tenta atualização direta caso a RPC não esteja disponível
+      await supabase.from('reviews').update({ reported: true }).eq('id', reviewId);
+    }
+  },
+
+  // ==========================================
+  // UGC & CONTENT MODERATION (GOOGLE PLAY)
+  // ==========================================
+  async submitContentReport(params: {
+    contentType: 'review' | 'business' | 'offer' | 'quote' | 'user';
+    contentId: string;
+    reason: string;
+    details?: string;
+  }): Promise<any> {
+    if (!isSupabaseConfigured || !supabase) throw new Error('Supabase não configurado');
+    const { data, error } = await supabase.rpc('submit_content_report', {
+      p_content_type: params.contentType,
+      p_content_id: params.contentId,
+      p_reason: params.reason,
+      p_details: params.details || null,
+    });
+    if (error) throw new Error(error.message);
+    return data;
+  },
+
+  async adminGetContentReports(status = 'PENDING'): Promise<any[]> {
+    if (!isSupabaseConfigured || !supabase) return [];
+    let query = supabase
+      .from('content_reports')
+      .select('*')
+      .order('created_at', { ascending: false });
+
+    if (status !== 'ALL') {
+      query = query.eq('status', status);
+    }
+
+    const { data, error } = await query;
+    if (error) {
+      console.warn('[dataService] Erro ao buscar denúncias:', error.message);
+      return [];
+    }
+    return data || [];
+  },
+
+  async adminModerateContent(
+    reportId: string,
+    action: 'DISMISS' | 'HIDE_CONTENT' | 'SUSPEND_USER',
+    notes?: string
+  ): Promise<any> {
+    if (!isSupabaseConfigured || !supabase) throw new Error('Supabase não configurado');
+    const { data, error } = await supabase.rpc('admin_moderate_content', {
+      p_report_id: reportId,
+      p_action: action,
+      p_notes: notes || null,
+    });
+    if (error) throw new Error(error.message);
+    return data;
+  },
+
+  async blockUser(blockedUserId: string): Promise<any> {
+    if (!isSupabaseConfigured || !supabase) throw new Error('Supabase não configurado');
+    const { data, error } = await supabase.rpc('block_user', {
+      p_blocked_user_id: blockedUserId,
+    });
+    if (error) throw new Error(error.message);
+    return data;
   },
 
   // ==========================================
@@ -1363,6 +1436,56 @@ export const dataService = {
   },
 
   /**
+   * Processa com segurança a compra realizada no Google Play Billing,
+   * validando no backend contra replay e vinculando à empresa do parceiro.
+   */
+  async processGooglePlayPurchase(params: {
+    businessId: string;
+    productId: string;
+    purchaseToken: string;
+    orderId?: string;
+    payload?: any;
+  }): Promise<any> {
+    if (!isSupabaseConfigured || !supabase) throw new Error('Supabase não configurado');
+    const { data, error } = await supabase.rpc('process_google_play_purchase', {
+      p_business_id: params.businessId,
+      p_product_id: params.productId,
+      p_purchase_token: params.purchaseToken,
+      p_order_id: params.orderId || null,
+      p_purchase_payload: params.payload || {},
+    });
+    if (error) {
+      console.error('[dataService] Erro na RPC process_google_play_purchase:', error);
+      throw new Error(error.message || 'Falha ao registrar compra no servidor.');
+    }
+    return data;
+  },
+
+  /**
+   * Ativação Manual Administrativa de Assinatura
+   * Exclusivo para administradores realizarem suporte/cortesia/testes com registro de justificativa.
+   */
+  async adminActivateBusinessPlan(params: {
+    businessId: string;
+    planTier: 'free' | 'gratis' | 'pro' | 'premium';
+    reason: string;
+    durationDays?: number;
+  }): Promise<any> {
+    if (!isSupabaseConfigured || !supabase) throw new Error('Supabase não configurado');
+    const { data, error } = await supabase.rpc('admin_activate_business_plan', {
+      p_business_id: params.businessId,
+      p_plan_tier: params.planTier,
+      p_reason: params.reason,
+      p_duration_days: params.durationDays || 30,
+    });
+    if (error) {
+      console.error('[dataService] Erro na RPC admin_activate_business_plan:', error);
+      throw new Error(error.message || 'Falha ao ativar plano administrativamente.');
+    }
+    return data;
+  },
+
+  /**
    * Ativa e persiste a assinatura confirmada via Google Play Billing.
    */
   async activateGooglePlaySubscription(params: {
@@ -1373,28 +1496,22 @@ export const dataService = {
   }): Promise<void> {
     if (!isSupabaseConfigured || !supabase) return;
 
-    try {
-      const initData = await this.initiatePlanSubscription(
-        params.businessId,
-        params.planTier,
-        'google_play_billing'
-      );
-      const subId = initData?.subscription_id || initData?.id;
-      if (subId) {
-        await this.confirmPlanSubscription(subId, params.purchaseToken || params.transactionId);
-      }
-    } catch (rpcErr) {
-      console.warn('Fallback ao registrar transação da assinatura no Supabase:', rpcErr);
-    }
+    const productId =
+      params.planTier === 'premium'
+        ? 'economizaja_premium_monthly'
+        : 'economizaja_pro_monthly';
 
-    try {
-      await supabase
-        .from('businesses')
-        .update({ plan: params.planTier })
-        .eq('id', params.businessId);
-    } catch (bizErr) {
-      console.warn('Erro ao atualizar plano na tabela businesses:', bizErr);
-    }
+    const token =
+      params.purchaseToken ||
+      params.transactionId ||
+      `token-${Date.now()}`;
+
+    await this.processGooglePlayPurchase({
+      businessId: params.businessId,
+      productId,
+      purchaseToken: token,
+      orderId: params.transactionId,
+    });
   },
 
   async initiateFeaturedListing(businessId: string, days: number, offerId?: string): Promise<any> {

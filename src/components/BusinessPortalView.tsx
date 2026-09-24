@@ -164,9 +164,13 @@ export const BusinessPortalView: React.FC = () => {
     try {
       const res = await billingService.purchasePlan(plan, currentBiz.id);
       if (res.success) {
-        await upgradeBusinessPlan(currentBiz.id, plan, true);
+        if (res.isPending) {
+          alert('Sua compra está em processamento pelo Google Play (status PENDENTE). O benefício do plano será liberado assim que o Google confirmar a liquidação.');
+          return;
+        }
+        await upgradeBusinessPlan(currentBiz.id, plan, true, res.purchaseToken, res.orderId);
         triggerCelebrationFireworks();
-        alert(`Parabéns! Sua empresa agora é ${plan === 'premium' ? 'PREMIUM' : 'PRÓ'}! Propostas ilimitadas foram liberadas no Google Play.`);
+        alert(`Parabéns! Sua empresa agora é ${plan === 'premium' ? 'PREMIUM' : 'PRÓ'}! Assinatura validada e propostas ilimitadas liberadas via Google Play.`);
       } else if (res.error && !res.error.toLowerCase().includes('cancel')) {
         alert(`Google Play Billing: ${res.error}`);
       }
@@ -182,16 +186,16 @@ export const BusinessPortalView: React.FC = () => {
     setIsRestoringPurchases(true);
     try {
       const res = await billingService.restorePurchases();
-      if (res.activePlans && res.activePlans.length > 0) {
-        const highestPlan = res.activePlans.includes('premium') ? 'premium' : 'pro';
-        await upgradeBusinessPlan(currentBiz.id, highestPlan, true);
+      if (res.purchases && res.purchases.length > 0) {
+        const bestPurchase = res.purchases.find((p) => p.plan === 'premium') || res.purchases[0];
+        await upgradeBusinessPlan(currentBiz.id, bestPurchase.plan, true, bestPurchase.purchaseToken, bestPurchase.orderId);
         triggerCelebrationFireworks();
-        alert(`Assinatura encontrada no Google Play! Seu plano ${highestPlan.toUpperCase()} foi restaurado com sucesso.`);
+        alert(`Assinatura encontrada no Google Play! Seu plano ${bestPurchase.plan.toUpperCase()} foi restaurado com sucesso.`);
       } else {
         alert('Nenhuma assinatura ativa encontrada na sua conta da Google Play Store.');
       }
     } catch (err: any) {
-      alert('Erro ao consultar assinaturas anteriores no Google Play.');
+      alert(err?.message || 'Erro ao consultar assinaturas anteriores no Google Play.');
     } finally {
       setIsRestoringPurchases(false);
     }

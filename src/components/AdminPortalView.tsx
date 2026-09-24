@@ -46,6 +46,7 @@ export const AdminPortalView: React.FC = () => {
     deleteBusiness,
     refreshBusinesses,
     addLeadCredits,
+    adminActivatePlan,
   } = useApp();
 
   // ╔══════════════════════════════════════════════════════════════════╗
@@ -53,7 +54,7 @@ export const AdminPortalView: React.FC = () => {
   // ║  Regra dos Hooks do React: nunca chame hooks condicionalmente.   ║
   // ╚══════════════════════════════════════════════════════════════════╝
 
-  const [adminTab, setAdminTab] = useState<'empresas' | 'ofertas' | 'leads' | 'assinaturas' | 'monetizacao' | 'auditoria'>('empresas');
+  const [adminTab, setAdminTab] = useState<'empresas' | 'ofertas' | 'leads' | 'assinaturas' | 'monetizacao' | 'auditoria' | 'moderacao'>('empresas');
   const [expandedQuoteId, setExpandedQuoteId] = useState<string | null>(null);
 
   // Cotações globais para auditoria administrativa independente
@@ -63,6 +64,18 @@ export const AdminPortalView: React.FC = () => {
   // Estado dos logs de auditoria
   const [auditLogs, setAuditLogs] = useState<any[]>([]);
   const [isLoadingAudit, setIsLoadingAudit] = useState(false);
+
+  // Moderação de Conteúdo (UGC)
+  const [contentReports, setContentReports] = useState<any[]>([]);
+  const [isLoadingReports, setIsLoadingReports] = useState(false);
+  const [moderatingReportId, setModeratingReportId] = useState<string | null>(null);
+
+  // Ativação Manual de Plano para suporte/regularização com auditoria
+  const [manualPlanBiz, setManualPlanBiz] = useState<any | null>(null);
+  const [manualPlanTier, setManualPlanTier] = useState<'pro' | 'premium' | 'free'>('pro');
+  const [manualPlanReason, setManualPlanReason] = useState<string>('');
+  const [manualPlanDuration, setManualPlanDuration] = useState<number>(30);
+  const [isSubmittingManualPlan, setIsSubmittingManualPlan] = useState<boolean>(false);
 
   // Pending monetization state
   const [pendingItems, setPendingItems] = useState<{
@@ -138,6 +151,18 @@ export const AdminPortalView: React.FC = () => {
     }
   };
 
+  const fetchContentReports = async () => {
+    setIsLoadingReports(true);
+    try {
+      const data = await dataService.adminGetContentReports('ALL');
+      setContentReports(data || []);
+    } catch (e) {
+      console.warn('Erro ao carregar denúncias:', e);
+    } finally {
+      setIsLoadingReports(false);
+    }
+  };
+
   // --- useEffects (todos antes do early return) ---
 
   React.useEffect(() => {
@@ -145,6 +170,7 @@ export const AdminPortalView: React.FC = () => {
     if (currentUser?.role !== 'admin') return;
     fetchAdminQuotes();
     fetchPendingMonetization();
+    fetchContentReports();
   }, []);
 
   React.useEffect(() => {
@@ -154,6 +180,9 @@ export const AdminPortalView: React.FC = () => {
     }
     if (adminTab === 'auditoria' && auditLogs.length === 0) {
       fetchAuditLogs();
+    }
+    if (adminTab === 'moderacao') {
+      fetchContentReports();
     }
   }, [adminTab]);
 
@@ -169,6 +198,44 @@ export const AdminPortalView: React.FC = () => {
   }
 
   // --- Handlers (após o guard, pois não são hooks) ---
+
+  const handleConfirmManualPlan = async () => {
+    if (!manualPlanBiz) return;
+    if (!manualPlanReason || manualPlanReason.trim().length < 3) {
+      alert('Informe uma justificativa detalhada para a ativação administrativa do plano.');
+      return;
+    }
+    setIsSubmittingManualPlan(true);
+    try {
+      await adminActivatePlan(manualPlanBiz.id, manualPlanTier, manualPlanReason, manualPlanDuration);
+      await refreshBusinesses?.();
+      alert(`Plano ${manualPlanTier.toUpperCase()} ativado com sucesso para "${manualPlanBiz.name}" por ${manualPlanDuration} dias!`);
+      setManualPlanBiz(null);
+      setManualPlanReason('');
+      await fetchPendingMonetization();
+    } catch (err: any) {
+      alert(`Erro ao ativar plano administrativamente: ${err.message}`);
+    } finally {
+      setIsSubmittingManualPlan(false);
+    }
+  };
+
+  const handleModerateReport = async (
+    reportId: string,
+    action: 'DISMISS' | 'HIDE_CONTENT' | 'SUSPEND_USER',
+    notes?: string
+  ) => {
+    setModeratingReportId(reportId);
+    try {
+      await dataService.adminModerateContent(reportId, action, notes);
+      alert('Ação de moderação executada com sucesso.');
+      await fetchContentReports();
+    } catch (err: any) {
+      alert(`Erro na moderação: ${err.message}`);
+    } finally {
+      setModeratingReportId(null);
+    }
+  };
 
   const handleConfirmAdminHighlight = async () => {
     if (!highlightTargetBiz) return;
@@ -400,6 +467,15 @@ export const AdminPortalView: React.FC = () => {
             <Activity className="w-3.5 h-3.5 text-emerald-400" />
             <span>Auditoria de Ações</span>
           </button>
+          <button
+            onClick={() => setAdminTab('moderacao')}
+            className={`px-3.5 py-2 rounded-xl font-bold transition whitespace-nowrap flex items-center gap-1.5 ${
+              adminTab === 'moderacao' ? 'bg-white text-slate-900' : 'text-slate-300 hover:bg-slate-800'
+            }`}
+          >
+            <ShieldAlert className="w-3.5 h-3.5 text-rose-400" />
+            <span>Moderação UGC ({contentReports.filter(r => r.status === 'PENDING').length})</span>
+          </button>
         </div>
       </div>
 
@@ -551,6 +627,19 @@ export const AdminPortalView: React.FC = () => {
                       ⭐ Destacar (PIX)
                     </button>
                   )}
+
+                  <button
+                    onClick={() => {
+                      setManualPlanBiz(b);
+                      setManualPlanTier('pro');
+                      setManualPlanDuration(30);
+                      setManualPlanReason('Ativação manual autorizada pelo suporte administrativo');
+                    }}
+                    className="px-3 py-1.5 rounded-xl bg-indigo-50 hover:bg-indigo-100 text-indigo-800 border border-indigo-200 text-xs font-bold transition flex items-center gap-1 flex-shrink-0"
+                    title="Ativar ou alterar plano manualmente com justificativa e auditoria"
+                  >
+                    👑 Gerenciar Plano
+                  </button>
 
                   <button
                     onClick={() => {
@@ -1340,6 +1429,113 @@ export const AdminPortalView: React.FC = () => {
         </div>
       )}
 
+      {/* TAB: MODERAÇÃO DE CONTEÚDO E UGC */}
+      {adminTab === 'moderacao' && (
+        <div className="bg-white rounded-2xl p-4 sm:p-6 border border-slate-100 shadow-sm space-y-4">
+          <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 pb-3 border-b border-slate-100">
+            <div>
+              <h3 className="text-base font-bold text-slate-900 flex items-center gap-2">
+                <ShieldAlert className="w-5 h-5 text-rose-500" />
+                Moderação de Conteúdo & Denúncias (UGC)
+              </h3>
+              <p className="text-xs text-slate-500">
+                Diretrizes do Google Play: resposta ativa a denúncias de usuários e moderação de conteúdo impróprio.
+              </p>
+            </div>
+            <button
+              onClick={fetchContentReports}
+              disabled={isLoadingReports}
+              className="px-3 py-1.5 rounded-xl bg-slate-100 hover:bg-slate-200 text-slate-700 text-xs font-bold transition flex items-center gap-1.5 self-start sm:self-auto"
+            >
+              <RefreshCw className={`w-3.5 h-3.5 ${isLoadingReports ? 'animate-spin' : ''}`} />
+              Atualizar Denúncias
+            </button>
+          </div>
+
+          {isLoadingReports ? (
+            <div className="py-12 flex flex-col items-center justify-center text-center">
+              <RefreshCw className="w-6 h-6 text-slate-400 animate-spin mb-2" />
+              <p className="text-xs text-slate-500">Carregando denúncias...</p>
+            </div>
+          ) : contentReports.length === 0 ? (
+            <div className="py-12 flex flex-col items-center justify-center text-center bg-slate-50 rounded-xl border border-dashed border-slate-200">
+              <CheckCircle2 className="w-8 h-8 text-emerald-500 mb-2" />
+              <h4 className="text-sm font-bold text-slate-800">Nenhuma denúncia pendente</h4>
+              <p className="text-xs text-slate-500 max-w-sm mt-1">
+                Todas as denúncias de conteúdo gerado por usuários foram moderadas ou não há relatórios de violação.
+              </p>
+            </div>
+          ) : (
+            <div className="divide-y divide-slate-100">
+              {contentReports.map((report) => (
+                <div key={report.id} className="py-4 flex flex-col gap-3">
+                  <div className="flex items-start justify-between gap-2">
+                    <div className="space-y-1">
+                      <div className="flex items-center gap-2 flex-wrap">
+                        <span className={`text-[10px] uppercase font-bold px-2 py-0.5 rounded-md ${
+                          report.status === 'PENDING'
+                            ? 'bg-rose-100 text-rose-800 border border-rose-200'
+                            : report.status === 'DISMISSED'
+                            ? 'bg-slate-100 text-slate-600'
+                            : 'bg-emerald-100 text-emerald-800'
+                        }`}>
+                          {report.status === 'PENDING' ? 'PENDENTE' : report.status === 'DISMISSED' ? 'DESCARTADO' : 'RESOLVIDO'}
+                        </span>
+                        <span className="text-[10px] uppercase font-bold bg-slate-100 text-slate-700 px-2 py-0.5 rounded-md">
+                          TIPO: {report.content_type || 'CONTEÚDO'}
+                        </span>
+                        <span className="text-xs font-semibold text-slate-700">
+                          Motivo: <strong className="text-slate-900">{report.reason}</strong>
+                        </span>
+                      </div>
+                      <p className="text-xs text-slate-600">
+                        {report.details ? report.details : 'Sem detalhes adicionais fornecidos pelo denunciante.'}
+                      </p>
+                      <p className="text-[11px] text-slate-400">
+                        Conteúdo ID: <code className="text-[10px] bg-slate-100 px-1 py-0.5 rounded text-slate-700">{report.content_id}</code>
+                        {report.created_at && (
+                          <span className="ml-2">• {new Date(report.created_at).toLocaleString('pt-BR')}</span>
+                        )}
+                      </p>
+                    </div>
+                  </div>
+
+                  {report.status === 'PENDING' && (
+                    <div className="flex flex-wrap items-center gap-2 pt-2 border-t border-slate-50">
+                      <button
+                        onClick={() => handleModerateReport(report.id, 'DISMISS', 'Denúncia analisada e considerada improcedente')}
+                        disabled={moderatingReportId === report.id}
+                        className="px-3 py-1.5 rounded-xl bg-slate-100 hover:bg-slate-200 text-slate-700 text-xs font-bold transition disabled:opacity-50"
+                      >
+                        Descartar Denúncia
+                      </button>
+                      <button
+                        onClick={() => handleModerateReport(report.id, 'HIDE_CONTENT', 'Conteúdo ocultado por violar diretrizes')}
+                        disabled={moderatingReportId === report.id}
+                        className="px-3 py-1.5 rounded-xl bg-amber-50 hover:bg-amber-100 text-amber-800 border border-amber-200 text-xs font-bold transition disabled:opacity-50"
+                      >
+                        Ocultar Conteúdo
+                      </button>
+                      <button
+                        onClick={() => {
+                          if (window.confirm('Tem certeza que deseja suspender o autor deste conteúdo?')) {
+                            handleModerateReport(report.id, 'SUSPEND_USER', 'Autor suspenso por violação recorrente ou grave');
+                          }
+                        }}
+                        disabled={moderatingReportId === report.id}
+                        className="px-3 py-1.5 rounded-xl bg-rose-50 hover:bg-rose-100 text-rose-700 border border-rose-200 text-xs font-bold transition disabled:opacity-50"
+                      >
+                        Suspender Usuário / Empresa
+                      </button>
+                    </div>
+                  )}
+                </div>
+              ))}
+            </div>
+          )}
+        </div>
+      )}
+
       {/* MODAL DE ATIVAÇÃO DE DESTAQUE PATROCINADO (AUDITORIA REAL) */}
       {highlightTargetBiz && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-950/60 backdrop-blur-xs p-4 animate-in fade-in duration-200">
@@ -1429,6 +1625,122 @@ export const AdminPortalView: React.FC = () => {
                 className="px-4 py-2 text-xs font-bold bg-amber-500 hover:bg-amber-600 text-slate-950 rounded-xl transition shadow-xs flex items-center gap-1.5 disabled:opacity-50"
               >
                 {isSubmittingHighlight ? 'Processando...' : 'Confirmar & Ativar Destaque'}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* MODAL DE ATIVAÇÃO ADMINISTRATIVA DE PLANO (SUPORTE / HOMOLOGAÇÃO) */}
+      {manualPlanBiz && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-950/60 backdrop-blur-xs p-4 animate-in fade-in duration-200">
+          <div className="bg-white rounded-2xl shadow-2xl max-w-md w-full p-6 space-y-5 border border-slate-100">
+            <div className="flex items-center justify-between border-b border-slate-100 pb-3">
+              <div className="flex items-center gap-2">
+                <span className="p-2 bg-indigo-100 text-indigo-800 rounded-xl">👑</span>
+                <div>
+                  <h3 className="font-bold text-base text-slate-900">Ativação de Plano (Suporte)</h3>
+                  <p className="text-xs text-slate-500">Operação auditada para suporte e testes</p>
+                </div>
+              </div>
+              <button
+                onClick={() => setManualPlanBiz(null)}
+                className="p-1 rounded-lg text-slate-400 hover:text-slate-600 hover:bg-slate-100 transition"
+              >
+                ✕
+              </button>
+            </div>
+
+            <div className="bg-slate-50 p-3.5 rounded-xl border border-slate-100 text-xs space-y-1">
+              <p className="font-bold text-slate-800">Empresa: <span className="font-normal text-slate-600">{manualPlanBiz.name}</span></p>
+              <p className="font-bold text-slate-800">Plano Atual: <span className="font-semibold text-emerald-700 uppercase">{manualPlanBiz.plan || manualPlanBiz.planTier || 'gratis'}</span></p>
+              <p className="font-bold text-slate-800">CNPJ/Local: <span className="font-normal text-slate-600">{manualPlanBiz.cnpj || '—'} • {manualPlanBiz.city || '—'}</span></p>
+            </div>
+
+            <div className="space-y-2">
+              <label className="text-xs font-bold text-slate-700">Selecione o Plano:</label>
+              <div className="grid grid-cols-2 gap-2">
+                <button
+                  type="button"
+                  onClick={() => setManualPlanTier('pro')}
+                  className={`p-3 rounded-xl border text-left transition ${
+                    manualPlanTier === 'pro'
+                      ? 'border-indigo-600 bg-indigo-50/50 shadow-xs'
+                      : 'border-slate-200 bg-white hover:bg-slate-50'
+                  }`}
+                >
+                  <div className="font-bold text-xs text-slate-900">Plano Pro</div>
+                  <div className="text-[11px] text-slate-500">R$ 79,90 / mês</div>
+                  <div className="text-[10px] text-emerald-700 mt-1 font-semibold">15 leads inclusos</div>
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setManualPlanTier('premium')}
+                  className={`p-3 rounded-xl border text-left transition ${
+                    manualPlanTier === 'premium'
+                      ? 'border-indigo-600 bg-indigo-50/50 shadow-xs'
+                      : 'border-slate-200 bg-white hover:bg-slate-50'
+                  }`}
+                >
+                  <div className="font-bold text-xs text-slate-900">Plano Premium</div>
+                  <div className="text-[11px] text-slate-500">R$ 159,90 / mês</div>
+                  <div className="text-[10px] text-emerald-700 mt-1 font-semibold">40 leads inclusos</div>
+                </button>
+              </div>
+            </div>
+
+            <div className="space-y-2">
+              <label className="text-xs font-bold text-slate-700">Duração do Acesso:</label>
+              <div className="grid grid-cols-4 gap-2">
+                {[30, 60, 90, 365].map((days) => (
+                  <button
+                    key={days}
+                    type="button"
+                    onClick={() => setManualPlanDuration(days)}
+                    className={`py-2 px-2 text-center rounded-xl text-xs font-bold border transition ${
+                      manualPlanDuration === days
+                        ? 'bg-indigo-600 text-white border-indigo-600 shadow-xs'
+                        : 'bg-white text-slate-700 border-slate-200 hover:bg-slate-50'
+                    }`}
+                  >
+                    {days} dias
+                  </button>
+                ))}
+              </div>
+            </div>
+
+            <div className="space-y-1.5">
+              <label className="text-xs font-bold text-slate-700">
+                Justificativa Obrigatória (Auditoria):
+              </label>
+              <textarea
+                rows={2}
+                value={manualPlanReason}
+                onChange={(e) => setManualPlanReason(e.target.value)}
+                placeholder="Ex.: Teste de homologação Google Play / Ativação autorizada suporte"
+                className="w-full text-xs px-3 py-2 rounded-xl border border-slate-200 focus:outline-none focus:ring-2 focus:ring-indigo-500"
+              />
+              <p className="text-[10px] text-slate-500">
+                Esta ação grava log permanente com ID de administrador, data e justificativa.
+              </p>
+            </div>
+
+            <div className="flex items-center justify-end gap-2 pt-2 border-t border-slate-100">
+              <button
+                type="button"
+                onClick={() => setManualPlanBiz(null)}
+                disabled={isSubmittingManualPlan}
+                className="px-4 py-2 text-xs font-bold text-slate-600 hover:bg-slate-100 rounded-xl transition"
+              >
+                Cancelar
+              </button>
+              <button
+                type="button"
+                onClick={handleConfirmManualPlan}
+                disabled={isSubmittingManualPlan || !manualPlanReason.trim()}
+                className="px-4 py-2 text-xs font-bold bg-indigo-600 hover:bg-indigo-700 text-white rounded-xl transition shadow-xs flex items-center gap-1.5 disabled:opacity-50"
+              >
+                {isSubmittingManualPlan ? 'Ativando...' : 'Confirmar Ativação'}
               </button>
             </div>
           </div>
