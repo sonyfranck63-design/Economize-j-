@@ -1671,7 +1671,7 @@ export const AdminPortalView: React.FC = () => {
                 >
                   <div className="font-bold text-xs text-slate-900">Plano Pro</div>
                   <div className="text-[11px] text-slate-500">R$ 79,90 / mês</div>
-                  <div className="text-[10px] text-emerald-700 mt-1 font-semibold">15 leads inclusos</div>
+                  <div className="text-[10px] text-emerald-700 mt-1 font-semibold">Propostas ilimitadas</div>
                 </button>
                 <button
                   type="button"
@@ -1684,7 +1684,7 @@ export const AdminPortalView: React.FC = () => {
                 >
                   <div className="font-bold text-xs text-slate-900">Plano Premium</div>
                   <div className="text-[11px] text-slate-500">R$ 159,90 / mês</div>
-                  <div className="text-[10px] text-emerald-700 mt-1 font-semibold">40 leads inclusos</div>
+                  <div className="text-[10px] text-emerald-700 mt-1 font-semibold">Propostas ilimitadas</div>
                 </button>
               </div>
             </div>

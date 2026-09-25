@@ -1369,7 +1369,13 @@ export const BusinessPortalView: React.FC = () => {
               </div>
               <button
                 disabled={isGratis}
-                onClick={() => upgradeBusinessPlan(currentBiz.id, 'free')}
+                onClick={() => {
+                  if (isNativeAndroid) {
+                    alert('Para gerenciar ou cancelar sua assinatura contratada pelo Android, acesse a Google Play Store em: Perfil > Pagamentos e Assinaturas.');
+                  } else {
+                    alert('Para cancelar a renovação da sua assinatura web ou migrar para o plano Gratuito, envie uma mensagem ao administrador ou contate o suporte.');
+                  }
+                }}
                 className="w-full py-2.5 rounded-xl border border-slate-200 text-xs font-bold text-slate-700 hover:bg-slate-50 transition cursor-pointer"
               >
                 {isGratis ? 'Plano Atual' : 'Migrar para Gratuito'}
@@ -1574,23 +1580,32 @@ export const BusinessPortalView: React.FC = () => {
                   <p className="text-[11px] text-amber-900 leading-relaxed">
                     A solicitação de <strong>{highlightPendingInfo.days} dias de destaque</strong> (R$ {highlightPendingInfo.totalCost.toFixed(2)}) foi gerada no status PENDING. A ativação no guia ocorrerá após a confirmação do pagamento.
                   </p>
-                  {monetization.adminPixKey && (
-                    <div className="p-2.5 bg-white rounded-xl border border-amber-200 text-[11px] flex flex-col sm:flex-row sm:items-center justify-between gap-2">
-                      <span>Chave PIX: <strong className="font-mono text-slate-900">{monetization.adminPixKey}</strong></span>
-                      {monetization.adminWhatsapp && (
-                        <a
-                          href={buildWhatsAppLink(
-                            monetization.adminWhatsapp,
-                            `Olá! Sou da empresa *${currentBiz.name}* no EconomizaJá. Solicitei ${highlightPendingInfo.days} dias de Destaque Patrocinado (R$ ${highlightPendingInfo.totalCost.toFixed(2)}) e gostaria de enviar o comprovante PIX para confirmação.`
-                          )}
-                          target="_blank"
-                          rel="noreferrer"
-                          className="px-3 py-1.5 bg-emerald-600 hover:bg-emerald-700 text-white rounded-lg font-bold text-[10px] text-center transition shrink-0"
-                        >
-                          Enviar Comprovante WhatsApp
-                        </a>
-                      )}
+                  {isNativeAndroid ? (
+                    <div className="p-2.5 bg-white rounded-xl border border-amber-200 text-[11px] text-slate-700 space-y-1">
+                      <p className="font-semibold text-amber-950">Aviso para o App Android:</p>
+                      <p className="text-slate-600">
+                        A confirmação e quitação deste destaque devem ser realizadas através do portal web ou diretamente com o suporte da plataforma.
+                      </p>
                     </div>
+                  ) : (
+                    monetization.adminPixKey && (
+                      <div className="p-2.5 bg-white rounded-xl border border-amber-200 text-[11px] flex flex-col sm:flex-row sm:items-center justify-between gap-2">
+                        <span>Chave PIX: <strong className="font-mono text-slate-900">{monetization.adminPixKey}</strong></span>
+                        {monetization.adminWhatsapp && (
+                          <a
+                            href={buildWhatsAppLink(
+                              monetization.adminWhatsapp,
+                              `Olá! Sou da empresa *${currentBiz.name}* no EconomizaJá. Solicitei ${highlightPendingInfo.days} dias de Destaque Patrocinado (R$ ${highlightPendingInfo.totalCost.toFixed(2)}) e gostaria de enviar o comprovante PIX para confirmação.`
+                            )}
+                            target="_blank"
+                            rel="noreferrer"
+                            className="px-3 py-1.5 bg-emerald-600 hover:bg-emerald-700 text-white rounded-lg font-bold text-[10px] text-center transition shrink-0"
+                          >
+                            Enviar Comprovante WhatsApp
+                          </a>
+                        )}
+                      </div>
+                    )
                   )}
                 </div>
               )}

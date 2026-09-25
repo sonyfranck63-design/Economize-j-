@@ -13,6 +13,7 @@ import {
   CreditCard,
   Crown,
   Info,
+  Smartphone,
 } from 'lucide-react';
 import { useApp } from '../context/AppContext';
 import { buildWhatsAppLink } from '../utils/whatsappUtils';
@@ -248,80 +249,117 @@ export const LeadCreditsModal: React.FC<LeadCreditsModalProps> = ({
           </div>
         </div>
 
-        {/* DADOS DE PAGAMENTO PIX */}
-        <div className="border border-emerald-200 bg-emerald-50/50 rounded-2xl p-4 space-y-3">
-          <div className="flex items-center justify-between">
-            <span className="text-xs font-bold text-emerald-900 uppercase flex items-center gap-1.5">
-              <QrCode className="w-4 h-4 text-emerald-700" />
-              <span>Pagamento via PIX</span>
-            </span>
-            <span className="text-xs font-extrabold text-emerald-800 bg-white px-2.5 py-0.5 rounded-full border border-emerald-200 shadow-2xs">
-              Total: R$ {activeDetails.price.toFixed(2)}
-            </span>
-          </div>
-
-          <div className="space-y-2 text-xs">
-            {/* Chave PIX e Botão Copiar */}
-            <div className="flex items-center justify-between bg-white p-2.5 rounded-xl border border-emerald-200 gap-2">
-              <div className="min-w-0 flex-1">
-                <span className="text-[10px] text-slate-400 block uppercase font-bold">
-                  Chave PIX ({pixKeyType})
-                </span>
-                <strong className="text-slate-900 text-xs font-mono truncate block">
-                  {pixKey}
-                </strong>
-              </div>
-
-              <button
-                type="button"
-                onClick={handleCopyPix}
-                className="flex items-center gap-1 px-3 py-2 rounded-xl bg-emerald-600 hover:bg-emerald-700 text-white text-xs font-bold transition shadow-xs shrink-0 active:scale-95 min-h-[40px]"
-              >
-                {copiedPix ? (
-                  <>
-                    <Check className="w-3.5 h-3.5" />
-                    <span>Copiado!</span>
-                  </>
-                ) : (
-                  <>
-                    <Copy className="w-3.5 h-3.5" />
-                    <span>Copiar Chave</span>
-                  </>
-                )}
-              </button>
+        {/* DADOS DE PAGAMENTO: GOOGLE PLAY NO ANDROID OU PIX NA WEB */}
+        {isNativeAndroid ? (
+          <div className="border border-blue-200 bg-blue-50/60 rounded-2xl p-4 space-y-3">
+            <div className="flex items-center gap-2 text-blue-900 font-bold text-xs uppercase">
+              <Smartphone className="w-4 h-4 text-blue-700" />
+              <span>Google Play & Faturamento Digital</span>
             </div>
-
-            {/* Dados Bancários */}
-            {pixBeneficiary && (
-              <p className="text-[11px] text-slate-600 bg-white/70 p-2 rounded-lg border border-emerald-100">
-                <strong>Favorecido:</strong> {pixBeneficiary}
-                <br />
-                <strong>Instituição:</strong> {pixBank}
+            <p className="text-xs text-blue-800 leading-relaxed">
+              No aplicativo Android, em conformidade com as diretrizes da Google Play Store, transações de produtos digitais são integradas ao ecossistema do Google Play.
+            </p>
+            <div className="bg-white p-3.5 rounded-xl border border-blue-200 space-y-2">
+              <div className="text-xs font-bold text-slate-800 flex items-center gap-1.5">
+                <Crown className="w-3.5 h-3.5 text-amber-500" />
+                <span>Recomendado: Propostas Ilimitadas</span>
+              </div>
+              <p className="text-[11px] text-slate-600 leading-relaxed">
+                Assine o <strong>Plano Pró</strong> com cobrança mensal gerenciada com segurança pelo Google Play para enviar orçamentos ilimitados, sem se preocupar com recargas de saldo.
               </p>
-            )}
-
-            {/* Instruções */}
-            <p className="text-[11px] text-slate-600 leading-relaxed">
-              {receiptNotes}
+              {onOpenPlansTab && (
+                <button
+                  type="button"
+                  onClick={() => {
+                    onClose();
+                    onOpenPlansTab();
+                  }}
+                  className="w-full py-2.5 rounded-xl bg-emerald-600 hover:bg-emerald-700 text-white text-xs font-bold transition flex items-center justify-center gap-1.5 shadow-xs active:scale-95"
+                >
+                  <CreditCard className="w-3.5 h-3.5" />
+                  <span>Conhecer Planos no Google Play</span>
+                </button>
+              )}
+            </div>
+            <p className="text-[10px] text-slate-500 text-center">
+              Para pacotes avulsos de créditos sob demanda via PIX, acesse sua conta pelo portal web no navegador.
             </p>
           </div>
+        ) : (
+          <div className="border border-emerald-200 bg-emerald-50/50 rounded-2xl p-4 space-y-3">
+            <div className="flex items-center justify-between">
+              <span className="text-xs font-bold text-emerald-900 uppercase flex items-center gap-1.5">
+                <QrCode className="w-4 h-4 text-emerald-700" />
+                <span>Pagamento via PIX</span>
+              </span>
+              <span className="text-xs font-extrabold text-emerald-800 bg-white px-2.5 py-0.5 rounded-full border border-emerald-200 shadow-2xs">
+                Total: R$ {activeDetails.price.toFixed(2)}
+              </span>
+            </div>
 
-          {/* Botão de WhatsApp */}
-          {adminPhone && (
-            <a
-              href={buildWhatsAppLink(adminPhone, whatsAppMessage)}
-              target="_blank"
-              rel="noreferrer"
-              className="w-full py-3 rounded-xl bg-emerald-600 hover:bg-emerald-700 text-white text-xs font-bold flex items-center justify-center gap-2 transition shadow-xs active:scale-95 min-h-[44px]"
-            >
-              <Phone className="w-4 h-4" />
-              <span>Enviar Comprovante pelo WhatsApp</span>
-            </a>
-          )}
-        </div>
+            <div className="space-y-2 text-xs">
+              {/* Chave PIX e Botão Copiar */}
+              <div className="flex items-center justify-between bg-white p-2.5 rounded-xl border border-emerald-200 gap-2">
+                <div className="min-w-0 flex-1">
+                  <span className="text-[10px] text-slate-400 block uppercase font-bold">
+                    Chave PIX ({pixKeyType})
+                  </span>
+                  <strong className="text-slate-900 text-xs font-mono truncate block">
+                    {pixKey}
+                  </strong>
+                </div>
 
-        {/* OPÇÃO ALTERNATIVA: PLANO COM LEADS ILIMITADOS */}
-        {onOpenPlansTab && (
+                <button
+                  type="button"
+                  onClick={handleCopyPix}
+                  className="flex items-center gap-1 px-3 py-2 rounded-xl bg-emerald-600 hover:bg-emerald-700 text-white text-xs font-bold transition shadow-xs shrink-0 active:scale-95 min-h-[40px]"
+                >
+                  {copiedPix ? (
+                    <>
+                      <Check className="w-3.5 h-3.5" />
+                      <span>Copiado!</span>
+                    </>
+                  ) : (
+                    <>
+                      <Copy className="w-3.5 h-3.5" />
+                      <span>Copiar Chave</span>
+                    </>
+                  )}
+                </button>
+              </div>
+
+              {/* Dados Bancários */}
+              {pixBeneficiary && (
+                <p className="text-[11px] text-slate-600 bg-white/70 p-2 rounded-lg border border-emerald-100">
+                  <strong>Favorecido:</strong> {pixBeneficiary}
+                  <br />
+                  <strong>Instituição:</strong> {pixBank}
+                </p>
+              )}
+
+              {/* Instruções */}
+              <p className="text-[11px] text-slate-600 leading-relaxed">
+                {receiptNotes}
+              </p>
+            </div>
+
+            {/* Botão de WhatsApp */}
+            {adminPhone && (
+              <a
+                href={buildWhatsAppLink(adminPhone, whatsAppMessage)}
+                target="_blank"
+                rel="noreferrer"
+                className="w-full py-3 rounded-xl bg-emerald-600 hover:bg-emerald-700 text-white text-xs font-bold flex items-center justify-center gap-2 transition shadow-xs active:scale-95 min-h-[44px]"
+              >
+                <Phone className="w-4 h-4" />
+                <span>Enviar Comprovante pelo WhatsApp</span>
+              </a>
+            )}
+          </div>
+        )}
+
+        {/* OPÇÃO ALTERNATIVA: PLANO COM LEADS ILIMITADOS (APENAS NA WEB) */}
+        {!isNativeAndroid && onOpenPlansTab && (
           <div className="p-3.5 rounded-2xl bg-slate-50 border border-slate-200 flex items-center justify-between gap-3 text-xs">
             <div className="space-y-0.5">
               <span className="font-bold text-slate-800 flex items-center gap-1.5">
