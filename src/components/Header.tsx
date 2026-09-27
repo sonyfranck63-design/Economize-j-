@@ -50,31 +50,6 @@ export const Header: React.FC = () => {
 
   return (
     <header className="sticky top-0 z-40 bg-white/95 backdrop-blur-md border-b border-slate-200/80 shadow-xs pt-safe w-full">
-      {/* Banner de Modo de Demonstração — visível para TODOS quando banco não está configurado */}
-      {!isDatabaseConnected && (
-        <div className="text-xs px-3 py-1.5 text-center font-medium flex items-center justify-center gap-1.5 bg-amber-50 border-b border-amber-200 text-amber-800">
-          <Info className="w-4 h-4 text-amber-600 shrink-0" />
-          <span>
-            <strong>Modo de Demonstração</strong> — Os dados exibidos são fictícios para fins ilustrativos.
-            {currentUser?.role === 'admin' && (
-              <span className="ml-1 text-amber-700 hidden sm:inline">
-                Configure <code className="bg-amber-100 px-1 rounded">VITE_SUPABASE_URL</code> no <code className="bg-amber-100 px-1 rounded">.env</code> para ativar dados reais.
-              </span>
-            )}
-          </span>
-        </div>
-      )}
-
-      {/* Banner de Conexão Ativa — apenas para administradores */}
-      {isDatabaseConnected && currentUser?.role === 'admin' && (
-        <div className="text-xs px-3 py-1 text-center font-medium flex items-center justify-center gap-1.5 bg-emerald-950 text-emerald-100 border-b border-emerald-800/80">
-          <span className="w-2 h-2 rounded-full bg-emerald-400 animate-ping shrink-0" />
-          <span>
-            <strong className="text-white">CONEXÃO ATIVA:</strong> Supabase PostgreSQL em Produção
-          </span>
-        </div>
-      )}
-
       <div className="max-w-7xl mx-auto px-3 sm:px-6 lg:px-8">
         <div className="flex items-center justify-between h-14 sm:h-16 gap-2 sm:gap-3">
           
@@ -97,8 +72,11 @@ export const Header: React.FC = () => {
               title="Alterar cidade ou usar GPS"
             >
               <MapPin className="w-4 h-4 text-emerald-600 shrink-0" />
-              <span className="max-w-[85px] xs:max-w-[120px] sm:max-w-[170px] truncate">
-                {currentLocation.neighborhood ? `${currentLocation.neighborhood}, ` : ''}{currentLocation.city}
+              <span className="max-w-[75px] xs:max-w-[110px] sm:max-w-[170px] truncate">
+                <span className="hidden sm:inline">
+                  {currentLocation.neighborhood ? `${currentLocation.neighborhood}, ` : ''}
+                </span>
+                {currentLocation.city || 'Definir local'}
               </span>
               <ChevronDown className="w-3.5 h-3.5 text-emerald-700/60 shrink-0" />
             </button>

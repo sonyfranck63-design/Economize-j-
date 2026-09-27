@@ -345,7 +345,7 @@ export const SearchView: React.FC = () => {
               value={searchQuery}
               onChange={(e) => setSearchQuery(e.target.value)}
               placeholder="Pesquisar empresas, serviços ou produtos..."
-              className="w-full pl-12 pr-10 py-3 rounded-xl bg-slate-50 border border-slate-200 text-sm text-slate-800 placeholder:text-slate-400 focus:outline-hidden focus:ring-2 focus:ring-emerald-500"
+              className="w-full pl-12 pr-10 py-3 rounded-xl bg-slate-50 border border-slate-200 text-base sm:text-sm text-slate-800 placeholder:text-slate-400 focus:outline-hidden focus:ring-2 focus:ring-emerald-500"
             />
             {searchQuery && (
               <button

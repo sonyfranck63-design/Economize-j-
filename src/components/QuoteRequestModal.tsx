@@ -282,7 +282,7 @@ export const QuoteRequestModal: React.FC = () => {
                   value={title}
                   onChange={(e) => setTitle(e.target.value)}
                   placeholder="Ex: Preciso trocar o telhado de uma casa de aprox. 100m²"
-                  className="w-full px-4 py-3 rounded-xl border border-slate-200 text-sm focus:ring-2 focus:ring-emerald-500 focus:outline-hidden text-slate-800 bg-slate-50/50"
+                  className="w-full px-4 py-3 rounded-xl border border-slate-200 text-base sm:text-sm focus:ring-2 focus:ring-emerald-500 focus:outline-hidden text-slate-800 bg-slate-50/50"
                 />
               </div>
 
@@ -299,7 +299,7 @@ export const QuoteRequestModal: React.FC = () => {
                         setSubcategory(found.subcategories[0]);
                       }
                     }}
-                    className="w-full px-3.5 py-2.5 rounded-xl border border-slate-200 text-sm bg-slate-50 text-slate-800 focus:ring-2 focus:ring-emerald-500 focus:outline-hidden cursor-pointer"
+                    className="w-full px-3.5 py-2.5 rounded-xl border border-slate-200 text-base sm:text-sm bg-slate-50 text-slate-800 focus:ring-2 focus:ring-emerald-500 focus:outline-hidden cursor-pointer"
                   >
                     {CATEGORIES.map((cat) => (
                       <option key={cat.id} value={cat.id}>
@@ -314,7 +314,7 @@ export const QuoteRequestModal: React.FC = () => {
                   <select
                     value={subcategory}
                     onChange={(e) => setSubcategory(e.target.value)}
-                    className="w-full px-3.5 py-2.5 rounded-xl border border-slate-200 text-sm bg-slate-50 text-slate-800 focus:ring-2 focus:ring-emerald-500 focus:outline-hidden cursor-pointer"
+                    className="w-full px-3.5 py-2.5 rounded-xl border border-slate-200 text-base sm:text-sm bg-slate-50 text-slate-800 focus:ring-2 focus:ring-emerald-500 focus:outline-hidden cursor-pointer"
                   >
                     {(currentCategoryObj?.subcategories || []).map((sub, idx) => (
                       <option key={idx} value={sub}>
@@ -334,7 +334,7 @@ export const QuoteRequestModal: React.FC = () => {
                     required
                     value={city}
                     onChange={(e) => setCity(e.target.value)}
-                    className="w-full px-3.5 py-2.5 rounded-xl border border-slate-200 text-sm focus:ring-2 focus:ring-emerald-500 focus:outline-hidden text-slate-800"
+                    className="w-full px-3.5 py-2.5 rounded-xl border border-slate-200 text-base sm:text-sm focus:ring-2 focus:ring-emerald-500 focus:outline-hidden text-slate-800"
                   />
                 </div>
 
@@ -344,7 +344,7 @@ export const QuoteRequestModal: React.FC = () => {
                     type="text"
                     value={neighborhood}
                     onChange={(e) => setNeighborhood(e.target.value)}
-                    className="w-full px-3.5 py-2.5 rounded-xl border border-slate-200 text-sm focus:ring-2 focus:ring-emerald-500 focus:outline-hidden text-slate-800"
+                    className="w-full px-3.5 py-2.5 rounded-xl border border-slate-200 text-base sm:text-sm focus:ring-2 focus:ring-emerald-500 focus:outline-hidden text-slate-800"
                   />
                 </div>
               </div>
@@ -360,7 +360,7 @@ export const QuoteRequestModal: React.FC = () => {
                   value={description}
                   onChange={(e) => setDescription(e.target.value)}
                   placeholder="Descreva detalhes como medidas aproximadas, estado atual, se você já possui materiais ou se precisa do fornecimento..."
-                  className="w-full px-4 py-2.5 rounded-xl border border-slate-200 text-sm focus:ring-2 focus:ring-emerald-500 focus:outline-hidden text-slate-800"
+                  className="w-full px-4 py-2.5 rounded-xl border border-slate-200 text-base sm:text-sm focus:ring-2 focus:ring-emerald-500 focus:outline-hidden text-slate-800"
                 />
               </div>
 
@@ -371,7 +371,7 @@ export const QuoteRequestModal: React.FC = () => {
                   <select
                     value={desiredDeadline}
                     onChange={(e) => setDesiredDeadline(e.target.value)}
-                    className="w-full px-3.5 py-2.5 rounded-xl border border-slate-200 text-sm bg-slate-50 text-slate-800 focus:ring-2 focus:ring-emerald-500 focus:outline-hidden cursor-pointer"
+                    className="w-full px-3.5 py-2.5 rounded-xl border border-slate-200 text-base sm:text-sm bg-slate-50 text-slate-800 focus:ring-2 focus:ring-emerald-500 focus:outline-hidden cursor-pointer"
                   >
                     <option value="Urgente (hoje ou amanhã)">Urgente (hoje ou amanhã)</option>
                     <option value="O quanto antes (próximos 3 dias)">O quanto antes (próximos 3 dias)</option>
@@ -387,7 +387,7 @@ export const QuoteRequestModal: React.FC = () => {
                     value={budgetRange}
                     onChange={(e) => setBudgetRange(e.target.value)}
                     placeholder="Ex: Até R$ 1.500"
-                    className="w-full px-3.5 py-2.5 rounded-xl border border-slate-200 text-sm focus:ring-2 focus:ring-emerald-500 focus:outline-hidden text-slate-800"
+                    className="w-full px-3.5 py-2.5 rounded-xl border border-slate-200 text-base sm:text-sm focus:ring-2 focus:ring-emerald-500 focus:outline-hidden text-slate-800"
                   />
                 </div>
               </div>
@@ -416,7 +416,7 @@ export const QuoteRequestModal: React.FC = () => {
                       placeholder="Seu nome"
                       value={userName}
                       onChange={(e) => setUserName(e.target.value)}
-                      className="w-full px-3.5 py-2.5 rounded-xl border border-slate-200 text-xs text-slate-800 bg-white focus:ring-2 focus:ring-emerald-500 focus:outline-hidden"
+                      className="w-full px-3.5 py-2.5 rounded-xl border border-slate-200 text-base sm:text-sm text-slate-800 bg-white focus:ring-2 focus:ring-emerald-500 focus:outline-hidden"
                     />
                   </div>
                   <div>
@@ -428,7 +428,7 @@ export const QuoteRequestModal: React.FC = () => {
                       placeholder="Ex: (11) 99999-8888"
                       value={userPhone}
                       onChange={(e) => setUserPhone(maskPhoneBR(e.target.value))}
-                      className="w-full px-3.5 py-2.5 rounded-xl border border-slate-200 text-xs text-slate-800 bg-white focus:ring-2 focus:ring-emerald-500 focus:outline-hidden"
+                      className="w-full px-3.5 py-2.5 rounded-xl border border-slate-200 text-base sm:text-sm text-slate-800 bg-white focus:ring-2 focus:ring-emerald-500 focus:outline-hidden"
                     />
                   </div>
                 </div>

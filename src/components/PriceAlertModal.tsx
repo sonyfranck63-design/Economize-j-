@@ -108,7 +108,7 @@ export const PriceAlertModal: React.FC = () => {
                 value={keyword}
                 onChange={(e) => setKeyword(e.target.value)}
                 placeholder="Ex: Pneu aro 15, Troca de tela iPhone, Pintura de sala..."
-                className="w-full px-3.5 py-2.5 rounded-xl border border-slate-200 bg-white text-sm focus:ring-2 focus:ring-emerald-500 focus:outline-hidden text-slate-800"
+                className="w-full px-3.5 py-2.5 rounded-xl border border-slate-200 bg-white text-base sm:text-sm focus:ring-2 focus:ring-emerald-500 focus:outline-hidden text-slate-800"
               />
             </div>
 
@@ -124,7 +124,7 @@ export const PriceAlertModal: React.FC = () => {
                   value={maxPrice}
                   onChange={(e) => setMaxPrice(e.target.value)}
                   placeholder="Ex: 350.00"
-                  className="w-full px-3.5 py-2.5 rounded-xl border border-slate-200 bg-white text-sm focus:ring-2 focus:ring-emerald-500 focus:outline-hidden text-slate-800"
+                  className="w-full px-3.5 py-2.5 rounded-xl border border-slate-200 bg-white text-base sm:text-sm focus:ring-2 focus:ring-emerald-500 focus:outline-hidden text-slate-800"
                 />
               </div>
 
@@ -135,7 +135,7 @@ export const PriceAlertModal: React.FC = () => {
                 <select
                   value={categoryId}
                   onChange={(e) => setCategoryId(e.target.value)}
-                  className="w-full px-3.5 py-2.5 rounded-xl border border-slate-200 bg-white text-sm text-slate-800 focus:ring-2 focus:ring-emerald-500 focus:outline-hidden"
+                  className="w-full px-3.5 py-2.5 rounded-xl border border-slate-200 bg-white text-base sm:text-sm text-slate-800 focus:ring-2 focus:ring-emerald-500 focus:outline-hidden"
                 >
                   {CATEGORIES.map((c) => (
                     <option key={c.id} value={c.id}>

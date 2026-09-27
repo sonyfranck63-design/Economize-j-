@@ -17,12 +17,10 @@ export const Footer: React.FC = () => {
             <p className="text-slate-400 text-xs leading-relaxed">
               Antes de comprar ou contratar, compare. A plataforma que ajuda consumidores a economizar e conecta empresas locais a clientes reais.
             </p>
-            <div className="flex items-center gap-2 pt-1">
               <span className="inline-flex items-center gap-1 text-[11px] font-semibold text-emerald-400 bg-emerald-950/60 border border-emerald-800/80 px-2.5 py-1 rounded-full">
                 <ShieldCheck className="w-3.5 h-3.5" />
-                Google Play AAB Ready
+                Plataforma Segura & Verificada
               </span>
-            </div>
           </div>
 
           {/* Col 2 */}
@@ -121,13 +119,15 @@ export const Footer: React.FC = () => {
                 </button>
               </li>
             </ul>
-            <button
-              onClick={() => setIsPlayStoreModalOpen(true)}
-              className="mt-2 inline-flex items-center gap-1.5 px-3 py-2 rounded-xl bg-slate-800 hover:bg-slate-700 text-white font-semibold transition text-xs"
-            >
-              <Smartphone className="w-3.5 h-3.5 text-emerald-400" />
-              <span>Ver Detalhes do AAB</span>
-            </button>
+            {currentUser?.role === 'admin' && (
+              <button
+                onClick={() => setIsPlayStoreModalOpen(true)}
+                className="mt-2 inline-flex items-center gap-1.5 px-3 py-2 rounded-xl bg-slate-800 hover:bg-slate-700 text-white font-semibold transition text-xs"
+              >
+                <Smartphone className="w-3.5 h-3.5 text-emerald-400" />
+                <span>Painel AAB (Admin)</span>
+              </button>
+            )}
           </div>
 
         </div>

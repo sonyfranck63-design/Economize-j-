@@ -296,7 +296,7 @@ export const HomeView: React.FC = () => {
                 value={localSearch}
                 onChange={(e) => setLocalSearch(e.target.value)}
                 placeholder="O que você está procurando?"
-                className="bg-transparent text-sm text-white placeholder-slate-400 outline-none w-full font-medium"
+                className="bg-transparent text-base sm:text-sm text-white placeholder-slate-400 outline-none w-full font-medium"
               />
             </div>
             <button

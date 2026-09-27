@@ -197,8 +197,8 @@ export const AuthModal: React.FC = () => {
                   required
                   value={fullName}
                   onChange={(e) => setFullName(e.target.value)}
-                  placeholder="Ex: Matheus Franck"
-                  className="w-full px-3 py-2 rounded-xl border border-slate-300 text-sm focus:ring-2 focus:ring-emerald-500 focus:outline-hidden"
+                  placeholder="Ex: Carlos Eduardo Silva"
+                  className="w-full px-3 py-2 rounded-xl border border-slate-300 text-base sm:text-sm focus:ring-2 focus:ring-emerald-500 focus:outline-hidden"
                 />
               </div>
 
@@ -212,7 +212,7 @@ export const AuthModal: React.FC = () => {
                   value={phone}
                   onChange={(e) => setPhone(maskPhoneBR(e.target.value))}
                   placeholder="(11) 98765-4321"
-                  className="w-full px-3 py-2 rounded-xl border border-slate-300 text-sm focus:ring-2 focus:ring-emerald-500 focus:outline-hidden"
+                  className="w-full px-3 py-2 rounded-xl border border-slate-300 text-base sm:text-sm focus:ring-2 focus:ring-emerald-500 focus:outline-hidden"
                 />
               </div>
 
@@ -225,7 +225,7 @@ export const AuthModal: React.FC = () => {
                     value={city}
                     onChange={(e) => setCity(e.target.value)}
                     placeholder="São Paulo"
-                    className="w-full px-3 py-2 rounded-xl border border-slate-300 text-sm"
+                    className="w-full px-3 py-2 rounded-xl border border-slate-300 text-base sm:text-sm"
                   />
                 </div>
                 <div>
@@ -237,7 +237,7 @@ export const AuthModal: React.FC = () => {
                     maxLength={2}
                     onChange={(e) => setState(e.target.value.toUpperCase())}
                     placeholder="SP"
-                    className="w-full px-3 py-2 rounded-xl border border-slate-300 text-sm uppercase"
+                    className="w-full px-3 py-2 rounded-xl border border-slate-300 text-base sm:text-sm uppercase"
                   />
                 </div>
               </div>
@@ -253,7 +253,7 @@ export const AuthModal: React.FC = () => {
                 value={email}
                 onChange={(e) => setEmail(e.target.value)}
                 placeholder="voce@exemplo.com"
-                className="w-full pl-9 pr-3 py-2 rounded-xl border border-slate-300 text-sm focus:ring-2 focus:ring-emerald-500 focus:outline-hidden"
+                className="w-full pl-9 pr-3 py-2 rounded-xl border border-slate-300 text-base sm:text-sm focus:ring-2 focus:ring-emerald-500 focus:outline-hidden"
               />
               <Mail className="w-4 h-4 text-slate-400 absolute left-3 top-2.5" />
             </div>
@@ -281,7 +281,7 @@ export const AuthModal: React.FC = () => {
                   value={password}
                   onChange={(e) => setPassword(e.target.value)}
                   placeholder="Digite sua senha"
-                  className="w-full pl-9 pr-3 py-2 rounded-xl border border-slate-300 text-sm focus:ring-2 focus:ring-emerald-500 focus:outline-hidden"
+                  className="w-full pl-9 pr-3 py-2 rounded-xl border border-slate-300 text-base sm:text-sm focus:ring-2 focus:ring-emerald-500 focus:outline-hidden"
                 />
                 <Lock className="w-4 h-4 text-slate-400 absolute left-3 top-2.5" />
               </div>

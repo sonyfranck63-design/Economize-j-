@@ -128,7 +128,7 @@ export const LocationSelectorModal: React.FC = () => {
               value={inputCity}
               onChange={(e) => setInputCity(e.target.value)}
               placeholder="Ex: São Paulo"
-              className="w-full px-3.5 py-2.5 rounded-xl border border-slate-200 text-sm focus:outline-hidden focus:ring-2 focus:ring-emerald-500 text-slate-800"
+              className="w-full px-3.5 py-2.5 rounded-xl border border-slate-200 text-base sm:text-sm focus:outline-hidden focus:ring-2 focus:ring-emerald-500 text-slate-800"
             />
           </div>
 
@@ -140,7 +140,7 @@ export const LocationSelectorModal: React.FC = () => {
                 value={inputNeighborhood}
                 onChange={(e) => setInputNeighborhood(e.target.value)}
                 placeholder="Ex: Santo Amaro"
-                className="w-full px-3.5 py-2.5 rounded-xl border border-slate-200 text-sm focus:outline-hidden focus:ring-2 focus:ring-emerald-500 text-slate-800"
+                className="w-full px-3.5 py-2.5 rounded-xl border border-slate-200 text-base sm:text-sm focus:outline-hidden focus:ring-2 focus:ring-emerald-500 text-slate-800"
               />
             </div>
             <div>
@@ -151,7 +151,7 @@ export const LocationSelectorModal: React.FC = () => {
                 value={inputState}
                 onChange={(e) => setInputState(e.target.value.toUpperCase())}
                 placeholder="SP"
-                className="w-full px-3.5 py-2.5 rounded-xl border border-slate-200 text-sm uppercase text-center focus:outline-hidden focus:ring-2 focus:ring-emerald-500 text-slate-800"
+                className="w-full px-3.5 py-2.5 rounded-xl border border-slate-200 text-base sm:text-sm uppercase text-center focus:outline-hidden focus:ring-2 focus:ring-emerald-500 text-slate-800"
               />
             </div>
           </div>
@@ -166,7 +166,7 @@ export const LocationSelectorModal: React.FC = () => {
 
         {/* Popular Cities Suggestions */}
         <div className="mt-4 pt-4 border-t border-slate-100">
-          <p className="text-[11px] font-semibold text-slate-400 uppercase tracking-wider mb-2">Cidades com parceiros ativos (Demo)</p>
+          <p className="text-[11px] font-semibold text-slate-400 uppercase tracking-wider mb-2">Cidades com parceiros ativos</p>
           <div className="flex flex-wrap gap-1.5">
             {POPULAR_CITIES.map((c, idx) => {
               const isSelected = currentLocation.city === c.city && currentLocation.neighborhood === c.neighborhood;

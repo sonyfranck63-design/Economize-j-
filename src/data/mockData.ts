@@ -3,7 +3,7 @@ import { Business, Offer, QuoteRequest, Review, AdminMonetizationSettings } from
 export const INITIAL_BUSINESSES: Business[] = [
   {
     id: 'b-auto-1',
-    name: 'Centro Automotivo Imperial (DEMO)',
+    name: 'Centro Automotivo Imperial',
     ownerName: 'Carlos Roberto',
     email: 'contato@imperialauto.demo',
     phone: '(11) 98765-4321',
@@ -42,7 +42,7 @@ export const INITIAL_BUSINESSES: Business[] = [
   },
   {
     id: 'b-casa-1',
-    name: 'Silva Eletricista & Manutenção (DEMO)',
+    name: 'Silva Eletricista & Manutenção',
     ownerName: 'Marcos Silva',
     email: 'silva.eletrica@demo.com',
     phone: '(11) 97123-8899',
@@ -77,7 +77,7 @@ export const INITIAL_BUSINESSES: Business[] = [
   },
   {
     id: 'b-tec-1',
-    name: 'SmartFix Assistência Técnica (DEMO)',
+    name: 'SmartFix Assistência Técnica',
     ownerName: 'Juliana Mendes',
     email: 'contato@smartfix.demo',
     phone: '(11) 96541-2233',
@@ -115,7 +115,7 @@ export const INITIAL_BUSINESSES: Business[] = [
   },
   {
     id: 'b-pintor-1',
-    name: 'Souza Pinturas & Reformas (DEMO)',
+    name: 'Souza Pinturas & Reformas',
     ownerName: 'Vanderlei Souza',
     email: 'souzapinturas@demo.com',
     phone: '(11) 98877-1122',
