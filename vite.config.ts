@@ -4,8 +4,14 @@ import { VitePWA } from 'vite-plugin-pwa';
 import path from 'path';
 import {defineConfig} from 'vite';
 
-export default defineConfig(() => {
+export default defineConfig(({ mode }) => {
+  const isProd = mode === 'production';
   return {
+    esbuild: isProd
+      ? {
+          drop: ['console', 'debugger'],
+        }
+      : undefined,
     plugins: [
       react(),
       tailwindcss(),

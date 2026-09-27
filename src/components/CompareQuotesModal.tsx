@@ -395,7 +395,7 @@ export const CompareQuotesModal: React.FC = () => {
                 const isBestPrice = prop.price === lowestPrice;
                 const isAccepted =
                   prop.status === 'escolhida' ||
-                  (isQuoteChosen && (sortedProposals.length === 1 || prop.status === 'escolhida'));
+                  (isQuoteChosen && sortedProposals.length === 1);
                 const isMyProposal =
                   myRelevantBusinesses.some((mb) => mb.id === prop.businessId) ||
                   businesses.some((b) => b.id === prop.businessId && b.ownerId === currentUser?.id);

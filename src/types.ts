@@ -14,6 +14,8 @@ export interface BusinessService {
   description: string;
   estimatedPriceFrom?: number;
   durationText?: string;
+  estimatedTime?: string;
+  priceEstimate?: number | string;
 }
 
 export interface BusinessProduct {
@@ -50,6 +52,7 @@ export interface Business {
   active?: boolean;
   openNow: boolean;
   workingHours: string;
+  openHours?: string;
   distanceKm: number; // relative to current selected city
   plan: 'gratis' | 'pro' | 'premium';
   planTier?: 'gratis' | 'pro' | 'premium';
@@ -76,8 +79,8 @@ export interface Offer {
   validUntil: string;
   categoryId: string;
   imageUrl: string;
-  isDemo: boolean;
-  verifiedDiscount: boolean;
+  isDemo?: boolean;
+  verifiedDiscount?: boolean;
   viewsCount: number;
   claimsCount: number;
 }
@@ -100,14 +103,14 @@ export interface QuoteRequest {
   budgetRange?: string;
   photos?: string[];
   createdAt: string;
-  status: 'aberto' | 'propostas_recebidas' | 'escolhido' | 'finalizado' | 'cancelado';
+  status: 'aberto' | 'propostas_recebidas' | 'escolhido' | 'escolhida' | 'finalizado' | 'cancelado';
   proposals: QuoteProposal[];
   origin?: 'geral' | 'direcionado' | 'proprio_consumidor' | 'recebido_parceiro';
 }
 
 export interface QuoteProposal {
   id: string;
-  quoteRequestId: string;
+  quoteRequestId?: string;
   businessId: string;
   businessName: string;
   businessRating: number;
@@ -137,12 +140,15 @@ export interface Review {
   id: string;
   businessId: string;
   userName: string;
+  authorName?: string;
   rating: number; // 1 to 5
   comment: string;
   createdAt: string;
   verifiedService: boolean;
+  verifiedCustomer?: boolean;
   reported: boolean;
   isDemo: boolean;
+  userId?: string;
 }
 
 export interface ChatMessage {

@@ -1,9 +1,10 @@
 import React from 'react';
-import { useApp } from '../context/AppContext';
+import { useUI, useData } from '../context/AppContext';
 import { Home, Search, Tag, FileText, Plus } from 'lucide-react';
 
 export const BottomNav: React.FC = () => {
-  const { activeTab, setActiveTab, setIsQuoteModalOpen, quoteRequests } = useApp();
+  const { activeTab, setActiveTab, setIsQuoteModalOpen } = useUI();
+  const { quoteRequests } = useData();
 
   const openQuotesCount = quoteRequests.filter((q) => (q.proposals || []).length > 0).length;
 

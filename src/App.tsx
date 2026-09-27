@@ -13,8 +13,8 @@ import { SearchView } from './components/SearchView';
 import { OffersView } from './components/OffersView';
 import { QuotesView } from './components/QuotesView';
 import { FavoritesView } from './components/FavoritesView';
-import { BusinessPortalView } from './components/BusinessPortalView';
-import { AdminPortalView } from './components/AdminPortalView';
+const BusinessPortalView = React.lazy(() => import('./components/BusinessPortalView').then((m) => ({ default: m.BusinessPortalView })));
+const AdminPortalView = React.lazy(() => import('./components/AdminPortalView').then((m) => ({ default: m.AdminPortalView })));
 import { LocationSelectorModal } from './components/LocationSelectorModal';
 import { QuoteRequestModal } from './components/QuoteRequestModal';
 import { CompareQuotesModal } from './components/CompareQuotesModal';
@@ -85,7 +85,16 @@ const MainContent: React.FC = () => {
                   fallbackTitle="Erro no Portal da Empresa"
                   onReset={() => window.location.reload()}
                 >
-                  <BusinessPortalView />
+                  <React.Suspense
+                    fallback={
+                      <div className="flex flex-col items-center justify-center min-h-[300px] p-8 text-center">
+                        <div className="w-10 h-10 border-3 border-emerald-600 border-t-transparent rounded-full animate-spin mb-4" />
+                        <p className="text-sm font-medium text-slate-500">Carregando Portal da Empresa...</p>
+                      </div>
+                    }
+                  >
+                    <BusinessPortalView />
+                  </React.Suspense>
                 </ErrorBoundary>
               )}
               {activeTab === 'admin_portal' && (
@@ -94,7 +103,16 @@ const MainContent: React.FC = () => {
                     fallbackTitle="Erro no Painel Administrativo"
                     onReset={() => window.location.reload()}
                   >
-                    <AdminPortalView />
+                    <React.Suspense
+                      fallback={
+                        <div className="flex flex-col items-center justify-center min-h-[300px] p-8 text-center">
+                          <div className="w-10 h-10 border-3 border-emerald-600 border-t-transparent rounded-full animate-spin mb-4" />
+                          <p className="text-sm font-medium text-slate-500">Carregando Painel Administrativo...</p>
+                        </div>
+                      }
+                    >
+                      <AdminPortalView />
+                    </React.Suspense>
                   </ErrorBoundary>
                 ) : (
                   <HomeView />

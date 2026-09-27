@@ -1,6 +1,6 @@
 import React, { useState } from 'react';
 import { useApp } from '../context/AppContext';
-import { authService, ADMIN_EMAILS } from '../services/authService';
+import { authService } from '../services/authService';
 import { isSupabaseConfigured } from '../lib/supabase';
 import { maskPhoneBR, formatWhatsAppNumber } from '../utils/whatsappUtils';
 import {

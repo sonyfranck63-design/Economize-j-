@@ -1,4 +1,4 @@
-import React, { createContext, useContext, useState, useEffect } from 'react';
+import React, { createContext, useContext, useState, useEffect, useMemo, useCallback } from 'react';
 import {
   Business,
   Offer,
@@ -39,7 +39,11 @@ import {
 
 export type PublicPageRoute = 'app' | 'privacy' | 'terms' | 'delete_account';
 
-interface AppContextType {
+/* =========================================================================
+   1. UI CONTEXT (Navegação, Rotas, Modais, Busca, Filtros e Localização)
+   ========================================================================= */
+
+export interface UIContextType {
   activeTab: 'home' | 'search' | 'offers' | 'quotes' | 'favorites' | 'business_portal' | 'admin_portal';
   setActiveTab: (tab: 'home' | 'search' | 'offers' | 'quotes' | 'favorites' | 'business_portal' | 'admin_portal') => void;
   publicRoute: PublicPageRoute;
@@ -49,71 +53,9 @@ interface AppContextType {
   searchQuery: string;
   setSearchQuery: (query: string) => void;
   currentLocation: UserLocation;
-  setCurrentLocation: (loc: UserLocation) => void;
+  setCurrentLocation: React.Dispatch<React.SetStateAction<UserLocation>>;
   isLocating: boolean;
   detectUserLocation: () => void;
-  
-  // Real Auth State
-  currentUser: AuthUserProfile | null;
-  setCurrentUser: (user: AuthUserProfile | null) => void;
-  isAuthModalOpen: boolean;
-  setIsAuthModalOpen: (open: boolean) => void;
-  logout: () => Promise<void>;
-  
-  // Data
-  businesses: Business[];
-  offers: Offer[];
-  quoteRequests: QuoteRequest[];
-  reviews: Review[];
-  priceAlerts: PriceAlert[];
-  notifications: NotificationItem[];
-  chatMessages: ChatMessage[];
-  monetization: AdminMonetizationSettings;
-  favorites: { businessIds: string[]; offerIds: string[] };
-  userRole: UserRole;
-  setUserRole: (role: UserRole) => void;
-  isLoadingData: boolean;
-  isDatabaseConnected: boolean;
-  
-  // Actions
-  toggleFavoriteBusiness: (id: string) => Promise<void>;
-  toggleFavoriteOffer: (id: string) => Promise<void>;
-  createQuoteRequest: (data: Omit<QuoteRequest, 'id' | 'createdAt' | 'status' | 'proposals'>) => Promise<string>;
-  submitProposal: (quoteRequestId: string, proposal: Omit<QuoteProposal, 'id' | 'createdAt' | 'status'>) => Promise<void>;
-  acceptProposal: (quoteRequestId: string, proposalId: string) => Promise<void>;
-  cancelQuoteRequest: (quoteRequestId: string) => Promise<void>;
-  deleteQuoteRequest: (quoteRequestId: string) => Promise<void>;
-  createPriceAlert: (data: Omit<PriceAlert, 'id' | 'createdAt' | 'active' | 'notified'>) => Promise<void>;
-  removePriceAlert: (id: string) => Promise<void>;
-  addReview: (businessId: string, rating: number, comment: string) => Promise<void>;
-  reportReview: (reviewId: string) => Promise<void>;
-  sendChatMessage: (businessId: string, text: string, quoteRequestId?: string) => void;
-  createOffer: (offerData: Omit<Offer, 'id' | 'viewsCount' | 'claimsCount'>) => Promise<void>;
-  addOffer: (offerData: Omit<Offer, 'id' | 'viewsCount' | 'claimsCount'>) => Promise<void>;
-  createBusiness: (businessData: Omit<Business, 'id' | 'leadsReceivedCount'>) => Promise<void>;
-  updateMonetization: (settings: AdminMonetizationSettings) => Promise<void>;
-  toggleBusinessActive: (businessId: string) => void;
-  toggleBusinessVerified: (businessId: string) => void;
-  toggleBusinessFeatured: (businessId: string, days?: number, notes?: string) => Promise<void>;
-  removeOffer: (offerId: string) => void;
-  deleteBusiness: (businessId: string) => void;
-  upgradeBusinessPlan: (
-    businessId: string,
-    planTier: 'free' | 'pro' | 'premium',
-    immediateActive?: boolean,
-    purchaseToken?: string,
-    orderId?: string
-  ) => Promise<void>;
-  adminActivatePlan: (businessId: string, planTier: 'free' | 'pro' | 'premium', reason: string, durationDays?: number) => Promise<void>;
-  submitContentReport: (params: { contentType: 'review' | 'business' | 'offer' | 'quote' | 'user'; contentId: string; reason: string; details?: string }) => Promise<any>;
-  blockUser: (blockedUserId: string) => Promise<any>;
-  addLeadCredits: (businessId: string, credits: number, notes?: string) => Promise<any>;
-  markNotificationRead: (id: string) => void;
-  refreshNotifications: () => Promise<void>;
-  deleteAccountAndData: () => void;
-  refreshQuoteRequests: () => Promise<void>;
-  refreshBusinesses: () => Promise<void>;
-  refreshOffers: () => Promise<void>;
 
   // Modals & Navigation Helpers
   selectedBusinessId: string | null;
@@ -121,9 +63,9 @@ interface AppContextType {
   isQuoteModalOpen: boolean;
   setIsQuoteModalOpen: (open: boolean) => void;
   quoteCategoryPreset: string | null;
+  setQuoteCategoryPreset: (cat: string | null) => void;
   quoteTargetBusinessId: string | null;
   setQuoteTargetBusinessId: (id: string | null) => void;
-  setQuoteCategoryPreset: (cat: string | null) => void;
   comparingQuoteRequestId: string | null;
   setComparingQuoteRequestId: (id: string | null) => void;
   isPriceAlertModalOpen: boolean;
@@ -138,16 +80,7 @@ interface AppContextType {
   setIsLocationSelectorOpen: (open: boolean) => void;
 }
 
-const AppContext = createContext<AppContextType | undefined>(undefined);
-
-export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
-  const [activeTab, setActiveTab] = useState<'home' | 'search' | 'offers' | 'quotes' | 'favorites' | 'business_portal' | 'admin_portal'>('home');
-  const [publicRoute, setPublicRoute] = useState<PublicPageRoute>('app');
-  const [selectedCategory, setSelectedCategory] = useState<string | null>(null);
-  const [searchQuery, setSearchQuery] = useState('');
-  const [isLocating, setIsLocating] = useState(false);
-  const [isLoadingData, setIsLoadingData] = useState(false);
-  const [isDatabaseConnected, setIsDatabaseConnected] = useState(isSupabaseConfigured);
+const UIContext = createContext<UIContextType | undefined>(undefined);
 
 const STORAGE_KEY_LOCATION = 'economizaja_user_location';
 const LOCATION_MAX_AGE_MS = 24 * 60 * 60 * 1000; // 24 horas
@@ -184,7 +117,25 @@ const getInitialUserLocation = (): UserLocation => {
   };
 };
 
+export const UIProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
+  const [activeTab, setActiveTabState] = useState<'home' | 'search' | 'offers' | 'quotes' | 'favorites' | 'business_portal' | 'admin_portal'>('home');
+  const [publicRoute, setPublicRouteState] = useState<PublicPageRoute>('app');
+  const [selectedCategory, setSelectedCategoryState] = useState<string | null>(null);
+  const [searchQuery, setSearchQueryState] = useState('');
+  const [isLocating, setIsLocating] = useState(false);
   const [currentLocation, setCurrentLocation] = useState<UserLocation>(getInitialUserLocation);
+
+  // Modals state
+  const [selectedBusinessId, setSelectedBusinessIdState] = useState<string | null>(null);
+  const [isQuoteModalOpen, setIsQuoteModalOpenState] = useState(false);
+  const [quoteCategoryPreset, setQuoteCategoryPresetState] = useState<string | null>(null);
+  const [quoteTargetBusinessId, setQuoteTargetBusinessIdState] = useState<string | null>(null);
+  const [comparingQuoteRequestId, setComparingQuoteRequestIdState] = useState<string | null>(null);
+  const [isPriceAlertModalOpen, setIsPriceAlertModalOpenState] = useState(false);
+  const [activeChatBusinessId, setActiveChatBusinessIdState] = useState<string | null>(null);
+  const [isPlayStoreModalOpen, setIsPlayStoreModalOpenState] = useState(false);
+  const [isLegalModalOpen, setIsLegalModalOpenState] = useState(false);
+  const [isLocationSelectorOpen, setIsLocationSelectorOpenState] = useState(false);
 
   // Sincroniza currentLocation com o localStorage com timestamp sempre que for atualizado
   useEffect(() => {
@@ -201,54 +152,6 @@ const getInitialUserLocation = (): UserLocation => {
     }
   }, [currentLocation]);
 
-  // Auth
-  const [currentUser, setCurrentUser] = useState<AuthUserProfile | null>(() => authService.getInitialUser());
-  const [isAuthModalOpen, setIsAuthModalOpen] = useState(false);
-  const [userRole, setUserRole] = useState<UserRole>(() => {
-    const initial = authService.getInitialUser();
-    return initial?.role || 'customer';
-  });
-
-  // Sync userRole with currentUser
-  useEffect(() => {
-    if (currentUser) {
-      setUserRole(currentUser.role);
-    } else {
-      setUserRole('customer');
-    }
-  }, [currentUser]);
-
-  // Persistence State
-  // PRODUÇÃO: Inicia sempre vazio — dados reais são carregados do Supabase
-  // Se Supabase não configurado, permanece vazio com isDatabaseConnected=false
-  const [businesses, setBusinesses] = useState<Business[]>([]);
-  const [offers, setOffers] = useState<Offer[]>([]);
-  const [quoteRequests, setQuoteRequests] = useState<QuoteRequest[]>([]);
-  const [reviews, setReviews] = useState<Review[]>([]);
-
-  const [priceAlerts, setPriceAlerts] = useState<PriceAlert[]>([]);
-  const [favorites, setFavorites] = useState<{ businessIds: string[]; offerIds: string[] }>({
-    businessIds: [],
-    offerIds: [],
-  });
-
-  const [monetization, setMonetization] = useState<AdminMonetizationSettings>(INITIAL_MONETIZATION);
-
-  const [notifications, setNotifications] = useState<NotificationItem[]>([]);
-  const [chatMessages, setChatMessages] = useState<ChatMessage[]>([]);
-
-  // Modals state
-  const [selectedBusinessId, setSelectedBusinessId] = useState<string | null>(null);
-  const [isQuoteModalOpen, setIsQuoteModalOpen] = useState(false);
-  const [quoteCategoryPreset, setQuoteCategoryPreset] = useState<string | null>(null);
-  const [quoteTargetBusinessId, setQuoteTargetBusinessId] = useState<string | null>(null);
-  const [comparingQuoteRequestId, setComparingQuoteRequestId] = useState<string | null>(null);
-  const [isPriceAlertModalOpen, setIsPriceAlertModalOpen] = useState(false);
-  const [activeChatBusinessId, setActiveChatBusinessId] = useState<string | null>(null);
-  const [isPlayStoreModalOpen, setIsPlayStoreModalOpen] = useState(false);
-  const [isLegalModalOpen, setIsLegalModalOpen] = useState(false);
-  const [isLocationSelectorOpen, setIsLocationSelectorOpen] = useState(false);
-
   // Check URL pathname or hash for Google Play and LGPD compliance routes (/privacy, /terms, /delete-account)
   useEffect(() => {
     const handleUrlRoute = () => {
@@ -259,20 +162,20 @@ const getInitialUserLocation = (): UserLocation => {
         path.includes('privacy') || hash.includes('privacy') ||
         path.includes('privacidade') || hash.includes('privacidade')
       ) {
-        setPublicRoute('privacy');
+        setPublicRouteState('privacy');
       } else if (
         path.includes('terms') || hash.includes('terms') ||
         path.includes('termos') || hash.includes('termos')
       ) {
-        setPublicRoute('terms');
+        setPublicRouteState('terms');
       } else if (
         path.includes('delete-account') || hash.includes('delete-account') ||
         path.includes('excluir-conta') || hash.includes('excluir-conta') ||
         path.includes('excluir_conta') || hash.includes('excluir_conta')
       ) {
-        setPublicRoute('delete_account');
+        setPublicRouteState('delete_account');
       } else {
-        setPublicRoute('app');
+        setPublicRouteState('app');
       }
     };
 
@@ -285,13 +188,367 @@ const getInitialUserLocation = (): UserLocation => {
     };
   }, []);
 
+  const detectUserLocation = useCallback(() => {
+    if (!navigator.geolocation) {
+      alert('Geolocalização não é suportada neste navegador.');
+      return;
+    }
+
+    setIsLocating(true);
+    navigator.geolocation.getCurrentPosition(
+      async (pos) => {
+        try {
+          const lat = pos.coords.latitude;
+          const lon = pos.coords.longitude;
+          const res = await fetch(`https://nominatim.openstreetmap.org/reverse?format=json&lat=${lat}&lon=${lon}`);
+          if (!res.ok) throw new Error('Falha na geocodificação');
+          const data = await res.json();
+
+          let cityName = data.address?.city || data.address?.town || data.address?.village || data.address?.municipality || '';
+          let stateName = data.address?.state || '';
+          let suburb = data.address?.suburb || data.address?.neighbourhood || '';
+
+          setCurrentLocation({
+            city: cityName,
+            state: stateName,
+            neighborhood: suburb,
+            latitude: lat,
+            longitude: lon,
+          });
+        } catch {
+          // Fallback if API fails
+          setCurrentLocation({
+            city: '',
+            state: '',
+            neighborhood: '',
+            latitude: pos.coords.latitude,
+            longitude: pos.coords.longitude,
+          });
+        } finally {
+          setIsLocating(false);
+        }
+      },
+      () => {
+        setIsLocating(false);
+        setCurrentLocation({
+          city: '',
+          state: '',
+          neighborhood: '',
+        });
+        alert('Não foi possível obter sua localização. Verifique as permissões.');
+      },
+      { timeout: 8000 }
+    );
+  }, []);
+
+  const setActiveTab = useCallback((tab: 'home' | 'search' | 'offers' | 'quotes' | 'favorites' | 'business_portal' | 'admin_portal') => {
+    setActiveTabState(tab);
+  }, []);
+
+  const setPublicRoute = useCallback((route: PublicPageRoute) => {
+    setPublicRouteState(route);
+  }, []);
+
+  const setSelectedCategory = useCallback((cat: string | null) => {
+    setSelectedCategoryState(cat);
+  }, []);
+
+  const setSearchQuery = useCallback((query: string) => {
+    setSearchQueryState(query);
+  }, []);
+
+  const setSelectedBusinessId = useCallback((id: string | null) => {
+    setSelectedBusinessIdState(id);
+  }, []);
+
+  const setIsQuoteModalOpen = useCallback((open: boolean) => {
+    setIsQuoteModalOpenState(open);
+  }, []);
+
+  const setQuoteCategoryPreset = useCallback((cat: string | null) => {
+    setQuoteCategoryPresetState(cat);
+  }, []);
+
+  const setQuoteTargetBusinessId = useCallback((id: string | null) => {
+    setQuoteTargetBusinessIdState(id);
+  }, []);
+
+  const setComparingQuoteRequestId = useCallback((id: string | null) => {
+    setComparingQuoteRequestIdState(id);
+  }, []);
+
+  const setIsPriceAlertModalOpen = useCallback((open: boolean) => {
+    setIsPriceAlertModalOpenState(open);
+  }, []);
+
+  const setActiveChatBusinessId = useCallback((id: string | null) => {
+    setActiveChatBusinessIdState(id);
+  }, []);
+
+  const setIsPlayStoreModalOpen = useCallback((open: boolean) => {
+    setIsPlayStoreModalOpenState(open);
+  }, []);
+
+  const setIsLegalModalOpen = useCallback((open: boolean) => {
+    setIsLegalModalOpenState(open);
+  }, []);
+
+  const setIsLocationSelectorOpen = useCallback((open: boolean) => {
+    setIsLocationSelectorOpenState(open);
+  }, []);
+
+  const value = useMemo<UIContextType>(() => ({
+    activeTab,
+    setActiveTab,
+    publicRoute,
+    setPublicRoute,
+    selectedCategory,
+    setSelectedCategory,
+    searchQuery,
+    setSearchQuery,
+    currentLocation,
+    setCurrentLocation,
+    isLocating,
+    detectUserLocation,
+
+    selectedBusinessId,
+    setSelectedBusinessId,
+    isQuoteModalOpen,
+    setIsQuoteModalOpen,
+    quoteCategoryPreset,
+    setQuoteCategoryPreset,
+    quoteTargetBusinessId,
+    setQuoteTargetBusinessId,
+    comparingQuoteRequestId,
+    setComparingQuoteRequestId,
+    isPriceAlertModalOpen,
+    setIsPriceAlertModalOpen,
+    activeChatBusinessId,
+    setActiveChatBusinessId,
+    isPlayStoreModalOpen,
+    setIsPlayStoreModalOpen,
+    isLegalModalOpen,
+    setIsLegalModalOpen,
+    isLocationSelectorOpen,
+    setIsLocationSelectorOpen,
+  }), [
+    activeTab,
+    setActiveTab,
+    publicRoute,
+    setPublicRoute,
+    selectedCategory,
+    setSelectedCategory,
+    searchQuery,
+    setSearchQuery,
+    currentLocation,
+    isLocating,
+    detectUserLocation,
+    selectedBusinessId,
+    setSelectedBusinessId,
+    isQuoteModalOpen,
+    setIsQuoteModalOpen,
+    quoteCategoryPreset,
+    setQuoteCategoryPreset,
+    quoteTargetBusinessId,
+    setQuoteTargetBusinessId,
+    comparingQuoteRequestId,
+    setComparingQuoteRequestId,
+    isPriceAlertModalOpen,
+    setIsPriceAlertModalOpen,
+    activeChatBusinessId,
+    setActiveChatBusinessId,
+    isPlayStoreModalOpen,
+    setIsPlayStoreModalOpen,
+    isLegalModalOpen,
+    setIsLegalModalOpen,
+    isLocationSelectorOpen,
+    setIsLocationSelectorOpen,
+  ]);
+
+  return <UIContext.Provider value={value}>{children}</UIContext.Provider>;
+};
+
+export const useUI = () => {
+  const context = useContext(UIContext);
+  if (!context) {
+    throw new Error('useUI must be used within a UIProvider');
+  }
+  return context;
+};
+
+/* =========================================================================
+   2. AUTH CONTEXT (Usuário, Perfil, Papel e Autenticação)
+   ========================================================================= */
+
+export interface AuthContextType {
+  currentUser: AuthUserProfile | null;
+  setCurrentUser: React.Dispatch<React.SetStateAction<AuthUserProfile | null>>;
+  userRole: UserRole;
+  setUserRole: (role: UserRole) => void;
+  isAuthModalOpen: boolean;
+  setIsAuthModalOpen: (open: boolean) => void;
+  logout: () => Promise<void>;
+  deleteAccountAndData: () => void;
+}
+
+const AuthContext = createContext<AuthContextType | undefined>(undefined);
+
+export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
+  const [currentUser, setCurrentUser] = useState<AuthUserProfile | null>(() => authService.getInitialUser());
+  const [isAuthModalOpen, setIsAuthModalOpenState] = useState(false);
+  const [userRole, setUserRoleState] = useState<UserRole>(() => {
+    const initial = authService.getInitialUser();
+    return initial?.role || 'customer';
+  });
+
+  const { setActiveTab } = useUI();
+
+  // Sincroniza userRole com currentUser
+  useEffect(() => {
+    if (currentUser) {
+      setUserRoleState(currentUser.role);
+    } else {
+      setUserRoleState('customer');
+    }
+  }, [currentUser]);
+
+  const setUserRole = useCallback((role: UserRole) => {
+    setUserRoleState(role);
+  }, []);
+
+  const setIsAuthModalOpen = useCallback((open: boolean) => {
+    setIsAuthModalOpenState(open);
+  }, []);
+
+  const logout = useCallback(async () => {
+    try {
+      await authService.signOut();
+    } catch {
+      // Ignora erro
+    }
+    setCurrentUser(null);
+    setUserRoleState('customer');
+    setActiveTab('home');
+  }, [setActiveTab]);
+
+  const deleteAccountAndData = useCallback(() => {
+    setCurrentUser(null);
+    setUserRoleState('customer');
+    setActiveTab('home');
+  }, [setActiveTab]);
+
+  const value = useMemo<AuthContextType>(() => ({
+    currentUser,
+    setCurrentUser,
+    userRole,
+    setUserRole,
+    isAuthModalOpen,
+    setIsAuthModalOpen,
+    logout,
+    deleteAccountAndData,
+  }), [
+    currentUser,
+    userRole,
+    setUserRole,
+    isAuthModalOpen,
+    setIsAuthModalOpen,
+    logout,
+    deleteAccountAndData,
+  ]);
+
+  return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>;
+};
+
+export const useAuth = () => {
+  const context = useContext(AuthContext);
+  if (!context) {
+    throw new Error('useAuth must be used within an AuthProvider');
+  }
+  return context;
+};
+
+/* =========================================================================
+   3. DATA CONTEXT (Businesses, Offers, Quotes, Reviews, Notifications, etc.)
+   ========================================================================= */
+
+export interface DataContextType {
+  businesses: Business[];
+  offers: Offer[];
+  quoteRequests: QuoteRequest[];
+  reviews: Review[];
+  priceAlerts: PriceAlert[];
+  notifications: NotificationItem[];
+  chatMessages: ChatMessage[];
+  monetization: AdminMonetizationSettings;
+  favorites: { businessIds: string[]; offerIds: string[] };
+  isLoadingData: boolean;
+  isDatabaseConnected: boolean;
+
+  // Actions
+  toggleFavoriteBusiness: (id: string) => Promise<void>;
+  toggleFavoriteOffer: (id: string) => Promise<void>;
+  createQuoteRequest: (data: Omit<QuoteRequest, 'id' | 'createdAt' | 'status' | 'proposals'>) => Promise<string>;
+  submitProposal: (quoteRequestId: string, proposal: Omit<QuoteProposal, 'id' | 'createdAt' | 'status'>) => Promise<void>;
+  acceptProposal: (quoteRequestId: string, proposalId: string) => Promise<void>;
+  cancelQuoteRequest: (quoteRequestId: string) => Promise<void>;
+  deleteQuoteRequest: (quoteRequestId: string) => Promise<void>;
+  createPriceAlert: (data: Omit<PriceAlert, 'id' | 'createdAt' | 'active' | 'notified'>) => Promise<void>;
+  removePriceAlert: (id: string) => Promise<void>;
+  addReview: (businessId: string, ratingOrObj: number | any, commentArg?: string) => Promise<void>;
+  reportReview: (reviewId: string) => Promise<void>;
+  sendChatMessage: (businessId: string, text: string, quoteRequestId?: string) => void;
+  createOffer: (offerData: Omit<Offer, 'id' | 'viewsCount' | 'claimsCount'>) => Promise<void>;
+  addOffer: (offerData: Omit<Offer, 'id' | 'viewsCount' | 'claimsCount'>) => Promise<void>;
+  createBusiness: (businessData: Omit<Business, 'id' | 'leadsReceivedCount'>) => Promise<void>;
+  updateMonetization: (settings: AdminMonetizationSettings) => Promise<void>;
+  toggleBusinessActive: (businessId: string) => void;
+  toggleBusinessVerified: (businessId: string) => void;
+  toggleBusinessFeatured: (businessId: string, days?: number, notes?: string) => Promise<void>;
+  removeOffer: (offerId: string) => void;
+  deleteBusiness: (businessId: string) => void;
+  upgradeBusinessPlan: (
+    businessId: string,
+    planTier: 'free' | 'pro' | 'premium',
+    immediateActive?: boolean,
+    purchaseToken?: string,
+    orderId?: string
+  ) => Promise<void>;
+  adminActivatePlan: (businessId: string, planTier: 'free' | 'pro' | 'premium', reason: string, durationDays?: number) => Promise<void>;
+  submitContentReport: (params: { contentType: 'review' | 'business' | 'offer' | 'quote' | 'user'; contentId: string; reason: string; details?: string }) => Promise<any>;
+  blockUser: (blockedUserId: string) => Promise<any>;
+  addLeadCredits: (businessId: string, credits: number, notes?: string) => Promise<any>;
+  markNotificationRead: (id: string) => void;
+  refreshNotifications: () => Promise<void>;
+  refreshQuoteRequests: () => Promise<void>;
+  refreshBusinesses: () => Promise<void>;
+  refreshOffers: () => Promise<void>;
+}
+
+const DataContext = createContext<DataContextType | undefined>(undefined);
+
+export const DataProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
+  const { currentUser, setCurrentUser, setUserRole, setIsAuthModalOpen } = useAuth();
+
+  const [isLoadingData, setIsLoadingData] = useState(false);
+  const [isDatabaseConnected, setIsDatabaseConnected] = useState(isSupabaseConfigured);
+
+  const [businesses, setBusinesses] = useState<Business[]>([]);
+  const [offers, setOffers] = useState<Offer[]>([]);
+  const [quoteRequests, setQuoteRequests] = useState<QuoteRequest[]>([]);
+  const [reviews, setReviews] = useState<Review[]>([]);
+  const [priceAlerts, setPriceAlerts] = useState<PriceAlert[]>([]);
+  const [favorites, setFavorites] = useState<{ businessIds: string[]; offerIds: string[] }>({
+    businessIds: [],
+    offerIds: [],
+  });
+  const [monetization, setMonetization] = useState<AdminMonetizationSettings>(INITIAL_MONETIZATION);
+  const [notifications, setNotifications] = useState<NotificationItem[]>([]);
+  const [chatMessages, setChatMessages] = useState<ChatMessage[]>([]);
+
   // Carrega dados reais do Supabase ao inicializar
-  // REGRA: Quando Supabase está configurado, NUNCA usa dados de demonstração como fallback.
-  // Lista vazia é preferível a dados falsos para clientes reais.
   useEffect(() => {
     async function loadBackendData() {
       if (!isSupabaseConfigured) {
-        // Supabase não configurado: mantém listas vazias, exibe aviso de configuração
         setIsDatabaseConnected(false);
         setIsLoadingData(false);
         return;
@@ -307,7 +564,6 @@ const getInitialUserLocation = (): UserLocation => {
           authService.getCurrentProfile(),
         ]);
 
-        // PRODUÇÃO: Usa apenas dados reais do Supabase (pode ser lista vazia)
         setBusinesses(bizList || []);
         setOffers(offList || []);
 
@@ -322,24 +578,20 @@ const getInitialUserLocation = (): UserLocation => {
           setCurrentUser(userProfile);
           setUserRole(userProfile.role);
 
-          // Carrega favoritos persistidos do usuário autenticado no Supabase
           const userFavs = await dataService.getUserFavorites(userProfile.id);
           if (userFavs) {
             setFavorites(userFavs);
           }
 
-          // Carrega notificações persistidas no Supabase
           const userNotifs = await dataService.getNotifications(userProfile.id);
           if (userNotifs && userNotifs.length > 0) {
             setNotifications(userNotifs);
           }
 
-          // Identifica empresas pertencentes ao usuário para garantir orçamentos direcionados
           const myBizIds = (bizList || [])
             .filter((b) => (b.ownerId || '').toLowerCase() === (userProfile.id || '').toLowerCase())
             .map((b) => b.id);
 
-          // Sincroniza todas as cotações: direcionadas às empresas do usuário + marketplace + cotações pessoais
           const allQuotes = await dataService.syncAllQuoteRequests(userProfile.id, myBizIds);
           setQuoteRequests(allQuotes || []);
         } else {
@@ -349,8 +601,6 @@ const getInitialUserLocation = (): UserLocation => {
         setIsDatabaseConnected(true);
       } catch (err) {
         console.warn('Falha ao sincronizar com backend Supabase:', err);
-        // Em caso de falha de rede, mantém listas vazias e marca banco como desconectado
-        // NÃO injeta dados fake como fallback
         setIsDatabaseConnected(false);
         setBusinesses([]);
         setOffers([]);
@@ -361,22 +611,27 @@ const getInitialUserLocation = (): UserLocation => {
     }
 
     loadBackendData();
-  }, []);
+  }, [setCurrentUser, setUserRole]);
 
-  // Sincroniza favoritos, cotações e notificações do usuário autenticado
+  // Sincroniza favoritos, cotações e notificações quando o usuário autenticado mudar
   useEffect(() => {
     if (!currentUser?.id || !isSupabaseConfigured) {
+      if (!currentUser) {
+        setFavorites({ businessIds: [], offerIds: [] });
+        setNotifications([]);
+        if (!isSupabaseConfigured) {
+          setQuoteRequests(getLocalQuoteRequests());
+        }
+      }
       return;
     }
 
-    // Carrega favoritos do Supabase
     dataService.getUserFavorites(currentUser.id).then((userFavs) => {
       if (userFavs) {
         setFavorites(userFavs);
       }
     });
 
-    // Carrega notificações persistidas do usuário
     dataService.getNotifications(currentUser.id).then((userNotifs) => {
       if (userNotifs) {
         setNotifications(userNotifs);
@@ -387,7 +642,6 @@ const getInitialUserLocation = (): UserLocation => {
       .filter((b) => (b.ownerId || '').toLowerCase() === (currentUser.id || '').toLowerCase())
       .map((b) => b.id);
 
-    // Sincroniza unificadamente: orçamentos direcionados às empresas do usuário, oportunidades da região e cotações do cliente
     dataService.syncAllQuoteRequests(currentUser.id, myBizIds).then((allQuotes) => {
       setQuoteRequests(allQuotes || []);
     });
@@ -425,73 +679,7 @@ const getInitialUserLocation = (): UserLocation => {
     };
   }, [currentUser?.id, currentUser?.role, businesses.length]);
 
-  // Geolocation trigger
-  const detectUserLocation = () => {
-    if (!navigator.geolocation) {
-      alert('Geolocalização não é suportada neste navegador.');
-      return;
-    }
-
-    setIsLocating(true);
-    navigator.geolocation.getCurrentPosition(
-      async (pos) => {
-        try {
-          const lat = pos.coords.latitude;
-          const lon = pos.coords.longitude;
-          const res = await fetch(`https://nominatim.openstreetmap.org/reverse?format=json&lat=${lat}&lon=${lon}`);
-          if (!res.ok) throw new Error('Falha na geocodificação');
-          const data = await res.json();
-          
-          let cityName = data.address?.city || data.address?.town || data.address?.village || data.address?.municipality || '';
-          let stateName = data.address?.state || '';
-          let suburb = data.address?.suburb || data.address?.neighbourhood || '';
-
-          setCurrentLocation({
-            city: cityName,
-            state: stateName,
-            neighborhood: suburb,
-            latitude: lat,
-            longitude: lon,
-          });
-
-          setNotifications((prev) => [
-            {
-              id: `loc-${Date.now()}`,
-              title: '📍 Localização Atualizada',
-              message: `Localização definida para ${cityName}${stateName ? ` - ${stateName}` : ''}. Buscando ofertas próximas.`,
-              timestamp: 'Agora',
-              type: 'system',
-              read: false,
-            },
-            ...prev,
-          ]);
-        } catch (e) {
-          // Fallback if API fails
-          setCurrentLocation({
-            city: '',
-            state: '',
-            neighborhood: '',
-            latitude: pos.coords.latitude,
-            longitude: pos.coords.longitude,
-          });
-        } finally {
-          setIsLocating(false);
-        }
-      },
-      () => {
-        setIsLocating(false);
-        setCurrentLocation({
-          city: '',
-          state: '',
-          neighborhood: '',
-        });
-        alert('Não foi possível obter sua localização. Verifique as permissões.');
-      },
-      { timeout: 8000 }
-    );
-  };
-
-  const toggleFavoriteBusiness = async (id: string) => {
+  const toggleFavoriteBusiness = useCallback(async (id: string) => {
     if (!currentUser?.id) {
       setIsAuthModalOpen(true);
       return;
@@ -527,9 +715,9 @@ const getInitialUserLocation = (): UserLocation => {
           : [...prev.businessIds, id],
       }));
     }
-  };
+  }, [currentUser?.id, favorites.businessIds, setIsAuthModalOpen]);
 
-  const toggleFavoriteOffer = async (id: string) => {
+  const toggleFavoriteOffer = useCallback(async (id: string) => {
     if (!currentUser?.id) {
       setIsAuthModalOpen(true);
       return;
@@ -565,9 +753,44 @@ const getInitialUserLocation = (): UserLocation => {
           : [...prev.offerIds, id],
       }));
     }
-  };
+  }, [currentUser?.id, favorites.offerIds, setIsAuthModalOpen]);
 
-  const createQuoteRequest = async (
+  const refreshQuoteRequests = useCallback(async () => {
+    if (!isSupabaseConfigured) return;
+    const myBizIds = currentUser
+      ? businesses
+          .filter((b) => (b.ownerId || '').toLowerCase() === (currentUser.id || '').toLowerCase())
+          .map((b) => b.id)
+      : [];
+    const allQuotes = await dataService.syncAllQuoteRequests(currentUser?.id, myBizIds);
+    setQuoteRequests(allQuotes);
+  }, [businesses, currentUser]);
+
+  const refreshBusinesses = useCallback(async () => {
+    if (!isSupabaseConfigured) return;
+    try {
+      const bizList = await dataService.getBusinesses(undefined, undefined, true);
+      if (bizList && bizList.length > 0) {
+        setBusinesses(bizList);
+      }
+    } catch (err) {
+      console.warn('Erro ao sincronizar lista de empresas:', err);
+    }
+  }, []);
+
+  const refreshOffers = useCallback(async () => {
+    if (!isSupabaseConfigured) return;
+    try {
+      const offList = await dataService.getOffers();
+      if (offList) {
+        setOffers(offList);
+      }
+    } catch (err) {
+      console.warn('Erro ao atualizar ofertas:', err);
+    }
+  }, []);
+
+  const createQuoteRequest = useCallback(async (
     data: Omit<QuoteRequest, 'id' | 'createdAt' | 'status' | 'proposals'>
   ): Promise<string> => {
     if (!currentUser?.id) {
@@ -610,16 +833,15 @@ const getInitialUserLocation = (): UserLocation => {
 
     hapticNotificationSuccess();
     return assignedId;
-  };
+  }, [currentUser?.id]);
 
-  const submitProposal = async (
+  const submitProposal = useCallback(async (
     quoteRequestId: string,
     proposalData: Omit<QuoteProposal, 'id' | 'createdAt' | 'status'>
   ) => {
     let realProposalId = `prop-${Date.now()}`;
 
     if (isSupabaseConfigured) {
-      // 1. Invoca a RPC atômica submit_quote_proposal e obtém o UUID confirmado pelo banco
       realProposalId = await dataService.submitProposal({
         quoteRequestId,
         businessId: proposalData.businessId,
@@ -627,10 +849,9 @@ const getInitialUserLocation = (): UserLocation => {
         deadlineText: proposalData.deadlineText,
         description: proposalData.description,
       });
-      // 2. Sincroniza imediatamente com o banco para garantir consistência em todas as visões
       await Promise.all([
         refreshQuoteRequests(),
-        refreshBusinesses()
+        refreshBusinesses(),
       ]);
     } else {
       const newProposal: QuoteProposal = {
@@ -654,7 +875,6 @@ const getInitialUserLocation = (): UserLocation => {
         })
       );
 
-      // Desconta 1 crédito local se empresa for plano gratuito e já passou de 3
       setBusinesses((prev) =>
         prev.map((b) => {
           if (b.id === proposalData.businessId && (b.plan === 'gratis' || b.planTier === 'gratis')) {
@@ -669,13 +889,11 @@ const getInitialUserLocation = (): UserLocation => {
       );
     }
     hapticNotificationSuccess();
-  };
+  }, [refreshBusinesses, refreshQuoteRequests]);
 
-  const acceptProposal = async (quoteRequestId: string, proposalId: string) => {
+  const acceptProposal = useCallback(async (quoteRequestId: string, proposalId: string) => {
     if (isSupabaseConfigured) {
-      // 1. Aguarda a transação atômica no Supabase via RPC accept_quote_proposal
       await dataService.acceptProposal(quoteRequestId, proposalId);
-      // 2. Recarrega as cotações diretamente da fonte de verdade (Supabase)
       await refreshQuoteRequests();
     } else {
       setQuoteRequests((prev) =>
@@ -707,14 +925,15 @@ const getInitialUserLocation = (): UserLocation => {
       },
       ...prev,
     ]);
-  };
+  }, [refreshQuoteRequests]);
 
-  const cancelQuoteRequest = async (quoteRequestId: string) => {
+  const cancelQuoteRequest = useCallback(async (quoteRequestId: string) => {
     hapticNotificationWarning();
-    const previous = [...quoteRequests];
-    setQuoteRequests((prev) =>
-      prev.map((qr) => (qr.id === quoteRequestId ? { ...qr, status: 'cancelado' as const } : qr))
-    );
+    let previous: QuoteRequest[] = [];
+    setQuoteRequests((prev) => {
+      previous = prev;
+      return prev.map((qr) => (qr.id === quoteRequestId ? { ...qr, status: 'cancelado' as const } : qr));
+    });
 
     if (isSupabaseConfigured) {
       try {
@@ -737,20 +956,13 @@ const getInitialUserLocation = (): UserLocation => {
       },
       ...prev,
     ]);
-  };
+  }, []);
 
-  const deleteQuoteRequest = async (quoteRequestId: string) => {
-    // 1. Marca imediatamente a exclusão permanente no armazenamento local
+  const deleteQuoteRequest = useCallback(async (quoteRequestId: string) => {
     markQuoteAsDeletedLocally(quoteRequestId);
 
-    // 2. Remove imediatamente do estado visual
     setQuoteRequests((prev) => prev.filter((qr) => qr.id !== quoteRequestId));
 
-    if (comparingQuoteRequestId === quoteRequestId) {
-      setComparingQuoteRequestId(null);
-    }
-
-    // 3. Persiste no Supabase com RPC e cascatas
     if (isSupabaseConfigured) {
       try {
         await dataService.deleteQuoteRequest(quoteRequestId);
@@ -770,9 +982,9 @@ const getInitialUserLocation = (): UserLocation => {
       },
       ...prev,
     ]);
-  };
+  }, []);
 
-  const createPriceAlert = async (data: Omit<PriceAlert, 'id' | 'createdAt' | 'active' | 'notified'>) => {
+  const createPriceAlert = useCallback(async (data: Omit<PriceAlert, 'id' | 'createdAt' | 'active' | 'notified'>) => {
     const newAlert: PriceAlert = {
       ...data,
       id: `pa-${Date.now()}`,
@@ -790,21 +1002,19 @@ const getInitialUserLocation = (): UserLocation => {
         console.error('Erro ao persistir alerta:', err);
       }
     }
-  };
+  }, [currentUser?.id]);
 
-  const removePriceAlert = async (id: string) => {
+  const removePriceAlert = useCallback(async (id: string) => {
     setPriceAlerts((prev) => prev.filter((a) => a.id !== id));
     if (isSupabaseConfigured) {
       await dataService.removePriceAlert(id);
     }
-  };
+  }, []);
 
-  const addReview = async (businessId: string, ratingOrObj: number | any, commentArg?: string) => {
-    // Normalização para aceitar tanto (businessId, rating, comment) quanto chamada com objeto
+  const addReview = useCallback(async (businessId: string, ratingOrObj: number | any, commentArg?: string) => {
     const rating = typeof ratingOrObj === 'number' ? ratingOrObj : Number(ratingOrObj?.rating || 5);
     const comment = typeof ratingOrObj === 'number' ? (commentArg || '') : (ratingOrObj?.comment || '');
 
-    // PROBLEMA 5: Validação para impedir avaliações duplicadas da mesma empresa pelo mesmo usuário
     const currentName = currentUser?.fullName?.trim().toLowerCase();
     const currentId = currentUser?.id;
 
@@ -862,9 +1072,9 @@ const getInitialUserLocation = (): UserLocation => {
         console.error('Erro ao salvar avaliação:', err);
       }
     }
-  };
+  }, [currentUser?.fullName, currentUser?.id, reviews]);
 
-  const reportReview = async (reviewId: string) => {
+  const reportReview = useCallback(async (reviewId: string) => {
     setReviews((prev) =>
       prev.map((r) => (r.id === reviewId ? { ...r, reported: true } : r))
     );
@@ -872,26 +1082,26 @@ const getInitialUserLocation = (): UserLocation => {
       await dataService.reportReview(reviewId);
     }
     alert('Avaliação denunciada para moderação administrativa.');
-  };
+  }, []);
 
-  const sendChatMessage = (businessId: string, text: string, quoteRequestId?: string) => {
+  const sendChatMessage = useCallback((businessId: string, text: string, quoteRequestId?: string) => {
     const msgId = `m-${Date.now()}`;
     const newMsg: ChatMessage = {
       id: msgId,
       conversationId: `conv-${businessId}`,
       businessId,
       userId: currentUser?.id || 'u-current',
-      senderType: userRole === 'business' ? 'business' : 'user',
-      senderName: userRole === 'business' ? 'Empresa' : (currentUser?.fullName || 'Você'),
+      senderType: currentUser?.role === 'business' ? 'business' : 'user',
+      senderName: currentUser?.role === 'business' ? 'Empresa' : (currentUser?.fullName || 'Você'),
       text,
       timestamp: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
       quoteRequestId,
     };
 
     setChatMessages((prev) => [...prev, newMsg]);
-  };
+  }, [currentUser?.fullName, currentUser?.id, currentUser?.role]);
 
-  const createOffer = async (offerData: Omit<Offer, 'id' | 'viewsCount' | 'claimsCount'>) => {
+  const createOffer = useCallback(async (offerData: Omit<Offer, 'id' | 'viewsCount' | 'claimsCount'>) => {
     const verifiedImageUrl = !isInvalidOrDeadImageUrl(offerData.imageUrl)
       ? offerData.imageUrl
       : getSmartImage(offerData.categoryId, offerData.title);
@@ -917,9 +1127,9 @@ const getInitialUserLocation = (): UserLocation => {
         console.error('Erro ao criar oferta no Supabase:', err);
       }
     }
-  };
+  }, []);
 
-  const createBusiness = async (businessData: Omit<Business, 'id' | 'leadsReceivedCount'>) => {
+  const createBusiness = useCallback(async (businessData: Omit<Business, 'id' | 'leadsReceivedCount'>) => {
     if (!currentUser?.id) {
       throw new Error('Você precisa estar autenticado para cadastrar uma empresa.');
     }
@@ -956,7 +1166,6 @@ const getInitialUserLocation = (): UserLocation => {
     saveLocalBusiness(newBusiness);
     setBusinesses((prev) => [newBusiness, ...prev]);
 
-    // Atualiza automaticamente o papel do usuário para parceiro/business
     if (currentUser && currentUser.role === 'customer') {
       const updatedUser = { ...currentUser, role: 'business' as const };
       setCurrentUser(updatedUser);
@@ -975,35 +1184,14 @@ const getInitialUserLocation = (): UserLocation => {
         ).catch((err: any) => console.warn('Aviso ao atualizar perfil para business:', err));
       }
     }
-  };
+  }, [currentUser, setCurrentUser, setUserRole]);
 
-  const refreshBusinesses = async () => {
-    if (!isSupabaseConfigured) return;
-    try {
-      const bizList = await dataService.getBusinesses(undefined, undefined, true);
-      if (bizList && bizList.length > 0) {
-        setBusinesses(bizList);
-      }
-    } catch (err) {
-      console.warn('Erro ao sincronizar lista de empresas:', err);
-    }
-  };
-
-  const refreshOffers = async () => {
-    if (!isSupabaseConfigured) return;
-    try {
-      const offList = await dataService.getOffers();
-      if (offList) {
-        setOffers(offList);
-      }
-    } catch (err) {
-      console.warn('Erro ao atualizar ofertas:', err);
-    }
-  };
-
-  const updateMonetization = async (settings: AdminMonetizationSettings) => {
-    const previous = { ...monetization };
-    setMonetization(settings);
+  const updateMonetization = useCallback(async (settings: AdminMonetizationSettings) => {
+    let previous: AdminMonetizationSettings = INITIAL_MONETIZATION;
+    setMonetization((prev) => {
+      previous = prev;
+      return settings;
+    });
     if (isSupabaseConfigured) {
       try {
         await dataService.updateMonetizationSettings(settings);
@@ -1013,13 +1201,13 @@ const getInitialUserLocation = (): UserLocation => {
         throw err;
       }
     }
-  };
+  }, []);
 
-  const toggleBusinessVerified = async (businessId: string) => {
-    const business = businesses.find(b => b.id === businessId);
+  const toggleBusinessVerified = useCallback(async (businessId: string) => {
+    const business = businesses.find((b) => b.id === businessId);
     if (!business) return;
     const newVerified = !business.verified;
-    
+
     setBusinesses((prev) =>
       prev.map((b) => (b.id === businessId ? { ...b, verified: newVerified } : b))
     );
@@ -1027,7 +1215,6 @@ const getInitialUserLocation = (): UserLocation => {
     if (isSupabaseConfigured) {
       try {
         await dataService.toggleBusinessVerified(businessId, newVerified);
-        // Registrar acao no log de auditoria
         dataService.logAdminAction(
           newVerified ? 'EMPRESA_VERIFICADA' : 'EMPRESA_VERIFICACAO_REMOVIDA',
           'business',
@@ -1037,17 +1224,16 @@ const getInitialUserLocation = (): UserLocation => {
         );
       } catch (err) {
         console.error('Erro ao verificar empresa:', err);
-        // Rollback on error
         setBusinesses((prev) =>
           prev.map((b) => (b.id === businessId ? { ...b, verified: !newVerified } : b))
         );
         alert(`Não foi possível alterar verificação: ${(err as Error).message}`);
       }
     }
-  };
+  }, [businesses]);
 
-  const toggleBusinessActive = async (businessId: string) => {
-    const business = businesses.find(b => b.id === businessId);
+  const toggleBusinessActive = useCallback(async (businessId: string) => {
+    const business = businesses.find((b) => b.id === businessId);
     if (!business) return;
     const newActive = business.active === false ? true : false;
 
@@ -1058,7 +1244,6 @@ const getInitialUserLocation = (): UserLocation => {
     if (isSupabaseConfigured) {
       try {
         await dataService.toggleBusinessActive(businessId, newActive);
-        // Registrar acao no log de auditoria
         dataService.logAdminAction(
           newActive ? 'EMPRESA_ATIVADA' : 'EMPRESA_SUSPENSA',
           'business',
@@ -1067,21 +1252,19 @@ const getInitialUserLocation = (): UserLocation => {
         );
       } catch (err) {
         console.error('Erro ao alterar status da empresa:', err);
-        // Rollback on error
         setBusinesses((prev) =>
           prev.map((b) => (b.id === businessId ? { ...b, active: !newActive } : b))
         );
         alert(`Não foi possível alterar status da empresa: ${(err as Error).message}`);
       }
     }
-  };
+  }, [businesses]);
 
-  const toggleBusinessFeatured = async (businessId: string, days = 7, notes?: string) => {
+  const toggleBusinessFeatured = useCallback(async (businessId: string, days = 7, notes?: string) => {
     const business = businesses.find((b) => b.id === businessId);
     if (!business) return;
     const newFeatured = !business.featured;
 
-    // Atualização otimista
     setBusinesses((prev) =>
       prev.map((b) => (b.id === businessId ? { ...b, featured: newFeatured } : b))
     );
@@ -1089,7 +1272,6 @@ const getInitialUserLocation = (): UserLocation => {
     if (isSupabaseConfigured) {
       try {
         await dataService.toggleBusinessFeatured(businessId, newFeatured, days, notes);
-        // Registrar acao no log de auditoria
         dataService.logAdminAction(
           newFeatured ? 'DESTAQUE_ATIVADO' : 'DESTAQUE_REVOGADO',
           'featured',
@@ -1097,12 +1279,10 @@ const getInitialUserLocation = (): UserLocation => {
           business.name,
           notes || (newFeatured ? `Destaque por ${days} dias` : 'Destaque removido pelo admin')
         );
-        // Recarrega lista oficial de empresas para refletir a nova vigência com precisão
         const refreshed = await dataService.getBusinesses(undefined, undefined, true);
         if (refreshed) setBusinesses(refreshed);
       } catch (err) {
         console.error('Erro ao destacar empresa:', err);
-        // Rollback on error
         setBusinesses((prev) =>
           prev.map((b) => (b.id === businessId ? { ...b, featured: !newFeatured } : b))
         );
@@ -1110,16 +1290,19 @@ const getInitialUserLocation = (): UserLocation => {
         throw err;
       }
     }
-  };
+  }, [businesses]);
 
-  const removeOffer = async (offerId: string) => {
+  const removeOffer = useCallback(async (offerId: string) => {
     const offerToRemove = offers.find((o) => o.id === offerId);
-    const previous = [...offers];
-    setOffers((prev) => prev.filter((o) => o.id !== offerId));
+    let previous: Offer[] = [];
+    setOffers((prev) => {
+      previous = prev;
+      return prev.filter((o) => o.id !== offerId);
+    });
+
     if (isSupabaseConfigured) {
       try {
         await dataService.deleteOffer(offerId);
-        // Registrar acao no log de auditoria
         dataService.logAdminAction(
           'OFERTA_REMOVIDA',
           'offer',
@@ -1132,29 +1315,34 @@ const getInitialUserLocation = (): UserLocation => {
         alert(`Não foi possível excluir a oferta: ${(err as Error).message}`);
       }
     }
-  };
+  }, [offers]);
 
-  const deleteBusiness = async (businessId: string) => {
-    const previousBusinesses = [...businesses];
-    const previousOffers = [...offers];
+  const deleteBusiness = useCallback(async (businessId: string) => {
+    let previousBusinesses: Business[] = [];
+    let previousOffers: Offer[] = [];
 
-    setBusinesses((prev) => prev.filter((b) => b.id !== businessId));
-    setOffers((prev) => prev.filter((o) => o.businessId !== businessId));
+    setBusinesses((prev) => {
+      previousBusinesses = prev;
+      return prev.filter((b) => b.id !== businessId);
+    });
+    setOffers((prev) => {
+      previousOffers = prev;
+      return prev.filter((o) => o.businessId !== businessId);
+    });
 
     if (isSupabaseConfigured) {
       try {
         await dataService.deleteBusiness(businessId);
       } catch (err) {
         console.error('Erro ao excluir empresa do Supabase:', err);
-        // Rollback on error
         setBusinesses(previousBusinesses);
         setOffers(previousOffers);
         alert(`Não foi possível excluir o parceiro: ${(err as Error).message}`);
       }
     }
-  };
+  }, []);
 
-  const upgradeBusinessPlan = async (
+  const upgradeBusinessPlan = useCallback(async (
     businessId: string,
     planTier: 'free' | 'pro' | 'premium',
     immediateActive = false,
@@ -1169,7 +1357,6 @@ const getInitialUserLocation = (): UserLocation => {
     try {
       if (isSupabaseConfigured) {
         if (immediateActive) {
-          // Validação e persistência server-side com anti-replay
           await dataService.activateGooglePlaySubscription({
             businessId,
             planTier,
@@ -1181,7 +1368,6 @@ const getInitialUserLocation = (): UserLocation => {
         }
       }
 
-      // REGRA: Atualiza o estado da empresa SOMENTE após a confirmação do backend
       if (immediateActive) {
         setBusinesses((prev) =>
           prev.map((b) => (b.id === businessId ? { ...b, plan: planTier, planTier: planTier } : b))
@@ -1216,9 +1402,9 @@ const getInitialUserLocation = (): UserLocation => {
       ]);
       throw err;
     }
-  };
+  }, []);
 
-  const adminActivatePlan = async (
+  const adminActivatePlan = useCallback(async (
     businessId: string,
     planTier: 'free' | 'pro' | 'premium',
     reason: string,
@@ -1234,14 +1420,13 @@ const getInitialUserLocation = (): UserLocation => {
         reason,
         durationDays,
       });
-      // Sincroniza o estado local após a confirmação do banco
       setBusinesses((prev) =>
         prev.map((b) => (b.id === businessId ? { ...b, plan: planTier, planTier: planTier } : b))
       );
     }
-  };
+  }, []);
 
-  const submitContentReport = async (params: {
+  const submitContentReport = useCallback(async (params: {
     contentType: 'review' | 'business' | 'offer' | 'quote' | 'user';
     contentId: string;
     reason: string;
@@ -1251,16 +1436,16 @@ const getInitialUserLocation = (): UserLocation => {
       return await dataService.submitContentReport(params);
     }
     return { success: true };
-  };
+  }, []);
 
-  const blockUser = async (blockedUserId: string) => {
+  const blockUser = useCallback(async (blockedUserId: string) => {
     if (isSupabaseConfigured) {
       return await dataService.blockUser(blockedUserId);
     }
     return { success: true };
-  };
+  }, []);
 
-  const addLeadCredits = async (businessId: string, credits: number, notes?: string) => {
+  const addLeadCredits = useCallback(async (businessId: string, credits: number, notes?: string) => {
     try {
       const result = await dataService.addLeadCredits(businessId, credits, notes);
       setBusinesses((prev) =>
@@ -1276,9 +1461,9 @@ const getInitialUserLocation = (): UserLocation => {
       console.error('Erro ao adicionar créditos de leads:', err);
       throw err;
     }
-  };
+  }, []);
 
-  const markNotificationRead = (id: string) => {
+  const markNotificationRead = useCallback((id: string) => {
     setNotifications((prev) =>
       prev.map((n) => (n.id === id ? { ...n, read: true } : n))
     );
@@ -1287,156 +1472,141 @@ const getInitialUserLocation = (): UserLocation => {
         console.warn('Aviso ao sincronizar leitura da notificação com Supabase:', err);
       });
     }
-  };
+  }, []);
 
-  const refreshNotifications = async () => {
+  const refreshNotifications = useCallback(async () => {
     if (!currentUser?.id || !isSupabaseConfigured) return;
     const notifs = await dataService.getNotifications(currentUser.id);
     if (notifs) {
       setNotifications(notifs);
     }
-  };
+  }, [currentUser?.id]);
 
-  const deleteAccountAndData = () => {
-    setCurrentUser(null);
-    setUserRole('customer');
-    setFavorites({ businessIds: [], offerIds: [] });
-    setPriceAlerts([]);
-    setNotifications([]);
-    setChatMessages([]);
-    setQuoteRequests([]);
-    setActiveTab('home');
-  };
+  const value = useMemo<DataContextType>(() => ({
+    businesses,
+    offers,
+    quoteRequests,
+    reviews,
+    priceAlerts,
+    notifications,
+    chatMessages,
+    monetization,
+    favorites,
+    isLoadingData,
+    isDatabaseConnected,
 
-  const refreshQuoteRequests = async () => {
-    if (!isSupabaseConfigured) return;
-    const myBizIds = currentUser
-      ? businesses
-          .filter((b) => (b.ownerId || '').toLowerCase() === (currentUser.id || '').toLowerCase())
-          .map((b) => b.id)
-      : [];
-    const allQuotes = await dataService.syncAllQuoteRequests(currentUser?.id, myBizIds);
-    setQuoteRequests(allQuotes);
-  };
+    toggleFavoriteBusiness,
+    toggleFavoriteOffer,
+    createQuoteRequest,
+    submitProposal,
+    acceptProposal,
+    cancelQuoteRequest,
+    deleteQuoteRequest,
+    createPriceAlert,
+    removePriceAlert,
+    addReview,
+    reportReview,
+    sendChatMessage,
+    createOffer,
+    addOffer: createOffer,
+    createBusiness,
+    updateMonetization,
+    toggleBusinessActive,
+    toggleBusinessVerified,
+    toggleBusinessFeatured,
+    removeOffer,
+    deleteBusiness,
+    upgradeBusinessPlan,
+    adminActivatePlan,
+    submitContentReport,
+    blockUser,
+    addLeadCredits,
+    markNotificationRead,
+    refreshNotifications,
+    refreshQuoteRequests,
+    refreshBusinesses,
+    refreshOffers,
+  }), [
+    businesses,
+    offers,
+    quoteRequests,
+    reviews,
+    priceAlerts,
+    notifications,
+    chatMessages,
+    monetization,
+    favorites,
+    isLoadingData,
+    isDatabaseConnected,
+    toggleFavoriteBusiness,
+    toggleFavoriteOffer,
+    createQuoteRequest,
+    submitProposal,
+    acceptProposal,
+    cancelQuoteRequest,
+    deleteQuoteRequest,
+    createPriceAlert,
+    removePriceAlert,
+    addReview,
+    reportReview,
+    sendChatMessage,
+    createOffer,
+    createBusiness,
+    updateMonetization,
+    toggleBusinessActive,
+    toggleBusinessVerified,
+    toggleBusinessFeatured,
+    removeOffer,
+    deleteBusiness,
+    upgradeBusinessPlan,
+    adminActivatePlan,
+    submitContentReport,
+    blockUser,
+    addLeadCredits,
+    markNotificationRead,
+    refreshNotifications,
+    refreshQuoteRequests,
+    refreshBusinesses,
+    refreshOffers,
+  ]);
 
-  const logout = async () => {
-    try {
-      await authService.signOut();
-    } catch (e) {
-      // Ignora erro
-    }
-    setCurrentUser(null);
-    setUserRole('customer');
-    setFavorites({ businessIds: [], offerIds: [] });
-    if (!isSupabaseConfigured) {
-      setQuoteRequests(getLocalQuoteRequests());
-    } else {
-      setQuoteRequests([]);
-    }
-    setNotifications([]);
-    setActiveTab('home');
-  };
+  return <DataContext.Provider value={value}>{children}</DataContext.Provider>;
+};
 
+export const useData = () => {
+  const context = useContext(DataContext);
+  if (!context) {
+    throw new Error('useData must be used within a DataProvider');
+  }
+  return context;
+};
+
+/* =========================================================================
+   4. APP PROVIDER & FACADE HOOK (useApp)
+   ========================================================================= */
+
+export type AppContextType = UIContextType & AuthContextType & DataContextType;
+
+export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
   return (
-    <AppContext.Provider
-      value={{
-        activeTab,
-        setActiveTab,
-        publicRoute,
-        setPublicRoute,
-        selectedCategory,
-        setSelectedCategory,
-        searchQuery,
-        setSearchQuery,
-        currentLocation,
-        setCurrentLocation,
-        isLocating,
-        detectUserLocation,
-
-        currentUser,
-        setCurrentUser,
-        isAuthModalOpen,
-        setIsAuthModalOpen,
-        logout,
-
-        businesses,
-        offers,
-        quoteRequests,
-        reviews,
-        priceAlerts,
-        notifications,
-        chatMessages,
-        monetization,
-        favorites,
-        userRole,
-        setUserRole,
-        isLoadingData,
-        isDatabaseConnected,
-
-        toggleFavoriteBusiness,
-        toggleFavoriteOffer,
-        createQuoteRequest,
-        submitProposal,
-        acceptProposal,
-        cancelQuoteRequest,
-        deleteQuoteRequest,
-        createPriceAlert,
-        removePriceAlert,
-        addReview,
-        reportReview,
-        sendChatMessage,
-        createOffer,
-        addOffer: createOffer,
-        createBusiness,
-        updateMonetization,
-        toggleBusinessActive,
-        toggleBusinessVerified,
-        toggleBusinessFeatured,
-        removeOffer,
-        deleteBusiness,
-        upgradeBusinessPlan,
-        adminActivatePlan,
-        submitContentReport,
-        blockUser,
-        addLeadCredits,
-        markNotificationRead,
-        refreshNotifications,
-        deleteAccountAndData,
-        refreshQuoteRequests,
-        refreshBusinesses,
-        refreshOffers,
-
-        selectedBusinessId,
-        setSelectedBusinessId,
-        isQuoteModalOpen,
-        setIsQuoteModalOpen,
-        quoteCategoryPreset,
-        quoteTargetBusinessId,
-        setQuoteTargetBusinessId,
-        setQuoteCategoryPreset,
-        comparingQuoteRequestId,
-        setComparingQuoteRequestId,
-        isPriceAlertModalOpen,
-        setIsPriceAlertModalOpen,
-        activeChatBusinessId,
-        setActiveChatBusinessId,
-        isPlayStoreModalOpen,
-        setIsPlayStoreModalOpen,
-        isLegalModalOpen,
-        setIsLegalModalOpen,
-        isLocationSelectorOpen,
-        setIsLocationSelectorOpen,
-      }}
-    >
-      {children}
-    </AppContext.Provider>
+    <UIProvider>
+      <AuthProvider>
+        <DataProvider>
+          {children}
+        </DataProvider>
+      </AuthProvider>
+    </UIProvider>
   );
 };
 
-export const useApp = () => {
-  const context = useContext(AppContext);
-  if (!context) {
-    throw new Error('useApp must be used within an AppProvider');
-  }
-  return context;
+export const useApp = (): AppContextType => {
+  const ui = useUI();
+  const auth = useAuth();
+  const data = useData();
+
+  return useMemo(() => ({
+    ...ui,
+    ...auth,
+    ...data,
+  }), [ui, auth, data]);
 };

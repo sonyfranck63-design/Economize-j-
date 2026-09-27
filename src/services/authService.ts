@@ -90,9 +90,9 @@ export const authService = {
         .single();
 
       if (!profileError && profile) {
-        // Garantia de integridade para a conta administrativa master
-        const isMasterAdmin = (profile.email || user.email)?.toLowerCase() === 'matheusfranck2013@gmail.com';
-        const role = isMasterAdmin ? 'admin' : ((profile.role as UserRole) || 'customer');
+        // O papel do usuário é definido 100% pela autoridade do banco de dados (tabela profiles / is_admin())
+        // Removido privilégio fixo no cliente (matheusfranck2013@gmail.com) para evitar fonte de verdade duplicada
+        const role = (profile.role as UserRole) || 'customer';
         const authProfile: AuthUserProfile = {
           id: profile.id,
           email: profile.email || user.email || '',

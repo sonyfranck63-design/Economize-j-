@@ -210,7 +210,7 @@ class BillingService {
           }
           purchasesList.push({
             plan,
-            purchaseToken: purchase.purchaseToken || purchase.token || '',
+            purchaseToken: purchase.purchaseToken || (purchase as any).token || '',
             orderId: purchase.orderId,
           });
         }

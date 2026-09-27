@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { useApp } from '../context/AppContext';
+import { useUI, useAuth, useData } from '../context/AppContext';
 import { PWAInstallButton } from './PWAInstallButton';
 import { BrandLogo } from './BrandLogo';
 import { NotificationItemSkeleton } from './Skeleton';
@@ -26,17 +26,23 @@ export const Header: React.FC = () => {
     setIsLocationSelectorOpen,
     setActiveTab,
     activeTab,
-    notifications,
-    markNotificationRead,
-    userRole,
     setIsPlayStoreModalOpen,
+    setPublicRoute,
+  } = useUI();
+
+  const {
+    userRole,
     currentUser,
     setIsAuthModalOpen,
     logout,
+  } = useAuth();
+
+  const {
+    notifications,
+    markNotificationRead,
     isDatabaseConnected,
-    setPublicRoute,
     isLoadingData,
-  } = useApp();
+  } = useData();
 
   const [isNotifOpen, setIsNotifOpen] = useState(false);
   const [isUserMenuOpen, setIsUserMenuOpen] = useState(false);
