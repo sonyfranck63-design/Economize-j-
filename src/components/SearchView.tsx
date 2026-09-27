@@ -481,8 +481,8 @@ export const SearchView: React.FC = () => {
                 className="w-full p-2 rounded-xl border border-slate-200 bg-slate-50 text-slate-800"
               >
                 <option value={0}>Qualquer nota</option>
-                <option value={4}>4 estrelas ou mais (⭐ 4+)</option>
-                <option value={4.5}>4.5 estrelas ou mais (⭐ 4.5+)</option>
+                <option value={4}>4 estrelas ou mais (4.0+)</option>
+                <option value={4.5}>4.5 estrelas ou mais (4.5+)</option>
               </select>
             </div>
 

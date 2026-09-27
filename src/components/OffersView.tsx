@@ -50,9 +50,10 @@ export const OffersView: React.FC = () => {
 
           <button
             onClick={() => setIsPriceAlertModalOpen(true)}
-            className="px-4 py-2.5 rounded-xl bg-emerald-50 hover:bg-emerald-100 text-emerald-700 text-xs font-bold border border-emerald-200 transition shrink-0 self-start sm:self-auto"
+            className="px-4 py-2.5 rounded-xl bg-emerald-50 hover:bg-emerald-100 text-emerald-800 text-xs font-bold border border-emerald-200 transition shrink-0 self-start sm:self-auto flex items-center gap-1.5 cursor-pointer active:scale-95"
           >
-            🔔 Quero Pagar Menos (Criar Alerta)
+            <Bell className="w-4 h-4 text-emerald-600 shrink-0" />
+            <span>Quero Pagar Menos (Criar Alerta)</span>
           </button>
         </div>
 

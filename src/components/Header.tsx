@@ -42,11 +42,18 @@ export const Header: React.FC = () => {
     markNotificationRead,
     isDatabaseConnected,
     isLoadingData,
+    businesses,
   } = useData();
 
   const [isNotifOpen, setIsNotifOpen] = useState(false);
   const [isUserMenuOpen, setIsUserMenuOpen] = useState(false);
   const unreadCount = notifications.filter((n) => !(n.read || false)).length;
+
+  const ownedBusinesses = currentUser
+    ? (businesses || []).filter((b) => (b.ownerId || '').toLowerCase() === (currentUser.id || '').toLowerCase())
+    : [];
+  const hasOwnedBusiness = ownedBusinesses.length > 0 || currentUser?.role === 'business';
+  const primaryBusiness = ownedBusinesses[0];
 
   return (
     <header className="sticky top-0 z-40 bg-white/95 backdrop-blur-md border-b border-slate-200/80 shadow-xs pt-safe w-full">
@@ -85,8 +92,8 @@ export const Header: React.FC = () => {
           {/* Lado Direito: Ações Principais e Perfil */}
           <div className="flex items-center gap-1.5 sm:gap-2.5 shrink-0">
             
-            {/* Botão Seja Parceiro (visível no desktop) */}
-            {(!currentUser || currentUser.role === 'customer') && (
+            {/* Botão Seja Parceiro (visível no desktop quando não tem empresa) */}
+            {(!currentUser || (!hasOwnedBusiness && currentUser.role === 'customer')) && (
               <button
                 onClick={() => {
                   if (!currentUser) {
@@ -103,7 +110,7 @@ export const Header: React.FC = () => {
               </button>
             )}
             
-            {currentUser?.role === 'business' && (
+            {(hasOwnedBusiness || currentUser?.role === 'business') && (
               <button
                 onClick={() => setActiveTab('business_portal')}
                 className="hidden sm:flex items-center gap-1.5 px-3.5 h-10 bg-indigo-50 hover:bg-indigo-100 border border-indigo-200 text-indigo-900 rounded-full text-xs font-bold transition shadow-2xs shrink-0"
@@ -130,12 +137,17 @@ export const Header: React.FC = () => {
               </button>
             )}
 
-            {/* Botão de Notificações - Área de toque confortável 44x44px */}
+            {/* Botão de Notificações */}
             <div className="relative">
               <button
                 id="btn-header-notifs"
-                onClick={() => setIsNotifOpen(!isNotifOpen)}
-                className={`relative w-11 h-11 rounded-full flex items-center justify-center transition border ${
+                type="button"
+                onClick={(e) => {
+                  e.stopPropagation();
+                  setIsNotifOpen(!isNotifOpen);
+                  if (isUserMenuOpen) setIsUserMenuOpen(false);
+                }}
+                className={`relative w-11 h-11 rounded-full flex items-center justify-center transition border cursor-pointer active:scale-95 ${
                   isNotifOpen 
                     ? 'bg-emerald-50 text-emerald-800 border-emerald-300 ring-2 ring-emerald-500/20' 
                     : 'bg-slate-50 hover:bg-slate-100 text-slate-700 border-slate-200'
@@ -151,19 +163,17 @@ export const Header: React.FC = () => {
                 )}
               </button>
 
-              {/* Dropdown de Notificações - Responsivo, sem overflow e com Backdrop Mobile */}
+              {/* Dropdown de Notificações */}
               {isNotifOpen && (
                 <>
-                  {/* Backdrop para toque fora no mobile e clique fora */}
                   <div
                     className="fixed inset-0 z-40 bg-slate-900/20 backdrop-blur-2xs transition-opacity"
                     onClick={() => setIsNotifOpen(false)}
-                    onTouchStart={() => setIsNotifOpen(false)}
                     aria-hidden="true"
                   />
 
                   <div 
-                    className="fixed sm:absolute right-3 sm:right-0 top-16 mt-1 w-[calc(100vw-24px)] max-w-sm bg-white rounded-2xl shadow-2xl border border-slate-200 p-4 z-50 animate-in fade-in zoom-in-95"
+                    className="fixed sm:absolute right-3 sm:right-0 top-16 sm:top-full mt-1 sm:mt-2 w-[calc(100vw-24px)] max-w-sm bg-white rounded-2xl shadow-2xl border border-slate-200 p-4 z-50 animate-in fade-in zoom-in-95"
                     onClick={(e) => e.stopPropagation()}
                   >
                     <div className="flex items-center justify-between pb-3 border-b border-slate-100">
@@ -175,7 +185,6 @@ export const Header: React.FC = () => {
                         </span>
                       </div>
 
-                      {/* Botão Fechar Explícito ("X") com área de toque mínima 44x44px */}
                       <button
                         type="button"
                         onClick={() => setIsNotifOpen(false)}
@@ -238,104 +247,163 @@ export const Header: React.FC = () => {
             {currentUser ? (
               <div className="relative">
                 <button
-                  onClick={() => setIsUserMenuOpen(!isUserMenuOpen)}
-                  className="flex items-center gap-1.5 h-11 px-2.5 sm:px-3 bg-slate-50 hover:bg-slate-100 text-slate-800 rounded-full border border-slate-200 transition shrink-0 active:scale-95 min-h-[44px]"
+                  id="header-user-menu-btn"
+                  type="button"
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    setIsUserMenuOpen((prev) => !prev);
+                    if (isNotifOpen) setIsNotifOpen(false);
+                  }}
+                  className={`relative z-50 flex items-center gap-1.5 h-11 px-2.5 sm:px-3 rounded-full border transition shrink-0 active:scale-95 min-h-[44px] cursor-pointer ${
+                    isUserMenuOpen
+                      ? 'bg-emerald-50 text-emerald-900 border-emerald-300 ring-2 ring-emerald-500/20'
+                      : 'bg-slate-50 hover:bg-slate-100 text-slate-800 border-slate-200'
+                  }`}
                   title="Opções da minha conta"
                   aria-label="Menu da conta"
+                  aria-expanded={isUserMenuOpen}
                 >
-                  <div className="w-7 h-7 rounded-full bg-emerald-600 text-white flex items-center justify-center font-extrabold text-xs shadow-xs">
+                  <div className="w-7 h-7 rounded-full bg-emerald-600 text-white flex items-center justify-center font-extrabold text-xs shadow-xs shrink-0">
                     {(currentUser.fullName || 'U').charAt(0).toUpperCase()}
                   </div>
                   <span className="max-w-[75px] sm:max-w-[100px] truncate font-bold text-xs text-slate-800 hidden md:inline">
                     {currentUser.fullName.split(' ')[0]}
                   </span>
-                  <ChevronDown className="w-3.5 h-3.5 text-slate-500" />
+                  <ChevronDown className={`w-3.5 h-3.5 text-slate-500 transition-transform ${isUserMenuOpen ? 'rotate-180' : ''}`} />
                 </button>
 
                 {/* Dropdown Menu do Usuário */}
                 {isUserMenuOpen && (
                   <>
-                    {/* Backdrop para toque fora no mobile */}
+                    {/* Backdrop para toque fora no mobile e clique fora */}
                     <div
-                      className="fixed inset-0 z-40 bg-slate-900/10 backdrop-blur-2xs transition-opacity"
+                      className="fixed inset-0 z-40 bg-slate-900/20 backdrop-blur-2xs transition-opacity"
                       onClick={() => setIsUserMenuOpen(false)}
-                      onTouchStart={() => setIsUserMenuOpen(false)}
                       aria-hidden="true"
                     />
                     <div 
-                      className="absolute right-0 mt-2 w-64 bg-white rounded-2xl shadow-2xl border border-slate-200 py-2.5 z-50 animate-in fade-in zoom-in-95"
-                      onClick={() => setIsUserMenuOpen(false)}
+                      className="fixed sm:absolute right-3 sm:right-0 top-16 sm:top-full mt-1 sm:mt-2 w-[calc(100vw-24px)] max-w-xs sm:w-64 bg-white rounded-2xl shadow-2xl border border-slate-200 py-3 z-50 animate-in fade-in zoom-in-95"
+                      onClick={(e) => e.stopPropagation()}
                     >
-                      <div className="px-4 py-2.5 border-b border-slate-100">
-                        <p className="text-xs font-bold text-slate-900 truncate">{currentUser.fullName}</p>
-                        <p className="text-[11px] text-slate-400 truncate">{currentUser.email}</p>
-                        <span className="inline-block mt-1.5 text-[10px] font-bold uppercase tracking-wider px-2 py-0.5 bg-emerald-50 text-emerald-700 rounded-md border border-emerald-100">
-                          {currentUser.role === 'admin' ? '🛡️ Administrador' : currentUser.role === 'business' ? '🏢 Parceiro' : '👤 Consumidor'}
-                        </span>
+                      <div className="flex items-start justify-between px-4 pb-3 border-b border-slate-100">
+                        <div className="min-w-0 pr-2">
+                          <p className="text-xs font-bold text-slate-900 truncate">{currentUser.fullName}</p>
+                          <p className="text-[11px] text-slate-400 truncate">{currentUser.email}</p>
+                          <span className="inline-flex items-center gap-1.5 mt-1.5 text-[10px] font-bold uppercase tracking-wider px-2 py-0.5 bg-emerald-50 text-emerald-800 rounded-md border border-emerald-200">
+                            {currentUser.role === 'admin' ? (
+                              <>
+                                <ShieldCheck className="w-3.5 h-3.5 text-emerald-700" />
+                                <span>Administrador</span>
+                              </>
+                            ) : hasOwnedBusiness ? (
+                              <>
+                                <Building2 className="w-3.5 h-3.5 text-emerald-700" />
+                                <span>Parceiro</span>
+                              </>
+                            ) : (
+                              <>
+                                <User className="w-3.5 h-3.5 text-emerald-700" />
+                                <span>Consumidor</span>
+                              </>
+                            )}
+                          </span>
+                        </div>
+                        <button
+                          type="button"
+                          onClick={() => setIsUserMenuOpen(false)}
+                          className="w-8 h-8 -mr-1 -mt-1 flex items-center justify-center rounded-full text-slate-400 hover:text-slate-700 hover:bg-slate-100 transition sm:hidden"
+                          aria-label="Fechar menu"
+                        >
+                          <X className="w-4 h-4" />
+                        </button>
                       </div>
 
-                    {/* Acessos Rápidos no Mobile */}
-                    <div className="py-1">
-                      {currentUser.role === 'admin' && (
-                        <button
-                          onClick={() => setActiveTab('admin_portal')}
-                          className="w-full text-left px-4 py-2 text-xs font-semibold text-slate-800 hover:bg-slate-50 flex items-center gap-2.5"
-                        >
-                          <SlidersHorizontal className="w-4 h-4 text-slate-600" />
-                          <span>Painel Administrativo</span>
-                        </button>
-                      )}
+                      {/* Acessos Rápidos no Mobile e Desktop */}
+                      <div className="py-1">
+                        {currentUser.role === 'admin' && (
+                          <button
+                            type="button"
+                            onClick={() => {
+                              setActiveTab('admin_portal');
+                              setIsUserMenuOpen(false);
+                            }}
+                            className="w-full text-left px-4 py-2.5 text-xs font-semibold text-slate-800 hover:bg-slate-50 flex items-center gap-2.5 cursor-pointer"
+                          >
+                            <SlidersHorizontal className="w-4 h-4 text-slate-600 shrink-0" />
+                            <span>Painel Administrativo</span>
+                          </button>
+                        )}
 
-                      {currentUser.role === 'business' ? (
-                        <button
-                          onClick={() => setActiveTab('business_portal')}
-                          className="w-full text-left px-4 py-2 text-xs font-semibold text-indigo-700 hover:bg-indigo-50 flex items-center gap-2.5"
-                        >
-                          <Building2 className="w-4 h-4 text-indigo-600" />
-                          <span>Painel da Minha Empresa</span>
-                        </button>
-                      ) : (
-                        <button
-                          onClick={() => setActiveTab('business_portal')}
-                          className="w-full text-left px-4 py-2 text-xs font-semibold text-amber-700 hover:bg-amber-50 flex items-center gap-2.5"
-                        >
-                          <Building2 className="w-4 h-4 text-amber-600" />
-                          <span>Cadastrar Minha Empresa</span>
-                        </button>
-                      )}
+                        {hasOwnedBusiness ? (
+                          <button
+                            type="button"
+                            onClick={() => {
+                              setActiveTab('business_portal');
+                              setIsUserMenuOpen(false);
+                            }}
+                            className="w-full text-left px-4 py-2.5 text-xs font-semibold text-indigo-700 hover:bg-indigo-50 flex items-center gap-2.5 cursor-pointer"
+                          >
+                            <Building2 className="w-4 h-4 text-indigo-600 shrink-0" />
+                            <span className="truncate">
+                              {primaryBusiness ? `Painel: ${primaryBusiness.name}` : 'Painel da Minha Empresa'}
+                            </span>
+                          </button>
+                        ) : (
+                          <button
+                            type="button"
+                            onClick={() => {
+                              setActiveTab('business_portal');
+                              setIsUserMenuOpen(false);
+                            }}
+                            className="w-full text-left px-4 py-2.5 text-xs font-semibold text-amber-800 hover:bg-amber-50 flex items-center gap-2.5 cursor-pointer"
+                          >
+                            <Building2 className="w-4 h-4 text-amber-600 shrink-0" />
+                            <span>Cadastrar Minha Empresa</span>
+                          </button>
+                        )}
 
-                      {currentUser.role === 'customer' && (
                         <button
-                          onClick={() => setActiveTab('quotes')}
-                          className="w-full text-left px-4 py-2 text-xs font-semibold text-slate-700 hover:bg-slate-50 flex items-center gap-2.5"
+                          type="button"
+                          onClick={() => {
+                            setActiveTab('quotes');
+                            setIsUserMenuOpen(false);
+                          }}
+                          className="w-full text-left px-4 py-2.5 text-xs font-semibold text-slate-700 hover:bg-slate-50 flex items-center gap-2.5 cursor-pointer"
                         >
-                          <User className="w-4 h-4 text-emerald-600" />
+                          <User className="w-4 h-4 text-emerald-600 shrink-0" />
                           <span>Minhas Cotações</span>
                         </button>
-                      )}
-                    </div>
+                      </div>
 
-                    <div className="border-t border-slate-100 pt-1">
-                      <button
-                        onClick={() => setPublicRoute('delete_account')}
-                        className="w-full text-left px-4 py-2 text-xs font-semibold text-rose-600 hover:bg-rose-50 flex items-center gap-2.5"
-                      >
-                        <Trash2 className="w-4 h-4 text-rose-500" />
-                        <span>Excluir Minha Conta (LGPD)</span>
-                      </button>
+                      <div className="border-t border-slate-100 pt-1">
+                        <button
+                          type="button"
+                          onClick={() => {
+                            setPublicRoute('delete_account');
+                            setIsUserMenuOpen(false);
+                          }}
+                          className="w-full text-left px-4 py-2.5 text-xs font-semibold text-rose-600 hover:bg-rose-50 flex items-center gap-2.5 cursor-pointer"
+                        >
+                          <Trash2 className="w-4 h-4 text-rose-500 shrink-0" />
+                          <span>Excluir Minha Conta (LGPD)</span>
+                        </button>
 
-                      <button
-                        onClick={logout}
-                        className="w-full text-left px-4 py-2 text-xs font-semibold text-slate-600 hover:bg-slate-100 flex items-center gap-2.5"
-                      >
-                        <LogOut className="w-4 h-4 text-slate-500" />
-                        <span>Sair da Conta</span>
-                      </button>
+                        <button
+                          type="button"
+                          onClick={async () => {
+                            setIsUserMenuOpen(false);
+                            await logout();
+                          }}
+                          className="w-full text-left px-4 py-2.5 text-xs font-semibold text-slate-600 hover:bg-slate-100 flex items-center gap-2.5 cursor-pointer"
+                        >
+                          <LogOut className="w-4 h-4 text-slate-500 shrink-0" />
+                          <span>Sair da Conta</span>
+                        </button>
+                      </div>
                     </div>
-                  </div>
-                </>
-              )}
-            </div>
+                  </>
+                )}
+              </div>
             ) : (
               <button
                 id="btn-open-auth-modal"

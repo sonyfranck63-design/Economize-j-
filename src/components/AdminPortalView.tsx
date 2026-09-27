@@ -27,6 +27,10 @@ import {
   RefreshCw,
   User,
   Trash2,
+  Sparkles,
+  Star,
+  Crown,
+  Zap,
 } from 'lucide-react';
 import { dataService } from '../services/dataService';
 import { buildWhatsAppLink } from '../utils/whatsappUtils';
@@ -543,7 +547,8 @@ export const AdminPortalView: React.FC = () => {
                       {/* Destaque: somente indicador visual — ativação é feita via pagamento confirmado */}
                       {b.featured && (
                         <span className="text-[10px] uppercase font-bold bg-amber-100 text-amber-800 px-2 py-0.5 rounded-md border border-amber-200 flex items-center gap-1 whitespace-nowrap">
-                          ⭐ DESTAQUE ATIVO
+                          <Sparkles className="w-3 h-3 text-amber-600" />
+                          <span>DESTAQUE ATIVO</span>
                           {b.featuredUntil && <span className="text-amber-600 font-semibold">ATÉ {b.featuredUntil}</span>}
                         </span>
                       )}
@@ -558,14 +563,15 @@ export const AdminPortalView: React.FC = () => {
                 <div className="flex flex-wrap items-center gap-2">
                   <button
                     onClick={() => toggleBusinessActive(b.id)}
-                    className={`px-3 py-1.5 rounded-xl text-xs font-bold transition flex-shrink-0 ${
+                    className={`px-3 py-1.5 rounded-xl text-xs font-bold transition flex items-center gap-1.5 flex-shrink-0 ${
                       b.active !== false
                         ? 'bg-emerald-50 text-emerald-800 border border-emerald-200 hover:bg-emerald-100'
                         : 'bg-rose-50 text-rose-700 border border-rose-200 hover:bg-rose-100'
                     }`}
                     title={b.active !== false ? 'Empresa ativa e visível no guia público' : 'Empresa suspensa (invisível ao público)'}
                   >
-                    {b.active !== false ? '🟢 Ativa' : '⏸️ Suspensa'}
+                    <span className={`w-2 h-2 rounded-full ${b.active !== false ? 'bg-emerald-600' : 'bg-rose-600'}`} />
+                    <span>{b.active !== false ? 'Ativa' : 'Suspensa'}</span>
                   </button>
 
                   <button
@@ -599,7 +605,8 @@ export const AdminPortalView: React.FC = () => {
                     className="px-3 py-1.5 rounded-xl bg-emerald-50 hover:bg-emerald-100 text-emerald-800 border border-emerald-300 text-xs font-bold transition flex items-center gap-1 flex-shrink-0"
                     title="Adicionar créditos de leads após confirmação de PIX"
                   >
-                    ⚡ + Créditos
+                    <Zap className="w-3.5 h-3.5 text-emerald-700" />
+                    <span>+ Créditos</span>
                   </button>
 
                   {b.featured ? (
@@ -612,7 +619,8 @@ export const AdminPortalView: React.FC = () => {
                       className="px-3 py-1.5 rounded-xl bg-amber-100 hover:bg-amber-200 text-amber-900 border border-amber-300 text-xs font-bold transition flex items-center gap-1 flex-shrink-0"
                       title="Revogar destaque patrocinado"
                     >
-                      ⭐ Revogar Destaque
+                      <Star className="w-3.5 h-3.5 text-amber-700" />
+                      <span>Revogar Destaque</span>
                     </button>
                   ) : (
                     <button
@@ -624,7 +632,8 @@ export const AdminPortalView: React.FC = () => {
                       className="px-3 py-1.5 rounded-xl bg-slate-100 hover:bg-amber-50 hover:text-amber-800 hover:border-amber-300 text-slate-700 border border-slate-200 text-xs font-bold transition flex items-center gap-1 flex-shrink-0"
                       title="Ativar destaque após confirmação de pagamento PIX"
                     >
-                      ⭐ Destacar (PIX)
+                      <Sparkles className="w-3.5 h-3.5 text-amber-600" />
+                      <span>Destacar (PIX)</span>
                     </button>
                   )}
 
@@ -638,7 +647,8 @@ export const AdminPortalView: React.FC = () => {
                     className="px-3 py-1.5 rounded-xl bg-indigo-50 hover:bg-indigo-100 text-indigo-800 border border-indigo-200 text-xs font-bold transition flex items-center gap-1 flex-shrink-0"
                     title="Ativar ou alterar plano manualmente com justificativa e auditoria"
                   >
-                    👑 Gerenciar Plano
+                    <Crown className="w-3.5 h-3.5 text-indigo-700" />
+                    <span>Gerenciar Plano</span>
                   </button>
 
                   <button
@@ -849,8 +859,9 @@ export const AdminPortalView: React.FC = () => {
                                   <div className="flex items-center gap-2">
                                     <strong className="text-xs text-slate-900">{p.businessName}</strong>
                                     {p.status === 'escolhida' ? (
-                                      <span className="text-[10px] font-bold uppercase px-2 py-0.2 bg-emerald-600 text-white rounded-md shadow-2xs">
-                                        🎉 Escolhida pelo Cliente
+                                      <span className="text-[10px] font-bold uppercase px-2 py-0.5 bg-emerald-600 text-white rounded-md shadow-2xs flex items-center gap-1">
+                                        <CheckCircle2 className="w-3 h-3 text-white" />
+                                        <span>Escolhida pelo Cliente</span>
                                       </span>
                                     ) : p.status === 'recusada' ? (
                                       <span className="text-[10px] font-semibold text-slate-500 bg-slate-200 px-2 py-0.2 rounded-md">
@@ -1542,7 +1553,9 @@ export const AdminPortalView: React.FC = () => {
           <div className="bg-white rounded-2xl shadow-2xl max-w-md w-full p-6 space-y-5 border border-slate-100">
             <div className="flex items-center justify-between border-b border-slate-100 pb-3">
               <div className="flex items-center gap-2">
-                <span className="p-2 bg-amber-100 text-amber-800 rounded-xl">⭐</span>
+                <span className="p-2 bg-amber-100 text-amber-800 rounded-xl">
+                  <Sparkles className="w-5 h-5 text-amber-600" />
+                </span>
                 <div>
                   <h3 className="font-bold text-base text-slate-900">Ativar Destaque Patrocinado</h3>
                   <p className="text-xs text-slate-500">Confirmação manual com registro auditado</p>
@@ -1637,7 +1650,9 @@ export const AdminPortalView: React.FC = () => {
           <div className="bg-white rounded-2xl shadow-2xl max-w-md w-full p-6 space-y-5 border border-slate-100">
             <div className="flex items-center justify-between border-b border-slate-100 pb-3">
               <div className="flex items-center gap-2">
-                <span className="p-2 bg-indigo-100 text-indigo-800 rounded-xl">👑</span>
+                <span className="p-2 bg-indigo-100 text-indigo-800 rounded-xl">
+                  <Crown className="w-5 h-5 text-indigo-700" />
+                </span>
                 <div>
                   <h3 className="font-bold text-base text-slate-900">Ativação de Plano (Suporte)</h3>
                   <p className="text-xs text-slate-500">Operação auditada para suporte e testes</p>

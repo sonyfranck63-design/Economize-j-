@@ -62,7 +62,7 @@ const BusinessQuoteCard = React.memo<BusinessQuoteCardProps>(({ q, userBusinesse
             {isWon ? (
               <span className="text-[10px] font-extrabold uppercase text-white bg-emerald-600 px-2.5 py-0.5 rounded-md flex items-center gap-1">
                 <CheckCircle2 className="w-3 h-3" />
-                🎉 Proposta Aceita • R$ {myProposal?.price.toFixed(2)}
+                <span>Proposta Aceita • R$ {myProposal?.price.toFixed(2)}</span>
               </span>
             ) : (
               <span className="text-[10px] font-bold uppercase text-slate-700 bg-slate-100 px-2.5 py-0.5 rounded-md flex items-center gap-1">
@@ -178,10 +178,10 @@ const CustomerQuoteCard = React.memo<CustomerQuoteCardProps>(({
                 triggerCelebrationFireworks();
               }}
               className="inline-flex items-center gap-1.5 text-xs font-bold text-emerald-800 bg-emerald-100 hover:bg-emerald-200 px-3 py-1 rounded-full border border-emerald-300 transition cursor-pointer shadow-xs active:scale-95"
-              title="Proposta escolhida! Clique para soltar fogos de comemoração 🎉"
+              title="Proposta escolhida pelo cliente"
             >
               <Sparkles className="w-3.5 h-3.5 text-amber-500 animate-pulse" />
-              <span>Proposta Escolhida 🎉</span>
+              <span>Proposta Escolhida</span>
             </button>
           ) : hasProposals ? (
             <span className="text-xs font-bold text-emerald-700 bg-emerald-50 px-3 py-1 rounded-full border border-emerald-200 flex items-center gap-1">

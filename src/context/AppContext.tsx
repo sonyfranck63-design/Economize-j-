@@ -575,8 +575,37 @@ export const DataProvider: React.FC<{ children: React.ReactNode }> = ({ children
         );
 
         if (userProfile) {
-          setCurrentUser(userProfile);
-          setUserRole(userProfile.role);
+          const myBizList = (bizList || []).filter(
+            (b) => (b.ownerId || '').toLowerCase() === (userProfile.id || '').toLowerCase()
+          );
+          const myBizIds = myBizList.map((b) => b.id);
+
+          // Sincroniza role: se o usuário já possui empresas cadastradas no banco mas o perfil ainda
+          // estava gravado como 'customer', promove legitimamente para 'business' para refletir a realidade
+          const effectiveRole: UserRole =
+            userProfile.role === 'admin'
+              ? 'admin'
+              : myBizList.length > 0
+              ? 'business'
+              : userProfile.role;
+
+          const syncedProfile: AuthUserProfile = {
+            ...userProfile,
+            role: effectiveRole,
+          };
+
+          setCurrentUser(syncedProfile);
+          setUserRole(effectiveRole);
+          authService.persistCurrentUser(syncedProfile);
+
+          if (myBizList.length > 0 && userProfile.role === 'customer' && isSupabaseConfigured && supabase) {
+            Promise.resolve(
+              supabase
+                .from('profiles')
+                .update({ role: 'business' })
+                .eq('id', userProfile.id)
+            ).catch((syncErr) => console.warn('[AppContext] Sincronização role profiles:', syncErr));
+          }
 
           const userFavs = await dataService.getUserFavorites(userProfile.id);
           if (userFavs) {
@@ -587,10 +616,6 @@ export const DataProvider: React.FC<{ children: React.ReactNode }> = ({ children
           if (userNotifs && userNotifs.length > 0) {
             setNotifications(userNotifs);
           }
-
-          const myBizIds = (bizList || [])
-            .filter((b) => (b.ownerId || '').toLowerCase() === (userProfile.id || '').toLowerCase())
-            .map((b) => b.id);
 
           const allQuotes = await dataService.syncAllQuoteRequests(userProfile.id, myBizIds);
           setQuoteRequests(allQuotes || []);
@@ -821,7 +846,7 @@ export const DataProvider: React.FC<{ children: React.ReactNode }> = ({ children
     setNotifications((prev) => [
       {
         id: `qr-notif-${Date.now()}`,
-        title: '📋 Orçamento Enviado com Sucesso',
+        title: 'Orçamento Enviado com Sucesso',
         message: `Sua solicitação de "${data.title}" foi repassada para as empresas da sua região.`,
         timestamp: 'Agora',
         type: 'proposal',
@@ -917,7 +942,7 @@ export const DataProvider: React.FC<{ children: React.ReactNode }> = ({ children
     setNotifications((prev) => [
       {
         id: `accept-${Date.now()}`,
-        title: '🎉 Proposta Escolhida!',
+        title: 'Proposta Escolhida com Sucesso',
         message: 'Você escolheu a proposta. A empresa foi notificada para agendamento.',
         timestamp: 'Agora',
         type: 'system',
@@ -1166,15 +1191,15 @@ export const DataProvider: React.FC<{ children: React.ReactNode }> = ({ children
     saveLocalBusiness(newBusiness);
     setBusinesses((prev) => [newBusiness, ...prev]);
 
-    if (currentUser && currentUser.role === 'customer') {
-      const updatedUser = { ...currentUser, role: 'business' as const };
+    if (currentUser) {
+      const updatedUser: AuthUserProfile = {
+        ...currentUser,
+        role: currentUser.role === 'admin' ? 'admin' : 'business',
+      };
       setCurrentUser(updatedUser);
-      setUserRole('business');
-      try {
-        localStorage.setItem('economizaja_user', JSON.stringify(updatedUser));
-      } catch {
-        // ignore
-      }
+      setUserRole(updatedUser.role);
+      authService.persistCurrentUser(updatedUser);
+
       if (isSupabaseConfigured && supabase) {
         Promise.resolve(
           supabase
@@ -1184,7 +1209,13 @@ export const DataProvider: React.FC<{ children: React.ReactNode }> = ({ children
         ).catch((err: any) => console.warn('Aviso ao atualizar perfil para business:', err));
       }
     }
-  }, [currentUser, setCurrentUser, setUserRole]);
+
+    if (isSupabaseConfigured) {
+      refreshBusinesses().catch((refreshErr) =>
+        console.warn('Aviso ao sincronizar empresas pós-cadastro:', refreshErr)
+      );
+    }
+  }, [currentUser, setCurrentUser, setUserRole, refreshBusinesses]);
 
   const updateMonetization = useCallback(async (settings: AdminMonetizationSettings) => {
     let previous: AdminMonetizationSettings = INITIAL_MONETIZATION;

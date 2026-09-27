@@ -24,6 +24,7 @@ import {
   Ban,
   AlertTriangle,
   Sparkles,
+  TrendingDown,
 } from 'lucide-react';
 
 export const CompareQuotesModal: React.FC = () => {
@@ -156,8 +157,9 @@ export const CompareQuotesModal: React.FC = () => {
             </h3>
             <p className="text-xs text-slate-500 mt-0.5">{quote.description}</p>
             {hasMultipleQuotes && quote.status !== 'cancelado' && (
-              <p className="text-xs font-semibold text-emerald-600 mt-2">
-                💰 Diferença de até R$ {maxSavings.toFixed(2).replace('.', ',')} entre as propostas!
+              <p className="text-xs font-semibold text-emerald-600 mt-2 flex items-center gap-1.5">
+                <TrendingDown className="w-3.5 h-3.5" />
+                <span>Diferença de até R$ {maxSavings.toFixed(2).replace('.', ',')} entre as propostas!</span>
               </p>
             )}
           </div>
@@ -343,8 +345,9 @@ export const CompareQuotesModal: React.FC = () => {
               </div>
               <div>
                 <div className="flex items-center gap-2">
-                  <span className="text-[11px] font-extrabold uppercase tracking-wider bg-white text-emerald-800 px-2.5 py-0.5 rounded-full shadow-xs">
-                    🎉 Proposta Escolhida!
+                  <span className="text-[11px] font-extrabold uppercase tracking-wider bg-white text-emerald-800 px-2.5 py-0.5 rounded-full shadow-xs flex items-center gap-1">
+                    <CheckCircle2 className="w-3.5 h-3.5 text-emerald-700" />
+                    <span>Proposta Escolhida!</span>
                   </span>
                   <span className="text-xs text-emerald-100 font-medium">Contratado pelo cliente</span>
                 </div>
@@ -563,14 +566,14 @@ export const CompareQuotesModal: React.FC = () => {
                               ? 'bg-slate-100 text-slate-400 cursor-not-allowed'
                               : 'bg-slate-900 hover:bg-slate-800 text-white shadow-xs active:scale-95 cursor-pointer'
                           }`}
-                          title={isAccepted ? "Proposta escolhida! Clique para soltar fogos de comemoração 🎉" : "Escolher esta proposta"}
+                          title={isAccepted ? "Proposta escolhida com sucesso" : "Escolher esta proposta"}
                         >
                           {isProcessingAction ? (
                             'Processando...'
                           ) : isAccepted ? (
                             <>
                               <Sparkles className="w-3.5 h-3.5 text-amber-500 animate-pulse" />
-                              <span>Escolhida 🎉</span>
+                              <span>Escolhida</span>
                             </>
                           ) : quote.status === 'cancelado' ? (
                             'Encerrado'

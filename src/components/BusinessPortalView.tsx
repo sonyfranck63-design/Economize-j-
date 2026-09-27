@@ -222,7 +222,10 @@ export const BusinessPortalView: React.FC = () => {
   if (isRegistering && currentUser) {
     return (
       <CompanyRegistrationView 
-        onComplete={() => setIsRegistering(false)} 
+        onComplete={() => {
+          setIsRegistering(false);
+          refreshBusinesses?.();
+        }} 
         onCancel={() => setIsRegistering(false)} 
       />
     );
@@ -282,8 +285,8 @@ export const BusinessPortalView: React.FC = () => {
   if (!currentBiz) {
     return (
       <div className="flex flex-col items-center justify-center min-h-[60vh] text-center space-y-4 animate-fade-in px-4">
-        <div className="w-16 h-16 bg-slate-100 rounded-full flex items-center justify-center mb-2 shadow-sm border border-slate-200">
-          <span className="text-2xl text-slate-400">🏢</span>
+        <div className="w-16 h-16 bg-emerald-50 rounded-2xl flex items-center justify-center mb-2 shadow-xs border border-emerald-100">
+          <Building2 className="w-8 h-8 text-emerald-600" />
         </div>
         <h2 className="text-xl font-bold text-slate-800">
           {currentUser ? 'Nenhuma empresa cadastrada' : 'Área do Parceiro EconomizaJá'}
@@ -518,36 +521,43 @@ export const BusinessPortalView: React.FC = () => {
           </div>
 
           {/* Switch Managed Business / Cadastrar outra */}
-          <div className="flex items-center gap-2">
-            <span className="text-xs text-slate-500 font-semibold hidden sm:inline">Empresa:</span>
-            <select
-              value={selectedBizId || ""}
-              onChange={(e) => setSelectedBizId(e.target.value)}
-              className="text-xs font-bold p-2.5 rounded-xl border border-slate-200 bg-slate-50 text-slate-800 focus:ring-2 focus:ring-emerald-500 focus:outline-hidden"
-            >
-              {ownedBusinesses.map((b) => (
-                <option key={b.id} value={b.id}>
-                  {b.name} ({b.subcategory})
-                </option>
-              ))}
-            </select>
+          <div className="flex flex-wrap items-center gap-2 w-full sm:w-auto">
+            {ownedBusinesses.length > 1 && (
+              <div className="flex items-center gap-1.5 min-w-0">
+                <span className="text-xs text-slate-500 font-semibold hidden sm:inline">Empresa:</span>
+                <select
+                  value={selectedBizId || ""}
+                  onChange={(e) => setSelectedBizId(e.target.value)}
+                  className="text-xs font-bold p-2.5 rounded-xl border border-slate-200 bg-slate-50 text-slate-800 focus:ring-2 focus:ring-emerald-500 focus:outline-hidden max-w-[150px] xs:max-w-[200px] truncate"
+                >
+                  {ownedBusinesses.map((b) => (
+                    <option key={b.id} value={b.id}>
+                      {b.name} ({b.subcategory})
+                    </option>
+                  ))}
+                </select>
+              </div>
+            )}
             <button
+              type="button"
               onClick={() => setIsLeadCreditsModalOpen(true)}
               title="Comprar Saldo de Leads para responder cotações"
-              className="text-xs font-bold px-3 py-2.5 bg-emerald-600 hover:bg-emerald-700 text-white rounded-xl transition-all shadow-xs flex items-center gap-1.5 shrink-0 active:scale-95 cursor-pointer min-h-[44px]"
+              className="text-xs font-bold px-3 py-2.5 bg-emerald-600 hover:bg-emerald-700 text-white rounded-xl transition-all shadow-xs flex items-center gap-1.5 active:scale-95 cursor-pointer min-h-[44px]"
             >
-              <Zap className="w-3.5 h-3.5 fill-amber-300 text-amber-300" />
+              <Zap className="w-3.5 h-3.5 fill-amber-300 text-amber-300 shrink-0" />
               <span>Comprar Leads</span>
             </button>
             <button
+              type="button"
               onClick={handleStartRegistration}
               title="Cadastrar outra empresa"
-              className="text-xs font-bold px-3 py-2.5 bg-emerald-50 hover:bg-emerald-100 text-emerald-700 border border-emerald-200 rounded-xl transition-colors flex items-center gap-1 shrink-0 min-h-[44px]"
+              className="text-xs font-bold px-3 py-2.5 bg-emerald-50 hover:bg-emerald-100 text-emerald-700 border border-emerald-200 rounded-xl transition-colors flex items-center gap-1 min-h-[44px]"
             >
-              <PlusCircle className="w-3.5 h-3.5" />
-              <span className="hidden sm:inline">Nova Empresa</span>
+              <PlusCircle className="w-3.5 h-3.5 shrink-0" />
+              <span className="hidden xs:inline">Nova Empresa</span>
             </button>
             <button
+              type="button"
               onClick={async () => {
                 setIsRefreshing(true);
                 await refreshBusinesses?.();
@@ -555,10 +565,10 @@ export const BusinessPortalView: React.FC = () => {
                 setIsRefreshing(false);
               }}
               title="Atualizar dados do negócio e plano"
-              className="text-xs font-bold px-3 py-2.5 bg-slate-100 hover:bg-slate-200 text-slate-700 border border-slate-200 rounded-xl transition-colors flex items-center gap-1 shrink-0 min-h-[44px]"
+              className="text-xs font-bold px-3 py-2.5 bg-slate-100 hover:bg-slate-200 text-slate-700 border border-slate-200 rounded-xl transition-colors flex items-center gap-1 min-h-[44px]"
             >
-              <RefreshCw className={`w-3.5 h-3.5 ${isRefreshing ? 'animate-spin text-emerald-600' : ''}`} />
-              <span className="hidden sm:inline">Atualizar</span>
+              <RefreshCw className={`w-3.5 h-3.5 shrink-0 ${isRefreshing ? 'animate-spin text-emerald-600' : ''}`} />
+              <span className="hidden xs:inline">Atualizar</span>
             </button>
           </div>
         </div>
@@ -647,18 +657,19 @@ export const BusinessPortalView: React.FC = () => {
                 </p>
               </div>
 
-              <div className="flex items-center gap-2 self-start sm:self-auto">
+              <div className="flex flex-wrap items-center gap-2 self-start sm:self-auto">
                 <button
                   type="button"
                   onClick={() => setIsLeadCreditsModalOpen(true)}
                   className="text-xs font-bold px-3 py-2 rounded-xl bg-emerald-50 hover:bg-emerald-100 text-emerald-800 border border-emerald-300 transition flex items-center gap-1.5 cursor-pointer min-h-[44px]"
                   title="Adquirir créditos de leads avulsos"
                 >
-                  <Zap className="w-3.5 h-3.5 text-amber-600 fill-amber-500" />
+                  <Zap className="w-3.5 h-3.5 text-amber-600 fill-amber-500 shrink-0" />
                   <span>Comprar Saldo de Leads</span>
                 </button>
 
                 <button
+                  type="button"
                   onClick={async () => {
                     setIsRefreshing(true);
                     try {
@@ -671,7 +682,7 @@ export const BusinessPortalView: React.FC = () => {
                   className="text-xs font-bold px-3 py-2 rounded-xl border border-slate-200 hover:bg-slate-50 text-slate-700 transition flex items-center gap-1.5 cursor-pointer min-h-[44px]"
                   title="Atualizar orçamentos em tempo real"
                 >
-                  <RefreshCw className={`w-3.5 h-3.5 ${isRefreshing ? 'animate-spin text-emerald-600' : 'text-slate-500'}`} />
+                  <RefreshCw className={`w-3.5 h-3.5 shrink-0 ${isRefreshing ? 'animate-spin text-emerald-600' : 'text-slate-500'}`} />
                   <span>{isRefreshing ? 'Atualizando...' : 'Atualizar'}</span>
                 </button>
               </div>
@@ -794,13 +805,13 @@ export const BusinessPortalView: React.FC = () => {
                 </p>
               </div>
 
-              <div className="flex items-center gap-2 shrink-0">
+              <div className="flex flex-wrap items-center gap-2 shrink-0">
                 <button
                   type="button"
                   onClick={() => setIsLeadCreditsModalOpen(true)}
                   className="px-3.5 py-2 rounded-xl bg-emerald-600 hover:bg-emerald-700 text-white font-bold text-xs transition shadow-xs flex items-center gap-1.5 active:scale-95 cursor-pointer min-h-[40px]"
                 >
-                  <Zap className="w-3.5 h-3.5 fill-amber-300 text-amber-300" />
+                  <Zap className="w-3.5 h-3.5 fill-amber-300 text-amber-300 shrink-0" />
                   <span>Comprar Saldo de Leads</span>
                 </button>
               </div>
@@ -1072,15 +1083,21 @@ export const BusinessPortalView: React.FC = () => {
 
               {isGratis && monthlyProposalsCount >= 3 && (currentBiz.leadCredits || 0) > 0 && (
                 <div className="bg-amber-50 p-3 rounded-xl text-[11px] text-amber-800 border border-amber-200 flex items-center justify-between">
-                  <span>⚡ Limite mensal gratuito atingido. O envio desta proposta consumirá <strong>1 crédito de lead</strong>.</span>
+                  <span className="flex items-center gap-1.5">
+                    <Zap className="w-3.5 h-3.5 text-amber-600 fill-amber-400 shrink-0" />
+                    <span>Limite mensal gratuito atingido. O envio desta proposta consumirá <strong>1 crédito de lead</strong>.</span>
+                  </span>
                   <span className="font-extrabold bg-amber-200 text-amber-900 px-2 py-0.5 rounded-md text-[10px] shrink-0 ml-2">
                     Saldo: {currentBiz.leadCredits}
                   </span>
                 </div>
               )}
 
-              <div className="bg-slate-50 p-3 rounded-xl text-[11px] text-slate-500 border border-slate-100">
-                Ao enviar a proposta, o cliente verá o valor, sua avaliação ({currentBiz.rating} ⭐) e poderá escolher sua empresa ou clicar no WhatsApp.
+              <div className="bg-slate-50 p-3 rounded-xl text-[11px] text-slate-600 border border-slate-100 flex items-center gap-1.5">
+                <Star className="w-3.5 h-3.5 text-amber-500 fill-amber-400 shrink-0" />
+                <span>
+                  Ao enviar a proposta, o cliente verá o valor, sua avaliação ({currentBiz.rating}) e poderá escolher sua empresa ou clicar no WhatsApp.
+                </span>
               </div>
 
               <div className="flex gap-2 pt-2">
@@ -1524,8 +1541,15 @@ export const BusinessPortalView: React.FC = () => {
                   R$ {monetization.featuredDailyRate.toFixed(2)}
                   <span className="text-xs font-normal text-slate-500"> /dia</span>
                 </span>
-                <span className="text-[11px] text-emerald-700 font-bold block mt-0.5">
-                  {currentBiz.featured ? '★ Sua empresa está em DESTAQUE' : 'Sem destaque ativo'}
+                <span className="text-[11px] text-emerald-700 font-bold flex items-center justify-center sm:justify-end gap-1 mt-0.5">
+                  {currentBiz.featured ? (
+                    <>
+                      <Sparkles className="w-3 h-3 text-amber-500" />
+                      <span>Sua empresa está em DESTAQUE</span>
+                    </>
+                  ) : (
+                    'Sem destaque ativo'
+                  )}
                 </span>
               </div>
             </div>

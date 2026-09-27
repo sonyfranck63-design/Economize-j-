@@ -126,103 +126,127 @@ export const dataService = {
       throw new Error('Supabase não configurado');
     }
 
-    const { data: authData, error: authError } = await supabase.auth.getUser();
-    if (authError || !authData.user) {
-      throw new Error('Sua sessão expirou. Faça login novamente para cadastrar uma empresa.');
+    // Tenta primeiro obter a sessão ativa (com auto-refresh de JWT expirado)
+    let activeUserId = ownerId;
+    let userEmail = '';
+    let userName = business.ownerName || business.name || 'Parceiro';
+
+    try {
+      const { data: sessionData } = await supabase.auth.getSession();
+      if (sessionData?.session?.user) {
+        activeUserId = sessionData.session.user.id;
+        userEmail = sessionData.session.user.email || '';
+        userName = sessionData.session.user.user_metadata?.full_name || userName;
+      } else {
+        const { data: authData, error: authError } = await supabase.auth.getUser();
+        if (authError || !authData?.user) {
+          throw new Error('Sua sessão expirou ou não está ativa. Faça login novamente para cadastrar uma empresa.');
+        }
+        activeUserId = authData.user.id;
+        userEmail = authData.user.email || '';
+        userName = authData.user.user_metadata?.full_name || userName;
+      }
+    } catch (authErr: any) {
+      console.warn('[dataService] Aviso na verificação de sessão:', authErr);
+      if (!activeUserId) {
+        throw new Error('Sua sessão expirou. Faça login novamente para cadastrar uma empresa.');
+      }
     }
 
     const validLogo = !isInvalidOrDeadImageUrl(business.logo)
       ? business.logo
       : getSmartImage(business.categoryId, business.name);
 
-    // Garante que o registro em public.profiles existe para o owner_id antes de vincular à empresa
-    const { data: existingProfile } = await supabase
-      .from('profiles')
-      .select('id, role')
-      .eq('id', authData.user.id)
-      .maybeSingle();
-
-    if (!existingProfile) {
-      const userEmail = authData.user.email || `${authData.user.id}@economizaja.local`;
-      const userName = authData.user.user_metadata?.full_name || business.ownerName || business.name || 'Parceiro';
-
-      // Inserção com role 'customer' para garantir compatibilidade com triggers de role security
-      // Utiliza apenas colunas existentes no schema do banco (id, email, full_name, role, city, state)
-      const profilePayload: {
-        id: string;
-        email: string;
-        full_name: string;
-        role: string;
-        city: string;
-        state: string;
-      } = {
-        id: authData.user.id,
-        email: userEmail,
+    // Garante que o registro em public.profiles existe e está sincronizado antes do INSERT na empresa
+    try {
+      const profilePayload = {
+        id: activeUserId,
+        email: userEmail || `${activeUserId}@economizaja.local`,
         full_name: userName,
-        role: 'customer',
+        role: 'business',
         city: business.city || 'São Paulo',
         state: business.state || 'SP',
       };
 
-      const { error: insertProfileErr } = await supabase
+      const { error: upsertErr } = await supabase
         .from('profiles')
-        .insert(profilePayload);
+        .upsert(profilePayload, { onConflict: 'id' });
 
-      if (insertProfileErr) {
-        console.error('Erro ao auto-criar perfil para vincular empresa:', insertProfileErr);
-        // Verifica se mesmo com erro o perfil já está presente (ex.: concorrência ou trigger)
-        const { data: recheckProfile } = await supabase
-          .from('profiles')
-          .select('id')
-          .eq('id', authData.user.id)
-          .maybeSingle();
-
-        if (!recheckProfile) {
-          throw new Error(`Não foi possível criar o perfil do usuário no banco: ${insertProfileErr.message}`);
-        }
+      if (upsertErr) {
+        console.warn('[dataService] Aviso ao provisionar perfil em profiles:', upsertErr.message);
       }
+    } catch (profErr) {
+      console.warn('[dataService] Falha não impeditiva no sync do perfil:', profErr);
     }
 
-    const { data, error } = await supabase
+    const newBusinessPayload = {
+      owner_id: activeUserId,
+      name: business.name.trim(),
+      legal_name: business.ownerName?.trim() || business.name.trim(),
+      phone: business.phone.trim(),
+      whatsapp: business.whatsapp?.trim() || business.phone.trim(),
+      category_id: business.categoryId,
+      subcategory: business.subcategory?.trim() || 'Serviços Gerais',
+      address: business.address?.trim() || 'Não informado',
+      neighborhood: business.neighborhood?.trim() || 'Centro',
+      city: business.city?.trim() || 'São Paulo',
+      state: business.state?.trim() || 'SP',
+      description: business.description?.trim() || '',
+      logo_url: validLogo,
+      photos: business.photos && business.photos.length > 0 ? business.photos : [validLogo],
+      verified: Boolean(business.verified),
+      featured: Boolean(business.featured),
+      plan_tier: business.plan || 'gratis',
+      working_hours: business.workingHours || 'Seg a Sex: 08h às 18h',
+      active: true,
+    };
+
+    let { data, error } = await supabase
       .from('businesses')
-      .insert({
-        owner_id: authData.user.id,
-        name: business.name,
-        legal_name: business.ownerName || business.name,
-        phone: business.phone,
-        whatsapp: business.whatsapp || business.phone,
-        category_id: business.categoryId,
-        subcategory: business.subcategory,
-        address: business.address,
-        neighborhood: business.neighborhood,
-        city: business.city,
-        state: business.state,
-        description: business.description || '',
-        logo_url: validLogo,
-        photos: business.photos && business.photos.length > 0 ? business.photos : [validLogo],
-        verified: Boolean(business.verified),
-        featured: Boolean(business.featured),
-        plan_tier: business.plan || 'gratis',
-        working_hours: business.workingHours || 'Seg a Sex: 08h às 18h',
-        active: true,
-      })
+      .insert(newBusinessPayload)
       .select('id')
       .single();
 
-    if (error) {
-      console.error('Erro ao inserir empresa no Supabase:', error);
-      if (error.message?.includes('businesses_owner_id_fkey')) {
-        throw new Error('Sua conta não possui um perfil ativo sincronizado no banco. Por favor, clique em Sair no topo da página e faça login novamente para sincronizar sua conta.');
+    // Se houve erro de foreign key com profiles, tenta reparar o profile e repetir uma vez
+    if (error && error.message?.includes('businesses_owner_id_fkey')) {
+      console.warn('[dataService] FK ausente em profiles, tentando auto-reparo e re-inserção...');
+      try {
+        await supabase.from('profiles').upsert({
+          id: activeUserId,
+          email: userEmail || `${activeUserId}@economizaja.local`,
+          full_name: userName,
+          role: 'business',
+          city: business.city || 'São Paulo',
+          state: business.state || 'SP',
+        }, { onConflict: 'id' });
+
+        const retry = await supabase
+          .from('businesses')
+          .insert(newBusinessPayload)
+          .select('id')
+          .single();
+
+        data = retry.data;
+        error = retry.error;
+      } catch (retryErr) {
+        console.error('[dataService] Falha no retry de inserção:', retryErr);
       }
-      throw new Error(error.message || 'Erro ao persistir empresa no banco de dados');
     }
 
-    // Tenta atualizar a role do perfil para 'business' se o banco permitir
+    if (error || !data) {
+      console.error('Erro ao inserir empresa no Supabase:', error);
+      if (error?.message?.includes('businesses_owner_id_fkey')) {
+        throw new Error('Sua conta não possui um perfil ativo sincronizado no banco. Por favor, clique em Sair no topo da página e faça login novamente para sincronizar sua conta.');
+      }
+      throw new Error(error?.message || 'Erro ao persistir empresa no banco de dados');
+    }
+
+    // Sincroniza role do perfil para 'business' no Supabase
     try {
       await supabase
         .from('profiles')
         .update({ role: 'business' })
-        .eq('id', authData.user.id);
+        .eq('id', activeUserId);
     } catch (profileErr) {
       console.warn('Aviso ao atualizar role do perfil para business:', profileErr);
     }
