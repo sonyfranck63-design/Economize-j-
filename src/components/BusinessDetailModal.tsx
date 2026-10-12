@@ -19,7 +19,9 @@ import {
   CheckCircle2,
   Tag,
   Share2,
+  Flag,
 } from 'lucide-react';
+import { ReportContentModal, ReportTarget } from './ReportContentModal';
 
 export const BusinessDetailModal: React.FC = () => {
   const {
@@ -34,9 +36,19 @@ export const BusinessDetailModal: React.FC = () => {
     favorites,
     addReview,
     reviews,
+    loadReviewsForBusiness,
     currentUser,
     setIsAuthModalOpen,
   } = useApp();
+
+  const [reportTarget, setReportTarget] = useState<ReportTarget | null>(null);
+
+  // Carrega as avaliações reais da empresa ao abrir o perfil
+  React.useEffect(() => {
+    if (selectedBusinessId) {
+      loadReviewsForBusiness(selectedBusinessId);
+    }
+  }, [selectedBusinessId, loadReviewsForBusiness]);
 
   const [activeTab, setActiveTab] = useState<'servicos' | 'produtos' | 'ofertas' | 'avaliacoes'>('servicos');
 
@@ -57,6 +69,7 @@ export const BusinessDetailModal: React.FC = () => {
   const biz = selectedBusinessId ? businesses.find((b) => b.id === selectedBusinessId) : null;
   const bizOffers = biz ? offers.filter((o) => o.businessId === biz.id) : [];
   const isFav = biz ? favorites.businessIds.includes(biz.id) : false;
+  const bizReviews = biz ? reviews.filter((r) => r.businessId === biz.id) : [];
 
   const handleReviewSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -96,6 +109,8 @@ export const BusinessDetailModal: React.FC = () => {
   };
 
   return (
+    <>
+    <ReportContentModal target={reportTarget} onClose={() => setReportTarget(null)} />
     <AnimatePresence>
       {Boolean(selectedBusinessId && biz) && biz && (
         <motion.div
@@ -248,6 +263,24 @@ export const BusinessDetailModal: React.FC = () => {
                 <Navigation className="w-3.5 h-3.5" />
                 <span>VER NO MAPA</span>
               </button>
+
+              {biz.ownerId !== currentUser?.id && (
+                <button
+                  id="biz-btn-denunciar"
+                  onClick={() =>
+                    setReportTarget({
+                      contentType: 'business',
+                      contentId: biz.id,
+                      label: biz.name,
+                      authorUserId: biz.ownerId,
+                    })
+                  }
+                  className="flex-1 sm:flex-none px-5 py-2 rounded-xl text-slate-500 hover:text-rose-700 hover:bg-rose-50 font-semibold text-xs transition flex items-center justify-center gap-1.5"
+                >
+                  <Flag className="w-3.5 h-3.5" />
+                  <span>Denunciar ou bloquear</span>
+                </button>
+              )}
             </div>
           </div>
 
@@ -283,7 +316,7 @@ export const BusinessDetailModal: React.FC = () => {
                 activeTab === 'avaliacoes' ? 'bg-slate-900 text-white' : 'text-slate-600 hover:bg-slate-100'
               }`}
             >
-              Avaliações ({(biz.reviews?.length || 0)})
+              Avaliações ({bizReviews.length})
             </button>
           </div>
         </div>
@@ -494,7 +527,10 @@ export const BusinessDetailModal: React.FC = () => {
 
               {/* Reviews list */}
               <div className="space-y-3">
-                {(biz.reviews || []).map((rev) => (
+                {bizReviews.length === 0 && (
+                  <p className="text-xs text-slate-400 text-center py-4">Esta empresa ainda não recebeu avaliações.</p>
+                )}
+                {bizReviews.map((rev) => (
                   <div key={rev.id} className="p-4 rounded-xl bg-slate-50 border border-slate-100 space-y-1.5">
                     <div className="flex items-center justify-between">
                       <div className="flex items-center gap-2">
@@ -512,9 +548,32 @@ export const BusinessDetailModal: React.FC = () => {
                       </div>
                     </div>
                     <p className="text-xs text-slate-600 leading-relaxed">{rev.comment}</p>
-                    <span className="text-[10px] text-slate-400 block">
-                      {new Date(rev.createdAt).toLocaleDateString('pt-BR')}
-                    </span>
+                    <div className="flex items-center justify-between gap-2">
+                      <span className="text-[10px] text-slate-400 block">
+                        {new Date(rev.createdAt).toLocaleDateString('pt-BR')}
+                      </span>
+                      {rev.userId !== currentUser?.id && (
+                        rev.reported ? (
+                          <span className="text-[10px] text-slate-400">Denunciada</span>
+                        ) : (
+                          <button
+                            type="button"
+                            onClick={() =>
+                              setReportTarget({
+                                contentType: 'review',
+                                contentId: rev.id,
+                                label: `Avaliação de ${rev.authorName || rev.userName}`,
+                                authorUserId: rev.userId,
+                              })
+                            }
+                            className="text-[10px] font-semibold text-slate-400 hover:text-rose-700 flex items-center gap-1 px-2 py-1 rounded-lg hover:bg-rose-50"
+                          >
+                            <Flag className="w-3 h-3" />
+                            Denunciar
+                          </button>
+                        )
+                      )}
+                    </div>
                   </div>
                 ))}
               </div>
@@ -527,5 +586,6 @@ export const BusinessDetailModal: React.FC = () => {
         </motion.div>
       )}
     </AnimatePresence>
+    </>
   );
 };

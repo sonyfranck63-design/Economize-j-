@@ -155,9 +155,9 @@ export const PlayStoreModal: React.FC = () => {
                 <div className="p-3.5 rounded-xl border border-slate-100 bg-slate-50/50 space-y-1">
                   <div className="flex items-center gap-2 text-emerald-600 font-bold">
                     <CheckCircle2 className="w-4 h-4" />
-                    <span>Deep Links Ativos</span>
+                    <span>Páginas Públicas</span>
                   </div>
-                  <p className="text-[11px] text-slate-500">Suporta https://economizaja.app e economizaja://</p>
+                  <p className="text-[11px] text-slate-500">Privacidade, termos e exclusão de conta em https://economizaja.ai.studio</p>
                 </div>
               </div>
             </div>

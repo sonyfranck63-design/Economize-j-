@@ -68,10 +68,10 @@ describe('Auditoria de Prontidão para a Google Play Store e Políticas do Googl
       );
     });
 
-    // Validar deep linking scheme
+    // App Links com autoVerify exigem assetlinks.json no domínio; o domínio economizaja.app não existe
     assert.ok(
-      content.includes('<data android:scheme="https" android:host="economizaja.app" />'),
-      'AndroidManifest.xml deve conter deep link configurado para economizaja.app'
+      !content.includes('android:host="economizaja.app"'),
+      'AndroidManifest.xml não deve declarar deep link para o domínio inexistente economizaja.app'
     );
   });
 

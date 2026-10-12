@@ -1244,18 +1244,23 @@ export const dataService = {
       return [];
     }
 
-    return data.map((r: any) => ({
-      id: r.id,
-      businessId: r.business_id,
-      userName: r.user_name,
-      rating: r.rating,
-      comment: r.comment,
-      createdAt: r.created_at,
-      verifiedService: Boolean(r.verified_service),
-      reported: Boolean(r.reported),
-      isDemo: false,
-      reviews: [],
-    }));
+    return data
+      // Avaliações ocultadas pela moderação (migração 00040) não são exibidas
+      .filter((r: any) => r.active !== false)
+      .map((r: any) => ({
+        id: r.id,
+        businessId: r.business_id,
+        userId: r.user_id,
+        userName: r.user_name,
+        authorName: r.user_name,
+        rating: r.rating,
+        comment: r.comment,
+        createdAt: r.created_at,
+        verifiedService: Boolean(r.verified_service),
+        verifiedCustomer: Boolean(r.verified_service),
+        reported: Boolean(r.reported),
+        isDemo: false,
+      }));
   },
 
   async addReview(params: {
@@ -1280,18 +1285,11 @@ export const dataService = {
   },
 
   async reportReview(reviewId: string, reason = 'Avaliação com conteúdo impróprio ou ofensivo'): Promise<void> {
-    if (!isSupabaseConfigured || !supabase) return;
-    try {
-      await this.submitContentReport({
-        contentType: 'review',
-        contentId: reviewId,
-        reason,
-      });
-    } catch (e) {
-      console.warn('[dataService] Fallback ao denunciar avaliação:', e);
-      // Tenta atualização direta caso a RPC não esteja disponível
-      await supabase.from('reviews').update({ reported: true }).eq('id', reviewId);
-    }
+    await this.submitContentReport({
+      contentType: 'review',
+      contentId: reviewId,
+      reason,
+    });
   },
 
   // ==========================================
@@ -1355,6 +1353,14 @@ export const dataService = {
     });
     if (error) throw new Error(error.message);
     return data;
+  },
+
+  async getBlockedUserIds(): Promise<string[]> {
+    if (!isSupabaseConfigured || !supabase) return [];
+    // RLS de user_blocks retorna apenas os bloqueios feitos pelo próprio usuário
+    const { data, error } = await supabase.from('user_blocks').select('blocked_user_id');
+    if (error || !data) return [];
+    return data.map((row: any) => row.blocked_user_id);
   },
 
   // ==========================================
@@ -1460,27 +1466,34 @@ export const dataService = {
   },
 
   /**
-   * Processa com segurança a compra realizada no Google Play Billing,
-   * validando no backend contra replay e vinculando à empresa do parceiro.
+   * Envia a compra do Google Play para a Edge Function verify-play-purchase,
+   * que confirma a assinatura na Google Play Developer API antes de ativar o plano.
    */
   async processGooglePlayPurchase(params: {
     businessId: string;
     productId: string;
     purchaseToken: string;
     orderId?: string;
-    payload?: any;
   }): Promise<any> {
     if (!isSupabaseConfigured || !supabase) throw new Error('Supabase não configurado');
-    const { data, error } = await supabase.rpc('process_google_play_purchase', {
-      p_business_id: params.businessId,
-      p_product_id: params.productId,
-      p_purchase_token: params.purchaseToken,
-      p_order_id: params.orderId || null,
-      p_purchase_payload: params.payload || {},
+    const { data, error } = await supabase.functions.invoke('verify-play-purchase', {
+      body: {
+        businessId: params.businessId,
+        productId: params.productId,
+        purchaseToken: params.purchaseToken,
+      },
     });
     if (error) {
-      console.error('[dataService] Erro na RPC process_google_play_purchase:', error);
-      throw new Error(error.message || 'Falha ao registrar compra no servidor.');
+      // FunctionsHttpError traz a resposta JSON da função em error.context
+      let message = error.message;
+      try {
+        const body = await (error as any).context?.json?.();
+        if (body?.error) message = body.error;
+      } catch {
+        // mantém a mensagem padrão
+      }
+      console.error('[dataService] Falha na validação da compra Google Play:', message);
+      throw new Error(message || 'Falha ao validar a compra no servidor.');
     }
     return data;
   },
@@ -1525,15 +1538,14 @@ export const dataService = {
         ? 'economizaja_premium_monthly'
         : 'economizaja_pro_monthly';
 
-    const token =
-      params.purchaseToken ||
-      params.transactionId ||
-      `token-${Date.now()}`;
+    if (!params.purchaseToken) {
+      throw new Error('O Google Play não retornou o comprovante da compra. Use "Restaurar compras" para tentar novamente.');
+    }
 
     await this.processGooglePlayPurchase({
       businessId: params.businessId,
       productId,
-      purchaseToken: token,
+      purchaseToken: params.purchaseToken,
       orderId: params.transactionId,
     });
   },

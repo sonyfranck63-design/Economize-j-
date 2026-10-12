@@ -1,7 +1,8 @@
 import React, { useState } from 'react';
 import { useApp } from '../context/AppContext';
 import { CATEGORIES } from '../data/categories';
-import { Tag, MapPin, Clock, MessageCircle, Heart, Info, ArrowUpDown, Bell } from 'lucide-react';
+import { Tag, MapPin, Clock, MessageCircle, Heart, Info, ArrowUpDown, Bell, Flag } from 'lucide-react';
+import { ReportContentModal, ReportTarget } from './ReportContentModal';
 import { SafeImage } from './SafeImage';
 import { buildWhatsAppLink } from '../utils/whatsappUtils';
 import { motion } from 'motion/react';
@@ -20,7 +21,11 @@ export const OffersView: React.FC = () => {
     setIsPriceAlertModalOpen,
     isLoadingData,
     refreshOffers,
+    businesses,
+    currentUser,
   } = useApp();
+
+  const [reportTarget, setReportTarget] = useState<ReportTarget | null>(null);
 
   const [selectedCat, setSelectedCat] = useState<string | null>(null);
   const [sortBy, setSortBy] = useState<'price_asc' | 'expiry'>('price_asc');
@@ -33,6 +38,8 @@ export const OffersView: React.FC = () => {
     });
 
   return (
+    <>
+    <ReportContentModal target={reportTarget} onClose={() => setReportTarget(null)} />
     <PullToRefresh onRefresh={refreshOffers}>
       <div className="space-y-6 pb-12">
         
@@ -227,6 +234,27 @@ export const OffersView: React.FC = () => {
                         <span>WhatsApp</span>
                       </a>
                     </div>
+                    {(() => {
+                      const ownerId = businesses.find((b) => b.id === offer.businessId)?.ownerId;
+                      if (ownerId && ownerId === currentUser?.id) return null;
+                      return (
+                        <button
+                          type="button"
+                          onClick={() =>
+                            setReportTarget({
+                              contentType: 'offer',
+                              contentId: offer.id,
+                              label: `${offer.title} — ${offer.businessName}`,
+                              authorUserId: ownerId,
+                            })
+                          }
+                          className="w-full mt-1 py-1.5 text-[11px] font-semibold text-slate-400 hover:text-rose-700 flex items-center justify-center gap-1"
+                        >
+                          <Flag className="w-3 h-3" />
+                          Denunciar oferta
+                        </button>
+                      );
+                    })()}
                   </div>
 
                 </div>
@@ -237,5 +265,6 @@ export const OffersView: React.FC = () => {
       )}
     </div>
     </PullToRefresh>
+    </>
   );
 };

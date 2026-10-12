@@ -61,6 +61,9 @@ export const TermsOfServiceView: React.FC<Props> = ({ onBack }) => {
           <p>
             Serão imediatamente removidos pela equipe de moderação, sujeitando a conta do infrator à suspensão ou encerramento definitivo sem prévio aviso.
           </p>
+          <p>
+            Qualquer usuário pode denunciar avaliações, empresas e ofertas e bloquear outros usuários diretamente no aplicativo, pela opção "Denunciar".
+          </p>
         </section>
 
         <section className="space-y-2">

@@ -483,8 +483,10 @@ export interface DataContextType {
   favorites: { businessIds: string[]; offerIds: string[] };
   isLoadingData: boolean;
   isDatabaseConnected: boolean;
+  blockedUserIds: string[];
 
   // Actions
+  loadReviewsForBusiness: (businessId: string) => Promise<void>;
   toggleFavoriteBusiness: (id: string) => Promise<void>;
   toggleFavoriteOffer: (id: string) => Promise<void>;
   createQuoteRequest: (data: Omit<QuoteRequest, 'id' | 'createdAt' | 'status' | 'proposals'>) => Promise<string>;
@@ -544,6 +546,16 @@ export const DataProvider: React.FC<{ children: React.ReactNode }> = ({ children
   const [monetization, setMonetization] = useState<AdminMonetizationSettings>(INITIAL_MONETIZATION);
   const [notifications, setNotifications] = useState<NotificationItem[]>([]);
   const [chatMessages, setChatMessages] = useState<ChatMessage[]>([]);
+  const [blockedUserIds, setBlockedUserIds] = useState<string[]>([]);
+
+  // Bloqueios do usuário (UGC - Google Play): conteúdo de usuários bloqueados fica oculto
+  useEffect(() => {
+    if (!currentUser?.id || !isSupabaseConfigured) {
+      setBlockedUserIds([]);
+      return;
+    }
+    dataService.getBlockedUserIds().then(setBlockedUserIds);
+  }, [currentUser?.id]);
 
   // Carrega dados reais do Supabase ao inicializar
   useEffect(() => {
@@ -1093,20 +1105,36 @@ export const DataProvider: React.FC<{ children: React.ReactNode }> = ({ children
           rating,
           comment,
         });
-      } catch (err) {
+        // Substitui a avaliação otimista pela versão persistida (com id e userId reais)
+        const persisted = await dataService.getReviews(businessId);
+        setReviews((prev) => [...prev.filter((r) => r.businessId !== businessId), ...persisted]);
+      } catch (err: any) {
         console.error('Erro ao salvar avaliação:', err);
+        setReviews((prev) => prev.filter((r) => r.id !== newReview.id));
+        const isDuplicate = String(err?.message || '').includes('unique') || String(err?.message || '').includes('duplicate');
+        alert(isDuplicate ? 'Você já avaliou esta empresa' : 'Não foi possível publicar sua avaliação. Tente novamente.');
       }
     }
   }, [currentUser?.fullName, currentUser?.id, reviews]);
 
+  const loadReviewsForBusiness = useCallback(async (businessId: string) => {
+    if (!isSupabaseConfigured) return;
+    const fetched = await dataService.getReviews(businessId);
+    setReviews((prev) => [...prev.filter((r) => r.businessId !== businessId), ...fetched]);
+  }, []);
+
   const reportReview = useCallback(async (reviewId: string) => {
-    setReviews((prev) =>
-      prev.map((r) => (r.id === reviewId ? { ...r, reported: true } : r))
-    );
-    if (isSupabaseConfigured) {
-      await dataService.reportReview(reviewId);
+    try {
+      if (isSupabaseConfigured) {
+        await dataService.reportReview(reviewId);
+      }
+      setReviews((prev) =>
+        prev.map((r) => (r.id === reviewId ? { ...r, reported: true } : r))
+      );
+      alert('Avaliação denunciada. Nossa equipe de moderação vai analisar o conteúdo.');
+    } catch (err: any) {
+      alert(err?.message || 'Não foi possível enviar a denúncia. Tente novamente.');
     }
-    alert('Avaliação denunciada para moderação administrativa.');
   }, []);
 
   const sendChatMessage = useCallback((businessId: string, text: string, quoteRequestId?: string) => {
@@ -1471,7 +1499,9 @@ export const DataProvider: React.FC<{ children: React.ReactNode }> = ({ children
 
   const blockUser = useCallback(async (blockedUserId: string) => {
     if (isSupabaseConfigured) {
-      return await dataService.blockUser(blockedUserId);
+      const res = await dataService.blockUser(blockedUserId);
+      setBlockedUserIds((prev) => (prev.includes(blockedUserId) ? prev : [...prev, blockedUserId]));
+      return res;
     }
     return { success: true };
   }, []);
@@ -1513,11 +1543,35 @@ export const DataProvider: React.FC<{ children: React.ReactNode }> = ({ children
     }
   }, [currentUser?.id]);
 
+  // Oculta conteúdo de usuários bloqueados (exceto para administradores, que moderam tudo)
+  const isAdminViewer = currentUser?.role === 'admin';
+  const visibleBusinesses = useMemo(
+    () =>
+      isAdminViewer || blockedUserIds.length === 0
+        ? businesses
+        : businesses.filter((b) => !b.ownerId || !blockedUserIds.includes(b.ownerId)),
+    [businesses, blockedUserIds, isAdminViewer]
+  );
+  const visibleOffers = useMemo(() => {
+    if (isAdminViewer || blockedUserIds.length === 0) return offers;
+    const hiddenBizIds = new Set(
+      businesses.filter((b) => b.ownerId && blockedUserIds.includes(b.ownerId)).map((b) => b.id)
+    );
+    return offers.filter((o) => !hiddenBizIds.has(o.businessId));
+  }, [offers, businesses, blockedUserIds, isAdminViewer]);
+  const visibleReviews = useMemo(
+    () =>
+      isAdminViewer || blockedUserIds.length === 0
+        ? reviews
+        : reviews.filter((r) => !r.userId || !blockedUserIds.includes(r.userId)),
+    [reviews, blockedUserIds, isAdminViewer]
+  );
+
   const value = useMemo<DataContextType>(() => ({
-    businesses,
-    offers,
+    businesses: visibleBusinesses,
+    offers: visibleOffers,
     quoteRequests,
-    reviews,
+    reviews: visibleReviews,
     priceAlerts,
     notifications,
     chatMessages,
@@ -1525,6 +1579,8 @@ export const DataProvider: React.FC<{ children: React.ReactNode }> = ({ children
     favorites,
     isLoadingData,
     isDatabaseConnected,
+    blockedUserIds,
+    loadReviewsForBusiness,
 
     toggleFavoriteBusiness,
     toggleFavoriteOffer,
@@ -1558,10 +1614,12 @@ export const DataProvider: React.FC<{ children: React.ReactNode }> = ({ children
     refreshBusinesses,
     refreshOffers,
   }), [
-    businesses,
-    offers,
+    visibleBusinesses,
+    visibleOffers,
+    blockedUserIds,
+    loadReviewsForBusiness,
     quoteRequests,
-    reviews,
+    visibleReviews,
     priceAlerts,
     notifications,
     chatMessages,

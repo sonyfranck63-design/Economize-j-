@@ -1,4 +1,5 @@
 import { supabase, isSupabaseConfigured } from '../lib/supabase';
+import { PUBLIC_PAGES } from '../lib/siteConfig';
 import { UserRole } from '../types';
 
 export interface AuthUserProfile {
@@ -296,7 +297,8 @@ export const authService = {
     }
     const cleanEmail = email.toLowerCase().trim();
     const { error } = await supabase.auth.resetPasswordForEmail(cleanEmail, {
-      redirectTo: `${window.location.origin}/#/reset-password`,
+      // No app Android a origem é https://localhost; o link do e-mail precisa abrir o site público
+      redirectTo: PUBLIC_PAGES.resetPassword,
     });
     if (error) {
       throw new Error(error.message || 'Não foi possível enviar o e-mail de recuperação.');

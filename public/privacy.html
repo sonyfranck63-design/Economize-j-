@@ -113,7 +113,9 @@
       <ul>
         <li><strong>Dados Cadastrais (Consumidores):</strong> Nome completo, endereço de e-mail, telefone/WhatsApp de contato e localização geográfica geral (cidade/bairro).</li>
         <li><strong>Dados de Parceiros Comerciais:</strong> Razão social, nome fantasia, CNPJ/CPF, endereço comercial, WhatsApp corporativo, fotos de catálogo e serviços oferecidos.</li>
-        <li><strong>Dados de Localização Aproximada:</strong> Bairro e cidade obtidos via rede mediante sua permissão prévia, estritamente para ordenar empresas e cotações por proximidade regional. O app não coleta localização em segundo plano.</li>
+        <li><strong>Dados de Localização Aproximada:</strong> somente quando você toca em &quot;usar minha localização&quot; e concede a permissão, o app lê a posição aproximada do aparelho e a envia ao serviço OpenStreetMap Nominatim para descobrir sua cidade e bairro. Usamos essa informação apenas para mostrar empresas, ofertas e cotações da sua região. As coordenadas ficam somente no seu aparelho por até 24 horas e não são gravadas em nossos servidores. O app não coleta localização em segundo plano.</li>
+        <li><strong>Dados de Assinatura (Parceiros):</strong> as assinaturas dos planos são processadas pelo Google Play. Recebemos apenas o identificador da compra, o plano contratado e a data de validade; não temos acesso a dados de cartão ou meios de pagamento.</li>
+        <li><strong>Denúncias e Bloqueios:</strong> quando você denuncia um conteúdo ou bloqueia um usuário, registramos o motivo informado e o vínculo de bloqueio para fins de moderação.</li>
         <li><strong>Conteúdo Fornecido:</strong> Descrições de pedidos de orçamento, histórico de cotações, empresas favoritadas e avaliações legítimas de serviços.</li>
       </ul>
     </section>
@@ -123,7 +125,7 @@
       <p>Tratamos seus dados exclusivamente para:</p>
       <ul>
         <li><strong>Execução de Contrato:</strong> Viabilizar o encaminhamento de orçamentos e cotações entre consumidores e empresas prestadoras.</li>
-        <li><strong>Consentimento:</strong> Para notificações e acesso à localização do aparelho.</li>
+        <li><strong>Consentimento:</strong> Para acesso à localização aproximada do aparelho.</li>
         <li><strong>Cumprimento de Obrigação Legal:</strong> Guarda obrigatória de registros de conexão por 6 meses conforme o Artigo 15 do Marco Civil da Internet (Lei 12.965/2014).</li>
         <li><strong>Segurança e Prevenção à Fraude:</strong> Moderação de conteúdo abusivo e proteção contra bots e spams.</li>
       </ul>
@@ -134,7 +136,7 @@
       <p>O EconomizaJá <strong>NUNCA comercializa dados pessoais de seus usuários</strong>. O compartilhamento ocorre apenas:</p>
       <ul>
         <li>Com empresas parceiras que você optar por solicitar orçamento, permitindo que elas enviem propostas comerciais diretas.</li>
-        <li>Com servidores seguros de infraestrutura em nuvem (Supabase / PostgreSQL) com criptografia ponta a ponta e em repouso.</li>
+        <li>Com provedores que operam o serviço em nosso nome: Supabase (hospedagem do banco de dados e autenticação, com conexão criptografada HTTPS/TLS e criptografia em repouso), Google Play (processamento de assinaturas) e OpenStreetMap Nominatim (conversão da localização aproximada em cidade/bairro, apenas quando você solicita).</li>
         <li>Mediante ordem judicial de autoridade competente.</li>
       </ul>
     </section>

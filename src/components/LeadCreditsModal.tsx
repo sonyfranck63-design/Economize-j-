@@ -131,7 +131,7 @@ export const LeadCreditsModal: React.FC<LeadCreditsModalProps> = ({
               <span className="text-xs text-slate-400 font-medium">EconomizaJá Parceiros</span>
             </div>
             <h3 className="text-lg sm:text-xl font-black text-slate-900 mt-1">
-              Comprar Saldo de Leads
+              {isNativeAndroid ? 'Limite de Propostas' : 'Comprar Saldo de Leads'}
             </h3>
             <p className="text-xs text-slate-500 mt-0.5">
               Empresa: <strong className="text-slate-800">{business.name}</strong>
@@ -163,7 +163,8 @@ export const LeadCreditsModal: React.FC<LeadCreditsModalProps> = ({
           </div>
         </div>
 
-        {/* SELEÇÃO DE PACOTES (VITRINE) */}
+        {/* SELEÇÃO DE PACOTES (VITRINE) — apenas na Web; no Android, bens digitais só via Google Play Billing */}
+        {!isNativeAndroid && (
         <div className="space-y-2.5">
           <label className="block text-xs font-bold text-slate-700 uppercase tracking-wider">
             Escolha o Pacote Desejado:
@@ -248,6 +249,7 @@ export const LeadCreditsModal: React.FC<LeadCreditsModalProps> = ({
             </div>
           </div>
         </div>
+        )}
 
         {/* DADOS DE PAGAMENTO: GOOGLE PLAY NO ANDROID OU PIX NA WEB */}
         {isNativeAndroid ? (
@@ -257,7 +259,7 @@ export const LeadCreditsModal: React.FC<LeadCreditsModalProps> = ({
               <span>Google Play & Faturamento Digital</span>
             </div>
             <p className="text-xs text-blue-800 leading-relaxed">
-              No aplicativo Android, em conformidade com as diretrizes da Google Play Store, transações de produtos digitais são integradas ao ecossistema do Google Play.
+              Você atingiu o limite de propostas do plano gratuito. Assine um plano pelo Google Play para continuar enviando propostas.
             </p>
             <div className="bg-white p-3.5 rounded-xl border border-blue-200 space-y-2">
               <div className="text-xs font-bold text-slate-800 flex items-center gap-1.5">
@@ -281,9 +283,6 @@ export const LeadCreditsModal: React.FC<LeadCreditsModalProps> = ({
                 </button>
               )}
             </div>
-            <p className="text-[10px] text-slate-500 text-center">
-              Para pacotes avulsos de créditos sob demanda via PIX, acesse sua conta pelo portal web no navegador.
-            </p>
           </div>
         ) : (
           <div className="border border-emerald-200 bg-emerald-50/50 rounded-2xl p-4 space-y-3">

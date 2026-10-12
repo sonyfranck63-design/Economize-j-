@@ -8,7 +8,7 @@ import { isQuoteMatchingBusiness, isLocationMatch } from '../utils/quoteStorage'
 import { buildWhatsAppLink, formatWhatsAppNumber } from '../utils/whatsappUtils';
 import { isThisMonth } from '../utils/dateUtils';
 import { triggerCelebrationFireworks } from '../utils/confetti';
-import { billingService } from '../services/billingService';
+import { billingService, BILLING_PLANS } from '../services/billingService';
 import { Capacitor } from '@capacitor/core';
 import { dataService } from '../services/dataService';
 import {
@@ -151,10 +151,18 @@ export const BusinessPortalView: React.FC = () => {
   const [isPurchasingPlan, setIsPurchasingPlan] = useState<'pro' | 'premium' | null>(null);
   const [isRestoringPurchases, setIsRestoringPurchases] = useState(false);
 
+  // Preços exibidos no Android vêm da Google Play (fonte da verdade da cobrança)
+  const [playPrices, setPlayPrices] = useState<{ pro?: string; premium?: string }>({});
+
   // Inicializa o serviço Google Play Billing no Android
   React.useEffect(() => {
     if (isNativeAndroid) {
-      billingService.init();
+      billingService.init().then(() => {
+        setPlayPrices({
+          pro: billingService.getProductInfo('pro')?.priceString || `R$ ${BILLING_PLANS.pro.defaultPrice.toFixed(2).replace('.', ',')}`,
+          premium: billingService.getProductInfo('premium')?.priceString || `R$ ${BILLING_PLANS.premium.defaultPrice.toFixed(2).replace('.', ',')}`,
+        });
+      });
     }
   }, [isNativeAndroid]);
 
@@ -538,6 +546,7 @@ export const BusinessPortalView: React.FC = () => {
                 </select>
               </div>
             )}
+            {!isNativeAndroid && (
             <button
               type="button"
               onClick={() => setIsLeadCreditsModalOpen(true)}
@@ -547,6 +556,7 @@ export const BusinessPortalView: React.FC = () => {
               <Zap className="w-3.5 h-3.5 fill-amber-300 text-amber-300 shrink-0" />
               <span>Comprar Leads</span>
             </button>
+            )}
             <button
               type="button"
               onClick={handleStartRegistration}
@@ -658,6 +668,7 @@ export const BusinessPortalView: React.FC = () => {
               </div>
 
               <div className="flex flex-wrap items-center gap-2 self-start sm:self-auto">
+                {!isNativeAndroid && (
                 <button
                   type="button"
                   onClick={() => setIsLeadCreditsModalOpen(true)}
@@ -667,6 +678,7 @@ export const BusinessPortalView: React.FC = () => {
                   <Zap className="w-3.5 h-3.5 text-amber-600 fill-amber-500 shrink-0" />
                   <span>Comprar Saldo de Leads</span>
                 </button>
+                )}
 
                 <button
                   type="button"
@@ -801,6 +813,8 @@ export const BusinessPortalView: React.FC = () => {
                       }`
                     : (currentBiz.leadCredits || 0) > 0
                     ? `Limite gratuito de 3 cotações atingido. Cada proposta enviada consumirá 1 crédito de lead (Saldo: ${currentBiz.leadCredits}).`
+                    : isNativeAndroid
+                    ? 'Limite de 3 propostas gratuitas do mês atingido. Assine o Plano Pró para continuar respondendo.'
                     : 'Limite de 3 propostas gratuitas do mês atingido. Adquira saldo de leads avulso ou assine o Plano Pró para continuar respondendo.'}
                 </p>
               </div>
@@ -808,11 +822,11 @@ export const BusinessPortalView: React.FC = () => {
               <div className="flex flex-wrap items-center gap-2 shrink-0">
                 <button
                   type="button"
-                  onClick={() => setIsLeadCreditsModalOpen(true)}
+                  onClick={() => (isNativeAndroid ? setActiveTab('planos') : setIsLeadCreditsModalOpen(true))}
                   className="px-3.5 py-2 rounded-xl bg-emerald-600 hover:bg-emerald-700 text-white font-bold text-xs transition shadow-xs flex items-center gap-1.5 active:scale-95 cursor-pointer min-h-[40px]"
                 >
                   <Zap className="w-3.5 h-3.5 fill-amber-300 text-amber-300 shrink-0" />
-                  <span>Comprar Saldo de Leads</span>
+                  <span>{isNativeAndroid ? 'Ver Planos' : 'Comprar Saldo de Leads'}</span>
                 </button>
               </div>
             </div>
@@ -1406,7 +1420,7 @@ export const BusinessPortalView: React.FC = () => {
               </div>
               <div className="space-y-2">
                 <span className="text-xs font-bold text-slate-400 uppercase">Plano Pró</span>
-                <h4 className="text-2xl font-bold">R$ {monetization.planProMonthly.toFixed(2)} <span className="text-xs text-slate-400 font-normal">/mês</span></h4>
+                <h4 className="text-2xl font-bold">{isNativeAndroid ? (playPrices.pro || '...') : `R$ ${monetization.planProMonthly.toFixed(2)}`} <span className="text-xs text-slate-400 font-normal">/mês</span></h4>
                 <p className="text-xs text-slate-300">Para profissionais e oficinas em crescimento</p>
                 <ul className="text-xs text-slate-300 space-y-2 pt-2 border-t border-slate-800">
                   <li>✓ Propostas ilimitadas para orçamentos</li>
@@ -1454,7 +1468,7 @@ export const BusinessPortalView: React.FC = () => {
                   <Crown className="w-4 h-4 text-emerald-600" />
                   <span>Plano Premium</span>
                 </div>
-                <h4 className="text-2xl font-bold text-slate-900">R$ {monetization.planPremiumMonthly.toFixed(2)} <span className="text-xs text-slate-400 font-normal">/mês</span></h4>
+                <h4 className="text-2xl font-bold text-slate-900">{isNativeAndroid ? (playPrices.premium || '...') : `R$ ${monetization.planPremiumMonthly.toFixed(2)}`} <span className="text-xs text-slate-400 font-normal">/mês</span></h4>
                 <p className="text-xs text-slate-500">Capacidade operacional máxima para empresas líderes</p>
                 <ul className="text-xs text-slate-600 space-y-2 pt-2 border-t border-slate-100">
                   <li>✓ Propostas ilimitadas para orçamentos</li>
@@ -1497,7 +1511,14 @@ export const BusinessPortalView: React.FC = () => {
             </div>
           </div>
 
-          {/* CARD DE COMPRA AVULSA DE LEADS NA ABA DE PLANOS */}
+          {isNativeAndroid && (
+            <p className="text-[11px] text-slate-500 leading-relaxed text-center">
+              Assinaturas mensais com renovação automática cobradas pela Google Play. Cancele a qualquer momento em Google Play &gt; Pagamentos e assinaturas. O cancelamento vale ao final do período já pago.
+            </p>
+          )}
+
+          {/* CARD DE COMPRA AVULSA DE LEADS NA ABA DE PLANOS (APENAS WEB) */}
+          {!isNativeAndroid && (
           <div className="bg-slate-50 border border-slate-200 rounded-3xl p-5 sm:p-6 flex flex-col sm:flex-row sm:items-center justify-between gap-4">
             <div className="space-y-1">
               <span className="text-[10px] font-extrabold uppercase bg-emerald-100 text-emerald-800 px-2 py-0.5 rounded-md">
@@ -1520,8 +1541,11 @@ export const BusinessPortalView: React.FC = () => {
               <span>Ver Pacotes de Leads</span>
             </button>
           </div>
+          )}
 
-          {/* SEÇÃO INDEPENDENTE: DESTAQUE PATROCINADO (PLANO ≠ DESTAQUE) */}
+          {/* SEÇÃO INDEPENDENTE: DESTAQUE PATROCINADO (PLANO ≠ DESTAQUE) — APENAS WEB.
+              No Android, serviços digitais só podem ser vendidos via Google Play Billing. */}
+          {!isNativeAndroid && (
           <div className="mt-8 bg-linear-to-br from-amber-500/10 via-amber-500/5 to-transparent border-2 border-amber-400/40 rounded-3xl p-6 sm:p-8 space-y-6">
             <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
               <div className="space-y-1">
@@ -1604,15 +1628,8 @@ export const BusinessPortalView: React.FC = () => {
                   <p className="text-[11px] text-amber-900 leading-relaxed">
                     A solicitação de <strong>{highlightPendingInfo.days} dias de destaque</strong> (R$ {highlightPendingInfo.totalCost.toFixed(2)}) foi gerada no status PENDING. A ativação no guia ocorrerá após a confirmação do pagamento.
                   </p>
-                  {isNativeAndroid ? (
-                    <div className="p-2.5 bg-white rounded-xl border border-amber-200 text-[11px] text-slate-700 space-y-1">
-                      <p className="font-semibold text-amber-950">Aviso para o App Android:</p>
-                      <p className="text-slate-600">
-                        A confirmação e quitação deste destaque devem ser realizadas através do portal web ou diretamente com o suporte da plataforma.
-                      </p>
-                    </div>
-                  ) : (
-                    monetization.adminPixKey && (
+                  {/* Seção inteira só é exibida na Web (ver wrapper !isNativeAndroid acima) */}
+                  {monetization.adminPixKey && (
                       <div className="p-2.5 bg-white rounded-xl border border-amber-200 text-[11px] flex flex-col sm:flex-row sm:items-center justify-between gap-2">
                         <span>Chave PIX: <strong className="font-mono text-slate-900">{monetization.adminPixKey}</strong></span>
                         {monetization.adminWhatsapp && (
@@ -1629,12 +1646,12 @@ export const BusinessPortalView: React.FC = () => {
                           </a>
                         )}
                       </div>
-                    )
                   )}
                 </div>
               )}
             </div>
           </div>
+          )}
         </div>
       )}
 
@@ -1869,17 +1886,6 @@ export const BusinessPortalView: React.FC = () => {
                 >
                   <CreditCard className="w-4 h-4" />
                   <span>Assinar Plano Pró via Google Play</span>
-                </button>
-                <button
-                  type="button"
-                  onClick={() => {
-                    setShowProposalLimitModal(false);
-                    setIsLeadCreditsModalOpen(true);
-                  }}
-                  className="w-full py-2.5 rounded-xl bg-slate-100 hover:bg-slate-200 text-slate-800 text-xs font-bold transition flex items-center justify-center gap-1.5 min-h-[44px]"
-                >
-                  <Zap className="w-3.5 h-3.5 fill-amber-500 text-amber-500" />
-                  <span>Comprar Saldo de Leads Avulso</span>
                 </button>
                 <button
                   type="button"

@@ -44,7 +44,9 @@ export const PrivacyPolicyView: React.FC<Props> = ({ onBack }) => {
           <ul className="list-disc pl-5 space-y-1">
             <li><strong>Dados de Cadastro (Consumidores):</strong> Nome completo, endereço de e-mail, telefone/WhatsApp e cidade/bairro de residência.</li>
             <li><strong>Dados de Empresas e Prestadores:</strong> Razão social, nome fantasia, CNPJ/CPF, endereço comercial, telefone, WhatsApp, fotos dos serviços e catálogo.</li>
-            <li><strong>Dados de Geolocalização:</strong> Localização aproximada (bairro, cidade ou raio aproximado via rede) mediante consentimento expresso em seu aparelho, utilizada estritamente para ordenar empresas e ofertas por proximidade até você. Não coletamos localização precisa contínua nem rastreamos seu deslocamento em segundo plano. Se você recusar a permissão, o aplicativo continuará plenamente operacional através da seleção manual de sua cidade.</li>
+            <li><strong>Dados de Geolocalização:</strong> Somente quando você toca em "usar minha localização" e concede a permissão, o app lê a posição aproximada do aparelho e a envia ao serviço OpenStreetMap Nominatim para descobrir sua cidade e bairro, usados para ordenar empresas e ofertas por proximidade. As coordenadas ficam apenas no seu aparelho por até 24 horas e não são gravadas em nossos servidores. Não rastreamos seu deslocamento em segundo plano. Se você recusar a permissão, o aplicativo continua funcionando com a seleção manual da cidade.</li>
+            <li><strong>Dados de Assinatura (Parceiros):</strong> As assinaturas dos planos são processadas pelo Google Play. Recebemos apenas o identificador da compra, o plano contratado e a validade; não temos acesso a dados de cartão.</li>
+            <li><strong>Denúncias e Bloqueios:</strong> Quando você denuncia um conteúdo ou bloqueia um usuário, registramos o motivo informado e o vínculo de bloqueio para fins de moderação.</li>
             <li><strong>Conteúdo Fornecido pelo Usuário:</strong> Descrição de solicitações de orçamento, mensagens do chat integrado, empresas e ofertas favoritadas para comparação e avaliações legítimas de empresas parceiras.</li>
           </ul>
         </section>
@@ -56,7 +58,7 @@ export const PrivacyPolicyView: React.FC<Props> = ({ onBack }) => {
           </p>
           <ul className="list-disc pl-5 space-y-1">
             <li><strong>Execução de Contrato e Procedimentos Preliminares:</strong> Para viabilizar a conexão entre consumidores e empresas fornecedoras de orçamentos e ofertas.</li>
-            <li><strong>Consentimento:</strong> Para envio de notificações push de alerta de preços e acesso à geolocalização do dispositivo móvel.</li>
+            <li><strong>Consentimento:</strong> Para acesso à localização aproximada do dispositivo móvel.</li>
             <li><strong>Legítimo Interesse:</strong> Para aprimoramento da segurança, moderação de fraudes, prevenção contra spam e análise estatística de mercado.</li>
             <li><strong>Cumprimento de Obrigação Legal:</strong> Guarda de registros de acesso a aplicações de internet pelo prazo de 6 meses, conforme o Art. 15 do Marco Civil da Internet (Lei 12.965/2014).</li>
           </ul>
@@ -69,7 +71,7 @@ export const PrivacyPolicyView: React.FC<Props> = ({ onBack }) => {
           </p>
           <ul className="list-disc pl-5 space-y-1">
             <li>Com empresas parceiras que você optar por solicitar orçamento, permitindo que elas enviem propostas com valores e prazos.</li>
-            <li>Com provedores essenciais de infraestrutura em nuvem (banco de dados seguro Supabase/PostgreSQL com criptografia em repouso e em trânsito).</li>
+            <li>Com provedores que operam o serviço em nosso nome: Supabase (banco de dados e autenticação, com criptografia em trânsito e em repouso), Google Play (processamento de assinaturas) e OpenStreetMap Nominatim (conversão da localização aproximada em cidade/bairro, apenas quando você solicita).</li>
             <li>Mediante ordem judicial expedida por autoridade competente brasileira.</li>
           </ul>
         </section>
