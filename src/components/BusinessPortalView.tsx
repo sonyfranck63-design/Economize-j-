@@ -8,7 +8,7 @@ import { isQuoteMatchingBusiness, isLocationMatch } from '../utils/quoteStorage'
 import { buildWhatsAppLink, formatWhatsAppNumber } from '../utils/whatsappUtils';
 import { isThisMonth } from '../utils/dateUtils';
 import { triggerCelebrationFireworks } from '../utils/confetti';
-import { billingService, BILLING_PLANS } from '../services/billingService';
+import { billingService, BILLING_PLANS, FEATURED_PRODUCTS, FeaturedDays } from '../services/billingService';
 import { Capacitor } from '@capacitor/core';
 import { dataService } from '../services/dataService';
 import {
@@ -154,6 +154,9 @@ export const BusinessPortalView: React.FC = () => {
   // Preços exibidos no Android vêm da Google Play (fonte da verdade da cobrança)
   const [playPrices, setPlayPrices] = useState<{ pro?: string; premium?: string }>({});
 
+  const [featuredPlayPrices, setFeaturedPlayPrices] = useState<Partial<Record<FeaturedDays, string>>>({});
+  const [isBuyingFeatured, setIsBuyingFeatured] = useState(false);
+
   // Inicializa o serviço Google Play Billing no Android
   React.useEffect(() => {
     if (isNativeAndroid) {
@@ -162,9 +165,87 @@ export const BusinessPortalView: React.FC = () => {
           pro: billingService.getProductInfo('pro')?.priceString || `R$ ${BILLING_PLANS.pro.defaultPrice.toFixed(2).replace('.', ',')}`,
           premium: billingService.getProductInfo('premium')?.priceString || `R$ ${BILLING_PLANS.premium.defaultPrice.toFixed(2).replace('.', ',')}`,
         });
+        const prices: Partial<Record<FeaturedDays, string>> = {};
+        ([7, 15, 30] as FeaturedDays[]).forEach((d) => {
+          prices[d] =
+            billingService.getFeaturedProductInfo(d)?.priceString ||
+            `R$ ${FEATURED_PRODUCTS[d].defaultPrice.toFixed(2).replace('.', ',')}`;
+        });
+        setFeaturedPlayPrices(prices);
       });
     }
   }, [isNativeAndroid]);
+
+  // Reenvia ao servidor compras de destaque pagas que não chegaram a ser ativadas
+  // (ex.: app fechado ou sem internet logo após o pagamento)
+  React.useEffect(() => {
+    if (!isNativeAndroid || !currentBiz?.id) return;
+    let cancelled = false;
+    (async () => {
+      const pending = await billingService.getUnconsumedFeaturedPurchases();
+      let activated = false;
+      for (const purchase of pending) {
+        if (cancelled) return;
+        if (purchase.businessId && purchase.businessId !== currentBiz.id) continue;
+        try {
+          await dataService.processGooglePlayPurchase({
+            businessId: currentBiz.id,
+            productId: purchase.productId,
+            purchaseToken: purchase.purchaseToken,
+          });
+          activated = true;
+        } catch (err) {
+          console.warn('[BusinessPortal] Destaque pendente não pôde ser ativado agora:', err);
+        }
+      }
+      if (activated && !cancelled) {
+        await refreshBusinesses?.();
+      }
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, [isNativeAndroid, currentBiz?.id]);
+
+  const handleNativeFeaturedPurchase = async () => {
+    if (!currentBiz) return;
+    const days = highlightDays as FeaturedDays;
+    if (!FEATURED_PRODUCTS[days]) return;
+    setIsBuyingFeatured(true);
+    try {
+      const res = await billingService.purchaseFeatured(days, currentBiz.id);
+      if (!res.success) {
+        if (res.error && !res.error.toLowerCase().includes('cancel')) {
+          alert(`Google Play: ${res.error}`);
+        }
+        return;
+      }
+      if (res.isPending) {
+        alert('Seu pagamento está pendente no Google Play. O destaque será ativado automaticamente assim que o pagamento for confirmado.');
+        return;
+      }
+      if (!res.purchaseToken) {
+        alert('O Google Play não retornou o comprovante. Abra o portal novamente para concluirmos a ativação.');
+        return;
+      }
+      await dataService.processGooglePlayPurchase({
+        businessId: currentBiz.id,
+        productId: FEATURED_PRODUCTS[days].productId,
+        purchaseToken: res.purchaseToken,
+        orderId: res.orderId,
+      });
+      await refreshBusinesses?.();
+      triggerCelebrationFireworks();
+      alert(`Destaque de ${days} dias ativado! Sua empresa já aparece no topo das buscas.`);
+    } catch (err: any) {
+      alert(
+        (err?.message || 'Não foi possível ativar o destaque agora.') +
+          ' Se o pagamento foi concluído, a ativação será refeita automaticamente quando você abrir o portal novamente.'
+      );
+    } finally {
+      setIsBuyingFeatured(false);
+    }
+  };
 
   const handleNativePurchase = async (plan: 'pro' | 'premium') => {
     if (!currentBiz) return;
@@ -1543,9 +1624,8 @@ export const BusinessPortalView: React.FC = () => {
           </div>
           )}
 
-          {/* SEÇÃO INDEPENDENTE: DESTAQUE PATROCINADO (PLANO ≠ DESTAQUE) — APENAS WEB.
-              No Android, serviços digitais só podem ser vendidos via Google Play Billing. */}
-          {!isNativeAndroid && (
+          {/* SEÇÃO INDEPENDENTE: DESTAQUE PATROCINADO (PLANO ≠ DESTAQUE).
+              No Android é vendido como compra única do Google Play; na Web, via PIX. */}
           <div className="mt-8 bg-linear-to-br from-amber-500/10 via-amber-500/5 to-transparent border-2 border-amber-400/40 rounded-3xl p-6 sm:p-8 space-y-6">
             <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
               <div className="space-y-1">
@@ -1560,11 +1640,23 @@ export const BusinessPortalView: React.FC = () => {
               </div>
 
               <div className="bg-white p-4 rounded-2xl border border-amber-200 shadow-xs shrink-0 text-center sm:text-right">
-                <span className="text-[10px] text-slate-500 font-medium block uppercase">Investimento Diário</span>
-                <span className="text-2xl font-black text-slate-900">
-                  R$ {monetization.featuredDailyRate.toFixed(2)}
-                  <span className="text-xs font-normal text-slate-500"> /dia</span>
-                </span>
+                {isNativeAndroid ? (
+                  <>
+                    <span className="text-[10px] text-slate-500 font-medium block uppercase">A partir de</span>
+                    <span className="text-2xl font-black text-slate-900">
+                      {featuredPlayPrices[7] || '...'}
+                      <span className="text-xs font-normal text-slate-500"> /7 dias</span>
+                    </span>
+                  </>
+                ) : (
+                  <>
+                    <span className="text-[10px] text-slate-500 font-medium block uppercase">Investimento Diário</span>
+                    <span className="text-2xl font-black text-slate-900">
+                      R$ {monetization.featuredDailyRate.toFixed(2)}
+                      <span className="text-xs font-normal text-slate-500"> /dia</span>
+                    </span>
+                  </>
+                )}
                 <span className="text-[11px] text-emerald-700 font-bold flex items-center justify-center sm:justify-end gap-1 mt-0.5">
                   {currentBiz.featured ? (
                     <>
@@ -1604,19 +1696,38 @@ export const BusinessPortalView: React.FC = () => {
                 <div className="text-xs text-slate-600">
                   Total para <strong>{highlightDays} dias de destaque</strong>:{' '}
                   <strong className="text-base text-slate-900">
-                    R$ {(highlightDays * monetization.featuredDailyRate).toFixed(2)}
+                    {isNativeAndroid
+                      ? featuredPlayPrices[highlightDays as FeaturedDays] || '...'
+                      : `R$ ${(highlightDays * monetization.featuredDailyRate).toFixed(2)}`}
                   </strong>
+                  {isNativeAndroid && (
+                    <span className="block text-[11px] text-slate-500 mt-0.5">
+                      Pagamento único pelo Google Play, sem renovação automática.
+                    </span>
+                  )}
                 </div>
 
-                <button
-                  type="button"
-                  disabled={isHighlighting}
-                  onClick={handleHireHighlight}
-                  className="px-6 py-2.5 rounded-xl bg-amber-500 hover:bg-amber-600 text-slate-950 font-bold text-xs shadow-sm transition flex items-center justify-center gap-2"
-                >
-                  <Sparkles className="w-4 h-4" />
-                  <span>{isHighlighting ? 'Processando...' : 'Contratar Destaque Patrocinado'}</span>
-                </button>
+                {isNativeAndroid ? (
+                  <button
+                    type="button"
+                    disabled={isBuyingFeatured}
+                    onClick={handleNativeFeaturedPurchase}
+                    className="px-6 py-2.5 rounded-xl bg-amber-500 hover:bg-amber-600 disabled:opacity-60 text-slate-950 font-bold text-xs shadow-sm transition flex items-center justify-center gap-2 min-h-[44px]"
+                  >
+                    <CreditCard className="w-4 h-4" />
+                    <span>{isBuyingFeatured ? 'Processando no Google Play...' : 'Contratar via Google Play'}</span>
+                  </button>
+                ) : (
+                  <button
+                    type="button"
+                    disabled={isHighlighting}
+                    onClick={handleHireHighlight}
+                    className="px-6 py-2.5 rounded-xl bg-amber-500 hover:bg-amber-600 text-slate-950 font-bold text-xs shadow-sm transition flex items-center justify-center gap-2"
+                  >
+                    <Sparkles className="w-4 h-4" />
+                    <span>{isHighlighting ? 'Processando...' : 'Contratar Destaque Patrocinado'}</span>
+                  </button>
+                )}
               </div>
 
               {highlightSuccess && highlightPendingInfo && (
@@ -1651,7 +1762,6 @@ export const BusinessPortalView: React.FC = () => {
               )}
             </div>
           </div>
-          )}
         </div>
       )}
 

@@ -146,3 +146,20 @@ Para que as cobranças com cartão funcionem no app, cadastre as assinaturas na 
   - **Ativar plano base**.
 
 > 💡 **Dica de Teste:** Em **Configurar** > **Testadores de licença**, adicione seu endereço de e-mail do Gmail para poder assinar os planos gratuitamente no app sem ser debitado do cartão durante os testes!
+
+---
+
+## 8. Destaque Patrocinado (compras únicas no Google Play)
+
+No app Android, o destaque é vendido como **produto de compra única consumível** (a empresa pode comprar de novo quando o período acabar). Na Play Console, vá em **Monetizar com o Google Play** > **Produtos** > **Produtos no app** > **Criar produto**:
+
+| ID do produto | Nome | Descrição | Preço sugerido |
+|---|---|---|---|
+| `economizaja_destaque_7_dias` | Destaque 7 dias | Sua empresa no topo das buscas e da tela inicial por 7 dias. | R$ 139,90 |
+| `economizaja_destaque_15_dias` | Destaque 15 dias | Sua empresa no topo das buscas e da tela inicial por 15 dias. | R$ 279,90 |
+| `economizaja_destaque_30_dias` | Destaque 30 dias | Sua empresa no topo das buscas e da tela inicial por 30 dias. | R$ 499,90 |
+
+- Os IDs precisam ser **exatamente** esses. O preço exibido no app vem da Play Console; os valores da migração 00042 servem só para relatórios internos.
+- Ative cada produto depois de criar.
+- Backend: aplique `supabase/migrations/00042_play_billing_featured_listing.sql` e republique a Edge Function `verify-play-purchase`. Ela valida a compra no Google, ativa o destaque e consome a compra.
+- Se a empresa já tiver destaque ativo, o novo período começa no dia seguinte ao fim do atual.

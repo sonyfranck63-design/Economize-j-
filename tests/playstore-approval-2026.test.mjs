@@ -25,8 +25,13 @@ describe('Aprovação Google Play (auditoria 2026-10) - EconomizaJá', () => {
       'Card de leads avulsos deve ficar oculto no Android'
     );
     assert.ok(
-      /DESTAQUE PATROCINADO[^\n]*APENAS WEB/.test(portal),
-      'Destaque patrocinado deve ficar oculto no Android'
+      portal.includes('onClick={handleNativeFeaturedPurchase}') &&
+        portal.includes('billingService.purchaseFeatured(days, currentBiz.id)'),
+      'No Android, o destaque patrocinado deve ser vendido pelo Google Play'
+    );
+    assert.ok(
+      /isNativeAndroid \? \(\s*<button[\s\S]{0,200}handleNativeFeaturedPurchase[\s\S]{0,1200}\) : \(\s*<button[\s\S]{0,200}handleHireHighlight/.test(portal),
+      'O fluxo de destaque via PIX (handleHireHighlight) deve ficar restrito à Web'
     );
     assert.ok(
       !portal.includes('devem ser realizadas através do portal web'),
@@ -69,6 +74,28 @@ describe('Aprovação Google Play (auditoria 2026-10) - EconomizaJá', () => {
     assert.ok(
       /GRANT EXECUTE ON FUNCTION public\.apply_verified_google_play_purchase[^;]+TO service_role;/.test(migration),
       'RPC verificada deve ser executável apenas pelo service_role'
+    );
+  });
+
+  test('2b. Destaque: compra única validada e consumida no servidor', () => {
+    const billing = read('src', 'services', 'billingService.ts');
+    assert.ok(billing.includes("productType: PURCHASE_TYPE.INAPP"), 'Destaque deve ser compra única (INAPP)');
+    assert.ok(
+      /purchaseFeatured[\s\S]{0,900}autoAcknowledgePurchases: false/.test(billing),
+      'A compra de destaque não pode ser confirmada no aparelho antes da validação no servidor'
+    );
+    assert.ok(!billing.includes('purchaseState === 4'), 'purchaseState do Android usa "1" (comprado) e "2" (pendente)');
+
+    const fn = read('supabase', 'functions', 'verify-play-purchase', 'index.ts');
+    assert.ok(fn.includes('/purchases/products/'), 'Edge Function deve consultar purchases.products');
+    assert.ok(fn.includes(':consume'), 'Edge Function deve consumir a compra após ativar o destaque');
+    assert.ok(fn.includes('apply_verified_featured_purchase'), 'Edge Function deve usar a RPC restrita de destaque');
+
+    const migration = read('supabase', 'migrations', '00042_play_billing_featured_listing.sql');
+    assert.ok(migration.includes('play_product_purchases'), 'Comprovantes devem ser registrados contra reuso');
+    assert.ok(
+      /GRANT EXECUTE ON FUNCTION public\.apply_verified_featured_purchase[^;]+TO service_role;/.test(migration),
+      'RPC de destaque deve ser executável apenas pelo service_role'
     );
   });
 

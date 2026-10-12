@@ -20,9 +20,17 @@ const corsHeaders = {
   'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type',
 };
 
+// Assinaturas (planos)
 const PRODUCTS: Record<string, 'pro' | 'premium'> = {
   economizaja_pro_monthly: 'pro',
   economizaja_premium_monthly: 'premium',
+};
+
+// Compras únicas consumíveis (destaque patrocinado)
+const FEATURED_PRODUCTS: Record<string, number> = {
+  economizaja_destaque_7_dias: 7,
+  economizaja_destaque_15_dias: 15,
+  economizaja_destaque_30_dias: 30,
 };
 
 // Estados em que o usuário ainda tem direito ao benefício (até expiryTime)
@@ -134,12 +142,74 @@ Deno.serve(async (req: Request) => {
       return json({ error: 'Parâmetros incompletos (businessId, productId, purchaseToken).' }, 400);
     }
     const planTier = PRODUCTS[productId];
-    if (!planTier) {
+    const featuredDays = FEATURED_PRODUCTS[productId];
+    if (!planTier && !featuredDays) {
       return json({ error: `Produto não reconhecido: ${productId}` }, 400);
     }
 
     // 2. Consulta oficial ao Google Play
     const accessToken = await getGoogleAccessToken(JSON.parse(serviceAccountRaw));
+    const adminClient = createClient(supabaseUrl, serviceRoleKey);
+
+    // 2a. Compra única de destaque patrocinado
+    if (featuredDays) {
+      const productUrl = `https://androidpublisher.googleapis.com/androidpublisher/v3/applications/${encodeURIComponent(
+        packageName
+      )}/purchases/products/${encodeURIComponent(productId)}/tokens/${encodeURIComponent(purchaseToken)}`;
+
+      const productRes = await fetch(productUrl, { headers: { Authorization: `Bearer ${accessToken}` } });
+      if (productRes.status === 404 || productRes.status === 400 || productRes.status === 410) {
+        return json({ error: 'Comprovante de compra inválido ou inexistente no Google Play.' }, 400);
+      }
+      if (!productRes.ok) {
+        console.error('[verify-play-purchase] Google API (produto) status', productRes.status, await productRes.text());
+        return json({ error: 'Não foi possível consultar o Google Play. Tente novamente.' }, 502);
+      }
+
+      const purchase = await productRes.json();
+      // purchaseState: 0 = comprado, 1 = cancelado, 2 = pendente
+      if (purchase.purchaseState !== 0) {
+        return json(
+          {
+            error:
+              purchase.purchaseState === 2
+                ? 'Pagamento ainda pendente no Google Play. O destaque será ativado após a confirmação.'
+                : 'Esta compra foi cancelada no Google Play.',
+          },
+          400
+        );
+      }
+      if (purchase.obfuscatedExternalAccountId && purchase.obfuscatedExternalAccountId !== businessId) {
+        return json({ error: 'Esta compra pertence a outra empresa.' }, 403);
+      }
+
+      const { data: rpcData, error: rpcError } = await adminClient.rpc('apply_verified_featured_purchase', {
+        p_user_id: user.id,
+        p_business_id: businessId,
+        p_product_id: productId,
+        p_purchase_token: purchaseToken,
+        p_order_id: purchase.orderId || null,
+      });
+      if (rpcError) {
+        console.error('[verify-play-purchase] RPC destaque error:', rpcError);
+        return json({ error: rpcError.message || 'Falha ao ativar o destaque.' }, 400);
+      }
+
+      // Consome a compra no Google (confirma a entrega e permite comprar de novo).
+      // consumptionState: 0 = ainda não consumida
+      if (purchase.consumptionState === 0) {
+        const consumeRes = await fetch(`${productUrl}:consume`, {
+          method: 'POST',
+          headers: { Authorization: `Bearer ${accessToken}` },
+        });
+        if (!consumeRes.ok) {
+          // O destaque já foi concedido; o app tentará reconsumir na próxima abertura do portal
+          console.error('[verify-play-purchase] Falha ao consumir', consumeRes.status, await consumeRes.text());
+        }
+      }
+
+      return json({ success: true, data: rpcData, featuredDays });
+    }
     const googleRes = await fetch(
       `https://androidpublisher.googleapis.com/androidpublisher/v3/applications/${encodeURIComponent(
         packageName
@@ -173,7 +243,6 @@ Deno.serve(async (req: Request) => {
     }
 
     // 3. Ativa o benefício (RPC executável somente pelo service_role)
-    const adminClient = createClient(supabaseUrl, serviceRoleKey);
     const { data: rpcData, error: rpcError } = await adminClient.rpc('apply_verified_google_play_purchase', {
       p_user_id: user.id,
       p_business_id: businessId,

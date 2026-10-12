@@ -25,6 +25,17 @@ export const BILLING_PLANS = {
   },
 } as const;
 
+// Destaque patrocinado: compras únicas (consumíveis) no Google Play
+export const FEATURED_PRODUCTS = {
+  7: { productId: 'economizaja_destaque_7_dias', defaultPrice: 139.9 },
+  15: { productId: 'economizaja_destaque_15_dias', defaultPrice: 279.9 },
+  30: { productId: 'economizaja_destaque_30_dias', defaultPrice: 499.9 },
+} as const;
+
+export type FeaturedDays = keyof typeof FEATURED_PRODUCTS;
+
+const FEATURED_PRODUCT_IDS: string[] = Object.values(FEATURED_PRODUCTS).map((p) => p.productId);
+
 export interface PurchaseResult {
   success: boolean;
   purchaseToken?: string;
@@ -76,17 +87,23 @@ class BillingService {
         productType: PURCHASE_TYPE.SUBS,
       });
 
-      if (res?.products && Array.isArray(res.products)) {
-        for (const prod of res.products) {
-          this.productsCache.set(prod.identifier, {
-            identifier: prod.identifier,
-            title: prod.title || '',
-            description: prod.description || '',
-            priceString: prod.priceString || '',
-            price: prod.price || 0,
-            currencyCode: prod.currencyCode || 'BRL',
-          });
-        }
+      const featuredRes = await NativePurchases.getProducts({
+        productIdentifiers: FEATURED_PRODUCT_IDS,
+        productType: PURCHASE_TYPE.INAPP,
+      }).catch((err) => {
+        console.warn('[BillingService] Produtos de destaque indisponíveis:', err);
+        return null;
+      });
+
+      for (const prod of [...(res?.products || []), ...(featuredRes?.products || [])]) {
+        this.productsCache.set(prod.identifier, {
+          identifier: prod.identifier,
+          title: prod.title || '',
+          description: prod.description || '',
+          priceString: prod.priceString || '',
+          price: prod.price || 0,
+          currencyCode: prod.currencyCode || 'BRL',
+        });
       }
       this.isInitialized = true;
     } catch (err) {
@@ -100,6 +117,74 @@ class BillingService {
   getProductInfo(plan: 'pro' | 'premium'): BillingProductInfo | null {
     const config = BILLING_PLANS[plan];
     return this.productsCache.get(config.productId) || null;
+  }
+
+  getFeaturedProductInfo(days: FeaturedDays): BillingProductInfo | null {
+    return this.productsCache.get(FEATURED_PRODUCTS[days].productId) || null;
+  }
+
+  /**
+   * Compra única do destaque patrocinado. A compra NÃO é confirmada nem consumida
+   * no aparelho: o servidor valida no Google Play, ativa o destaque e consome.
+   */
+  async purchaseFeatured(days: FeaturedDays, businessId: string): Promise<PurchaseResult> {
+    if (!Capacitor.isNativePlatform()) {
+      return { success: false, error: 'O destaque pelo Google Play está disponível apenas no aplicativo Android.' };
+    }
+
+    const productId = FEATURED_PRODUCTS[days].productId;
+    try {
+      const transaction: any = await NativePurchases.purchaseProduct({
+        productIdentifier: productId,
+        productType: PURCHASE_TYPE.INAPP,
+        quantity: 1,
+        appAccountToken: businessId,
+        isConsumable: false,
+        autoAcknowledgePurchases: false,
+      });
+
+      const purchaseToken = transaction?.purchaseToken || transaction?.token || '';
+      const isPending = String(transaction?.purchaseState) === '2' || transaction?.isPending === true;
+
+      return {
+        success: true,
+        purchaseToken,
+        orderId: transaction?.orderId || transaction?.transactionId,
+        productId,
+        isPending,
+        transaction,
+      };
+    } catch (err: any) {
+      console.error('[BillingService] Falha na compra do destaque:', err);
+      const isCancelled = err?.message?.toLowerCase().includes('cancel') || err?.code === 'USER_CANCELED';
+      return {
+        success: false,
+        error: isCancelled ? 'Operação cancelada pelo usuário.' : err?.message || 'A compra não pôde ser concluída no Google Play.',
+      };
+    }
+  }
+
+  /**
+   * Compras de destaque já pagas mas ainda não consumidas (ex.: o app fechou antes
+   * da validação). Devem ser reenviadas ao servidor para ativação.
+   */
+  async getUnconsumedFeaturedPurchases(): Promise<Array<{ productId: string; purchaseToken: string; businessId?: string }>> {
+    if (!Capacitor.isNativePlatform()) return [];
+    try {
+      const res = await NativePurchases.getPurchases({ productType: PURCHASE_TYPE.INAPP });
+      return (res?.purchases || [])
+        .filter((p: any) => FEATURED_PRODUCT_IDS.includes(p.productIdentifier))
+        .filter((p: any) => String(p.purchaseState) === '1')
+        .map((p: any) => ({
+          productId: p.productIdentifier,
+          purchaseToken: p.purchaseToken || p.token || '',
+          businessId: p.appAccountToken || undefined,
+        }))
+        .filter((p) => Boolean(p.purchaseToken));
+    } catch (err) {
+      console.warn('[BillingService] Erro ao consultar compras de destaque pendentes:', err);
+      return [];
+    }
   }
 
   /**
@@ -144,9 +229,8 @@ class BillingService {
         transaction?.transactionId ||
         `gp-${Date.now()}`;
 
-      const isPending =
-        transaction?.purchaseState === 4 || // 4 = PENDING no Billing v5/v6
-        transaction?.isPending === true;
+      // Android: purchaseState "1" = PURCHASED, "2" = PENDING
+      const isPending = String(transaction?.purchaseState) === '2' || transaction?.isPending === true;
 
       return {
         success: true,
