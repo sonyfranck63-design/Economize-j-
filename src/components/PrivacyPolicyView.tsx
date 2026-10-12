@@ -104,7 +104,7 @@ export const PrivacyPolicyView: React.FC<Props> = ({ onBack }) => {
             <p><strong>Encarregado pelo Tratamento de Dados (DPO):</strong> Equipe de Privacidade EconomizaJá</p>
             <p className="flex items-center gap-1.5">
               <Mail className="w-3.5 h-3.5 text-emerald-600" />
-              <strong>E-mail de contato exclusivo:</strong> privacidade@economizaja.app
+              <strong>E-mail de contato exclusivo:</strong> matheusfranck2013@gmail.com
             </p>
             <p><strong>Endereço para correspondência:</strong> São Paulo - SP, Brasil</p>
           </div>
