@@ -1278,7 +1278,7 @@ export const dataService = {
       user_name: params.userName,
       rating: params.rating,
       comment: params.comment,
-      verified_service: true,
+      // verified_service é definido pelo servidor (somente se houve orçamento aceito)
     });
 
     if (error) throw new Error(error.message);

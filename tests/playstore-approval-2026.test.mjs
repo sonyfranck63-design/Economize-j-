@@ -125,6 +125,28 @@ describe('Aprovação Google Play (auditoria 2026-10) - EconomizaJá', () => {
     );
   });
 
+  test('2d. Banco: funções do servidor, avaliações e créditos de leads (migrações 00045-00047)', () => {
+    const triggers = read('supabase', 'migrations', '00045_business_triggers_allow_trusted_functions.sql');
+    assert.ok(
+      (triggers.match(/^SECURITY INVOKER$/gm) || []).length === 2 &&
+        (triggers.match(/IF current_user NOT IN \('anon', 'authenticated'\) THEN/g) || []).length === 2,
+      'Gatilhos de empresas devem liberar apenas funções confiáveis do servidor'
+    );
+
+    const reviews = read('supabase', 'migrations', '00046_fix_reviews_insert_and_rating.sql');
+    assert.ok(reviews.includes('FOR INSERT') && reviews.includes('auth.uid() = user_id'), 'Clientes devem poder publicar avaliações próprias');
+    assert.ok(reviews.includes('uq_reviews_business_user'), 'Uma avaliação por cliente por empresa');
+    assert.ok(reviews.includes('refresh_business_rating'), 'Nota média deve ser recalculada');
+    assert.ok(reviews.includes("qp.status = 'escolhida'"), 'Selo de cliente verificado só com orçamento aceito');
+
+    const proposals = read('supabase', 'migrations', '00047_fix_proposal_limit_with_lead_credits.sql');
+    assert.ok(!/v_monthly_count >= 3/.test(proposals), 'Gatilho não pode bloquear propostas pagas com créditos');
+    assert.ok(proposals.includes('WITH CHECK (public.is_admin())'), 'INSERT direto de propostas deve ser exclusivo de admin');
+
+    const dataService = read('src', 'services', 'dataService.ts');
+    assert.ok(!/from\('reviews'\)\.insert\(\{[\s\S]{0,300}verified_service: true/.test(dataService), 'O app não pode se autodeclarar cliente verificado');
+  });
+
   test('3. UGC: usuários podem denunciar conteúdo e bloquear autores no app', () => {
     const reportModal = read('src', 'components', 'ReportContentModal.tsx');
     assert.ok(reportModal.includes('submitContentReport'), 'Modal deve enviar denúncia');

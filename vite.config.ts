@@ -17,6 +17,10 @@ export default defineConfig(({ mode }) => {
       tailwindcss(),
       VitePWA({
         registerType: 'autoUpdate',
+        // Registro manual em src/main.tsx: o service worker só roda na Web.
+        // No app Android (Capacitor) os arquivos já vêm no APK; um cache de SW
+        // poderia servir a versão antiga após uma atualização pela Play.
+        injectRegister: false,
         manifest: false,
         workbox: {
           globPatterns: ['**/*.{js,css,html,ico,png,svg}'],
