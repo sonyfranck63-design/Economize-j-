@@ -34,7 +34,19 @@ export const FEATURED_PRODUCTS = {
 
 export type FeaturedDays = keyof typeof FEATURED_PRODUCTS;
 
-const FEATURED_PRODUCT_IDS: string[] = Object.values(FEATURED_PRODUCTS).map((p) => p.productId);
+// Pacotes de créditos de leads: compras únicas (consumíveis) no Google Play
+export const LEAD_PRODUCTS = {
+  1: { productId: 'economizaja_leads_1', defaultPrice: 15.0 },
+  5: { productId: 'economizaja_leads_5', defaultPrice: 59.9 },
+  20: { productId: 'economizaja_leads_20', defaultPrice: 199.9 },
+} as const;
+
+export type LeadPackSize = keyof typeof LEAD_PRODUCTS;
+
+const ONE_TIME_PRODUCT_IDS: string[] = [
+  ...Object.values(FEATURED_PRODUCTS).map((p) => p.productId),
+  ...Object.values(LEAD_PRODUCTS).map((p) => p.productId),
+];
 
 export interface PurchaseResult {
   success: boolean;
@@ -87,15 +99,15 @@ class BillingService {
         productType: PURCHASE_TYPE.SUBS,
       });
 
-      const featuredRes = await NativePurchases.getProducts({
-        productIdentifiers: FEATURED_PRODUCT_IDS,
+      const oneTimeRes = await NativePurchases.getProducts({
+        productIdentifiers: ONE_TIME_PRODUCT_IDS,
         productType: PURCHASE_TYPE.INAPP,
       }).catch((err) => {
-        console.warn('[BillingService] Produtos de destaque indisponíveis:', err);
+        console.warn('[BillingService] Produtos de compra única indisponíveis:', err);
         return null;
       });
 
-      for (const prod of [...(res?.products || []), ...(featuredRes?.products || [])]) {
+      for (const prod of [...(res?.products || []), ...(oneTimeRes?.products || [])]) {
         this.productsCache.set(prod.identifier, {
           identifier: prod.identifier,
           title: prod.title || '',
@@ -123,16 +135,29 @@ class BillingService {
     return this.productsCache.get(FEATURED_PRODUCTS[days].productId) || null;
   }
 
+  getLeadProductInfo(pack: LeadPackSize): BillingProductInfo | null {
+    return this.productsCache.get(LEAD_PRODUCTS[pack].productId) || null;
+  }
+
+  /** Compra única do destaque patrocinado. */
+  purchaseFeatured(days: FeaturedDays, businessId: string): Promise<PurchaseResult> {
+    return this.purchaseOneTime(FEATURED_PRODUCTS[days].productId, businessId);
+  }
+
+  /** Compra única de um pacote de créditos de leads. */
+  purchaseLeads(pack: LeadPackSize, businessId: string): Promise<PurchaseResult> {
+    return this.purchaseOneTime(LEAD_PRODUCTS[pack].productId, businessId);
+  }
+
   /**
-   * Compra única do destaque patrocinado. A compra NÃO é confirmada nem consumida
-   * no aparelho: o servidor valida no Google Play, ativa o destaque e consome.
+   * Compra única consumível. A compra NÃO é confirmada nem consumida no aparelho:
+   * o servidor valida no Google Play, libera o benefício e consome.
    */
-  async purchaseFeatured(days: FeaturedDays, businessId: string): Promise<PurchaseResult> {
+  private async purchaseOneTime(productId: string, businessId: string): Promise<PurchaseResult> {
     if (!Capacitor.isNativePlatform()) {
-      return { success: false, error: 'O destaque pelo Google Play está disponível apenas no aplicativo Android.' };
+      return { success: false, error: 'Compras pelo Google Play estão disponíveis apenas no aplicativo Android.' };
     }
 
-    const productId = FEATURED_PRODUCTS[days].productId;
     try {
       const transaction: any = await NativePurchases.purchaseProduct({
         productIdentifier: productId,
@@ -155,7 +180,7 @@ class BillingService {
         transaction,
       };
     } catch (err: any) {
-      console.error('[BillingService] Falha na compra do destaque:', err);
+      console.error('[BillingService] Falha na compra única:', err);
       const isCancelled = err?.message?.toLowerCase().includes('cancel') || err?.code === 'USER_CANCELED';
       return {
         success: false,
@@ -165,15 +190,15 @@ class BillingService {
   }
 
   /**
-   * Compras de destaque já pagas mas ainda não consumidas (ex.: o app fechou antes
-   * da validação). Devem ser reenviadas ao servidor para ativação.
+   * Compras únicas (destaque ou leads) já pagas mas ainda não consumidas
+   * (ex.: o app fechou antes da validação). Devem ser reenviadas ao servidor.
    */
-  async getUnconsumedFeaturedPurchases(): Promise<Array<{ productId: string; purchaseToken: string; businessId?: string }>> {
+  async getUnconsumedOneTimePurchases(): Promise<Array<{ productId: string; purchaseToken: string; businessId?: string }>> {
     if (!Capacitor.isNativePlatform()) return [];
     try {
       const res = await NativePurchases.getPurchases({ productType: PURCHASE_TYPE.INAPP });
       return (res?.purchases || [])
-        .filter((p: any) => FEATURED_PRODUCT_IDS.includes(p.productIdentifier))
+        .filter((p: any) => ONE_TIME_PRODUCT_IDS.includes(p.productIdentifier))
         .filter((p: any) => String(p.purchaseState) === '1')
         .map((p: any) => ({
           productId: p.productIdentifier,
@@ -182,7 +207,7 @@ class BillingService {
         }))
         .filter((p) => Boolean(p.purchaseToken));
     } catch (err) {
-      console.warn('[BillingService] Erro ao consultar compras de destaque pendentes:', err);
+      console.warn('[BillingService] Erro ao consultar compras únicas pendentes:', err);
       return [];
     }
   }

@@ -1089,7 +1089,8 @@ export const AdminPortalView: React.FC = () => {
                 Diretriz de Pagamento Google Play vs Pagamento Web/PIX:
               </strong>
               <p>
-                No aplicativo Android (instalado via Google Play Store), as compras digitais de assinaturas utilizam o Google Play Billing oficial.
+                No aplicativo Android, planos, pacotes de leads e destaque patrocinado são cobrados pelo Google Play Billing.
+                <strong> Os preços abaixo valem apenas para a Web</strong>; no Android o preço exibido e cobrado é o cadastrado na Play Console.
               </p>
               <p>
                 Os dados de <strong>PIX e WhatsApp</strong> configurados abaixo são exibidos para compras corporativas e parceiros que acessam via <strong>Web / Computador</strong> ou negociam diretamente com você, sem taxa de intermediação do Google.
@@ -1499,8 +1500,24 @@ export const AdminPortalView: React.FC = () => {
                           Motivo: <strong className="text-slate-900">{report.reason}</strong>
                         </span>
                       </div>
+                      {report.preview ? (
+                        <div className="p-3 rounded-xl bg-slate-50 border border-slate-200 space-y-1">
+                          <p className="text-xs font-bold text-slate-900 flex items-center gap-2">
+                            <span>{report.preview.title}</span>
+                            {report.preview.hidden && (
+                              <span className="text-[10px] font-bold bg-slate-200 text-slate-600 px-1.5 py-0.5 rounded">OCULTO</span>
+                            )}
+                          </p>
+                          {report.preview.text && (
+                            <p className="text-xs text-slate-700 whitespace-pre-line line-clamp-4">{report.preview.text}</p>
+                          )}
+                        </div>
+                      ) : (
+                        <p className="text-[11px] text-slate-400 italic">Conteúdo não encontrado (pode ter sido excluído).</p>
+                      )}
                       <p className="text-xs text-slate-600">
-                        {report.details ? report.details : 'Sem detalhes adicionais fornecidos pelo denunciante.'}
+                        <strong>Detalhes do denunciante:</strong>{' '}
+                        {report.details ? report.details : 'Sem detalhes adicionais.'}
                       </p>
                       <p className="text-[11px] text-slate-400">
                         Conteúdo ID: <code className="text-[10px] bg-slate-100 px-1 py-0.5 rounded text-slate-700">{report.content_id}</code>

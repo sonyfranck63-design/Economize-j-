@@ -14,15 +14,18 @@ describe('Aprovação Google Play (auditoria 2026-10) - EconomizaJá', () => {
       'LeadCreditsModal não pode direcionar o usuário Android para pagar fora do app'
     );
     assert.ok(
-      /\{!isNativeAndroid && \(\s*<div className="space-y-2.5">/.test(leadModal),
-      'A vitrine de pacotes de leads (PIX) deve ser exibida apenas na Web'
+      /\{isNativeAndroid \? \(\s*<div className="border border-blue-200[\s\S]{0,600}onClick=\{handleBuyOnGooglePlay\}/.test(leadModal),
+      'No Android, pacotes de leads devem ser comprados pelo Google Play'
+    );
+    assert.ok(
+      /\) : \(\s*<div className="border border-emerald-200[\s\S]{0,400}Pagamento via PIX/.test(leadModal),
+      'O pagamento via PIX dos pacotes de leads deve ficar restrito à Web'
     );
 
     const portal = read('src', 'components', 'BusinessPortalView.tsx');
     assert.ok(
-      portal.includes('{/* CARD DE COMPRA AVULSA DE LEADS NA ABA DE PLANOS (APENAS WEB) */}\r\n          {!isNativeAndroid && (') ||
-        portal.includes('{/* CARD DE COMPRA AVULSA DE LEADS NA ABA DE PLANOS (APENAS WEB) */}\n          {!isNativeAndroid && ('),
-      'Card de leads avulsos deve ficar oculto no Android'
+      portal.includes("{isNativeAndroid ? 'com pagamento único pelo Google Play' : 'pagando via PIX'}"),
+      'Card de leads avulsos não pode mencionar PIX no Android'
     );
     assert.ok(
       portal.includes('onClick={handleNativeFeaturedPurchase}') &&
@@ -81,7 +84,7 @@ describe('Aprovação Google Play (auditoria 2026-10) - EconomizaJá', () => {
     const billing = read('src', 'services', 'billingService.ts');
     assert.ok(billing.includes("productType: PURCHASE_TYPE.INAPP"), 'Destaque deve ser compra única (INAPP)');
     assert.ok(
-      /purchaseFeatured[\s\S]{0,900}autoAcknowledgePurchases: false/.test(billing),
+      /private async purchaseOneTime[\s\S]{0,900}autoAcknowledgePurchases: false/.test(billing),
       'A compra de destaque não pode ser confirmada no aparelho antes da validação no servidor'
     );
     assert.ok(!billing.includes('purchaseState === 4'), 'purchaseState do Android usa "1" (comprado) e "2" (pendente)');
@@ -96,6 +99,29 @@ describe('Aprovação Google Play (auditoria 2026-10) - EconomizaJá', () => {
     assert.ok(
       /GRANT EXECUTE ON FUNCTION public\.apply_verified_featured_purchase[^;]+TO service_role;/.test(migration),
       'RPC de destaque deve ser executável apenas pelo service_role'
+    );
+  });
+
+  test('2c. Leads avulsos: compra pelo Google Play e saldo protegido contra autoconcessão', () => {
+    const billing = read('src', 'services', 'billingService.ts');
+    assert.ok(billing.includes("economizaja_leads_5"), 'Pacotes de leads devem existir como produtos da Play');
+    assert.ok(billing.includes('purchaseLeads('), 'billingService deve comprar pacotes de leads');
+
+    const fn = read('supabase', 'functions', 'verify-play-purchase', 'index.ts');
+    assert.ok(fn.includes('apply_verified_leads_purchase'), 'Edge Function deve liberar leads pela RPC restrita');
+
+    const migration = read('supabase', 'migrations', '00043_play_billing_lead_credits.sql');
+    assert.ok(
+      /FUNCTION public\.add_lead_credits[\s\S]{0,400}IF NOT public\.is_admin\(\) THEN/.test(migration),
+      'add_lead_credits deve ser exclusiva de administradores'
+    );
+    assert.ok(
+      migration.includes("current_user NOT IN ('anon', 'authenticated')") && migration.includes('trg_protect_lead_credits'),
+      'Clientes não podem aumentar lead_credits por UPDATE direto'
+    );
+    assert.ok(
+      /GRANT EXECUTE ON FUNCTION public\.apply_verified_leads_purchase[^;]+TO service_role;/.test(migration),
+      'RPC de leads deve ser executável apenas pelo service_role'
     );
   });
 

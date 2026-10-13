@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useEffect, useState } from 'react';
 import {
   X,
   Sparkles,
@@ -19,6 +19,9 @@ import { useApp } from '../context/AppContext';
 import { buildWhatsAppLink } from '../utils/whatsappUtils';
 import { Business } from '../types';
 import { Capacitor } from '@capacitor/core';
+import { billingService, LEAD_PRODUCTS, LeadPackSize } from '../services/billingService';
+import { dataService } from '../services/dataService';
+import { triggerCelebrationFireworks } from '../utils/confetti';
 
 interface LeadCreditsModalProps {
   isOpen: boolean;
@@ -29,24 +32,87 @@ interface LeadCreditsModalProps {
 
 export type LeadPackType = 'single' | 'pack5' | 'pack20';
 
+const PACK_SIZE: Record<LeadPackType, LeadPackSize> = { single: 1, pack5: 5, pack20: 20 };
+
 export const LeadCreditsModal: React.FC<LeadCreditsModalProps> = ({
   isOpen,
   onClose,
   business,
   onOpenPlansTab,
 }) => {
-  const { monetization } = useApp();
+  const { monetization, refreshBusinesses } = useApp();
   const isNativeAndroid = Capacitor.isNativePlatform();
 
   const [selectedPack, setSelectedPack] = useState<LeadPackType>('pack5');
   const [copiedPix, setCopiedPix] = useState(false);
+  const [isBuying, setIsBuying] = useState(false);
+  // No Android, preços vêm da Google Play (fonte da verdade da cobrança)
+  const [playLeadPrices, setPlayLeadPrices] = useState<Partial<Record<LeadPackSize, { label: string; value: number }>>>({});
+
+  useEffect(() => {
+    if (!isOpen || !isNativeAndroid) return;
+    billingService.init().then(() => {
+      const prices: Partial<Record<LeadPackSize, { label: string; value: number }>> = {};
+      ([1, 5, 20] as LeadPackSize[]).forEach((size) => {
+        const info = billingService.getLeadProductInfo(size);
+        const value = info?.price || LEAD_PRODUCTS[size].defaultPrice;
+        prices[size] = {
+          label: info?.priceString || `R$ ${value.toFixed(2).replace('.', ',')}`,
+          value,
+        };
+      });
+      setPlayLeadPrices(prices);
+    });
+  }, [isOpen, isNativeAndroid]);
 
   if (!isOpen || !business) return null;
 
-  // Valores dinâmicos da tabela de configurações
-  const costSingle = monetization.costPerLead || 15.0;
-  const costPack5 = monetization.packLeads5 || 59.9;
-  const costPack20 = monetization.packLeads20 || 199.9;
+  // Web: valores da configuração do admin (PIX). Android: valores da Google Play.
+  const costSingle = isNativeAndroid ? playLeadPrices[1]?.value || LEAD_PRODUCTS[1].defaultPrice : monetization.costPerLead || 15.0;
+  const costPack5 = isNativeAndroid ? playLeadPrices[5]?.value || LEAD_PRODUCTS[5].defaultPrice : monetization.packLeads5 || 59.9;
+  const costPack20 = isNativeAndroid ? playLeadPrices[20]?.value || LEAD_PRODUCTS[20].defaultPrice : monetization.packLeads20 || 199.9;
+
+  const handleBuyOnGooglePlay = async () => {
+    const size = PACK_SIZE[selectedPack];
+    setIsBuying(true);
+    try {
+      const res = await billingService.purchaseLeads(size, business.id);
+      if (!res.success) {
+        if (res.error && !res.error.toLowerCase().includes('cancel')) {
+          alert(`Google Play: ${res.error}`);
+        }
+        return;
+      }
+      if (res.isPending) {
+        alert('Seu pagamento está pendente no Google Play. Os créditos serão liberados automaticamente após a confirmação.');
+        return;
+      }
+      if (!res.purchaseToken) {
+        alert('O Google Play não retornou o comprovante. Abra o portal novamente para concluirmos a liberação.');
+        return;
+      }
+      await dataService.processGooglePlayPurchase({
+        businessId: business.id,
+        productId: LEAD_PRODUCTS[size].productId,
+        purchaseToken: res.purchaseToken,
+        orderId: res.orderId,
+      });
+      await refreshBusinesses?.();
+      triggerCelebrationFireworks();
+      alert(`${size} crédito(s) de lead adicionado(s) ao saldo da sua empresa!`);
+      onClose();
+    } catch (err: any) {
+      alert(
+        (err?.message || 'Não foi possível liberar os créditos agora.') +
+          ' Se o pagamento foi concluído, a liberação será refeita automaticamente quando você abrir o portal novamente.'
+      );
+    } finally {
+      setIsBuying(false);
+    }
+  };
+
+  const formatPrice = (size: LeadPackSize, value: number) =>
+    isNativeAndroid ? playLeadPrices[size]?.label || '...' : `R$ ${value.toFixed(2)}`;
 
   const getPackDetails = (type: LeadPackType) => {
     switch (type) {
@@ -131,7 +197,7 @@ export const LeadCreditsModal: React.FC<LeadCreditsModalProps> = ({
               <span className="text-xs text-slate-400 font-medium">EconomizaJá Parceiros</span>
             </div>
             <h3 className="text-lg sm:text-xl font-black text-slate-900 mt-1">
-              {isNativeAndroid ? 'Limite de Propostas' : 'Comprar Saldo de Leads'}
+              Comprar Saldo de Leads
             </h3>
             <p className="text-xs text-slate-500 mt-0.5">
               Empresa: <strong className="text-slate-800">{business.name}</strong>
@@ -163,8 +229,7 @@ export const LeadCreditsModal: React.FC<LeadCreditsModalProps> = ({
           </div>
         </div>
 
-        {/* SELEÇÃO DE PACOTES (VITRINE) — apenas na Web; no Android, bens digitais só via Google Play Billing */}
-        {!isNativeAndroid && (
+        {/* SELEÇÃO DE PACOTES (VITRINE): Android cobra pelo Google Play; Web via PIX */}
         <div className="space-y-2.5">
           <label className="block text-xs font-bold text-slate-700 uppercase tracking-wider">
             Escolha o Pacote Desejado:
@@ -190,7 +255,7 @@ export const LeadCreditsModal: React.FC<LeadCreditsModalProps> = ({
             </div>
             <div className="text-right shrink-0">
               <span className="text-base font-black text-slate-900">
-                R$ {costSingle.toFixed(2)}
+                {formatPrice(1, costSingle)}
               </span>
             </div>
           </div>
@@ -217,7 +282,7 @@ export const LeadCreditsModal: React.FC<LeadCreditsModalProps> = ({
             </div>
             <div className="text-right shrink-0">
               <span className="text-base font-black text-emerald-700">
-                R$ {costPack5.toFixed(2)}
+                {formatPrice(5, costPack5)}
               </span>
             </div>
           </div>
@@ -244,12 +309,11 @@ export const LeadCreditsModal: React.FC<LeadCreditsModalProps> = ({
             </div>
             <div className="text-right shrink-0">
               <span className="text-base font-black text-slate-900">
-                R$ {costPack20.toFixed(2)}
+                {formatPrice(20, costPack20)}
               </span>
             </div>
           </div>
         </div>
-        )}
 
         {/* DADOS DE PAGAMENTO: GOOGLE PLAY NO ANDROID OU PIX NA WEB */}
         {isNativeAndroid ? (
@@ -258,8 +322,21 @@ export const LeadCreditsModal: React.FC<LeadCreditsModalProps> = ({
               <Smartphone className="w-4 h-4 text-blue-700" />
               <span>Google Play & Faturamento Digital</span>
             </div>
-            <p className="text-xs text-blue-800 leading-relaxed">
-              Você atingiu o limite de propostas do plano gratuito. Assine um plano pelo Google Play para continuar enviando propostas.
+            <button
+              type="button"
+              disabled={isBuying}
+              onClick={handleBuyOnGooglePlay}
+              className="w-full py-3 rounded-xl bg-emerald-600 hover:bg-emerald-700 disabled:opacity-60 text-white text-xs font-bold flex items-center justify-center gap-2 transition shadow-xs active:scale-95 min-h-[44px]"
+            >
+              <CreditCard className="w-4 h-4" />
+              <span>
+                {isBuying
+                  ? 'Processando no Google Play...'
+                  : `Comprar ${activeDetails.shortName} via Google Play`}
+              </span>
+            </button>
+            <p className="text-[10px] text-slate-500 text-center">
+              Pagamento único pelo Google Play. Os créditos entram no saldo da empresa logo após a confirmação.
             </p>
             <div className="bg-white p-3.5 rounded-xl border border-blue-200 space-y-2">
               <div className="text-xs font-bold text-slate-800 flex items-center gap-1.5">

@@ -1328,7 +1328,46 @@ export const dataService = {
       console.warn('[dataService] Erro ao buscar denúncias:', error.message);
       return [];
     }
-    return data || [];
+    const reports = data || [];
+
+    // Anexa uma prévia do conteúdo denunciado para o moderador decidir sem procurar pelo ID
+    const idsOf = (type: string) =>
+      [...new Set(reports.filter((r: any) => r.content_type === type).map((r: any) => r.content_id))];
+    const reviewIds = idsOf('review');
+    const offerIds = idsOf('offer');
+    const businessIds = idsOf('business');
+
+    const [reviewsRes, offersRes, businessesRes] = await Promise.all([
+      reviewIds.length
+        ? supabase.from('reviews').select('id, user_name, rating, comment, business_id, active').in('id', reviewIds)
+        : Promise.resolve({ data: [] as any[] }),
+      offerIds.length
+        ? supabase.from('offers').select('id, title, description, business_id, active').in('id', offerIds)
+        : Promise.resolve({ data: [] as any[] }),
+      businessIds.length
+        ? supabase.from('businesses').select('id, name, description, active').in('id', businessIds)
+        : Promise.resolve({ data: [] as any[] }),
+    ]);
+
+    const byId = (rows: any[] | null | undefined) => new Map((rows || []).map((row: any) => [row.id, row]));
+    const reviewsMap = byId(reviewsRes.data);
+    const offersMap = byId(offersRes.data);
+    const businessesMap = byId(businessesRes.data);
+
+    return reports.map((r: any) => {
+      let preview: { title: string; text: string; hidden: boolean } | null = null;
+      if (r.content_type === 'review' && reviewsMap.has(r.content_id)) {
+        const rev = reviewsMap.get(r.content_id);
+        preview = { title: `Avaliação de ${rev.user_name} (${rev.rating}★)`, text: rev.comment, hidden: rev.active === false };
+      } else if (r.content_type === 'offer' && offersMap.has(r.content_id)) {
+        const off = offersMap.get(r.content_id);
+        preview = { title: `Oferta: ${off.title}`, text: off.description || '', hidden: off.active === false };
+      } else if (r.content_type === 'business' && businessesMap.has(r.content_id)) {
+        const biz = businessesMap.get(r.content_id);
+        preview = { title: `Empresa: ${biz.name}`, text: biz.description || '', hidden: biz.active === false };
+      }
+      return { ...r, preview };
+    });
   },
 
   async adminModerateContent(

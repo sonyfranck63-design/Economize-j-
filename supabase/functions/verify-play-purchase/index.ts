@@ -33,6 +33,13 @@ const FEATURED_PRODUCTS: Record<string, number> = {
   economizaja_destaque_30_dias: 30,
 };
 
+// Compras únicas consumíveis (pacotes de créditos de leads)
+const LEAD_PRODUCTS: Record<string, number> = {
+  economizaja_leads_1: 1,
+  economizaja_leads_5: 5,
+  economizaja_leads_20: 20,
+};
+
 // Estados em que o usuário ainda tem direito ao benefício (até expiryTime)
 const ENTITLED_STATES = new Set([
   'SUBSCRIPTION_STATE_ACTIVE',
@@ -143,7 +150,8 @@ Deno.serve(async (req: Request) => {
     }
     const planTier = PRODUCTS[productId];
     const featuredDays = FEATURED_PRODUCTS[productId];
-    if (!planTier && !featuredDays) {
+    const leadCredits = LEAD_PRODUCTS[productId];
+    if (!planTier && !featuredDays && !leadCredits) {
       return json({ error: `Produto não reconhecido: ${productId}` }, 400);
     }
 
@@ -151,8 +159,8 @@ Deno.serve(async (req: Request) => {
     const accessToken = await getGoogleAccessToken(JSON.parse(serviceAccountRaw));
     const adminClient = createClient(supabaseUrl, serviceRoleKey);
 
-    // 2a. Compra única de destaque patrocinado
-    if (featuredDays) {
+    // 2a. Compra única (destaque patrocinado ou pacote de leads)
+    if (featuredDays || leadCredits) {
       const productUrl = `https://androidpublisher.googleapis.com/androidpublisher/v3/applications/${encodeURIComponent(
         packageName
       )}/purchases/products/${encodeURIComponent(productId)}/tokens/${encodeURIComponent(purchaseToken)}`;
@@ -173,7 +181,7 @@ Deno.serve(async (req: Request) => {
           {
             error:
               purchase.purchaseState === 2
-                ? 'Pagamento ainda pendente no Google Play. O destaque será ativado após a confirmação.'
+                ? 'Pagamento ainda pendente no Google Play. A liberação ocorrerá após a confirmação.'
                 : 'Esta compra foi cancelada no Google Play.',
           },
           400
@@ -183,16 +191,19 @@ Deno.serve(async (req: Request) => {
         return json({ error: 'Esta compra pertence a outra empresa.' }, 403);
       }
 
-      const { data: rpcData, error: rpcError } = await adminClient.rpc('apply_verified_featured_purchase', {
-        p_user_id: user.id,
-        p_business_id: businessId,
-        p_product_id: productId,
-        p_purchase_token: purchaseToken,
-        p_order_id: purchase.orderId || null,
-      });
+      const { data: rpcData, error: rpcError } = await adminClient.rpc(
+        featuredDays ? 'apply_verified_featured_purchase' : 'apply_verified_leads_purchase',
+        {
+          p_user_id: user.id,
+          p_business_id: businessId,
+          p_product_id: productId,
+          p_purchase_token: purchaseToken,
+          p_order_id: purchase.orderId || null,
+        }
+      );
       if (rpcError) {
-        console.error('[verify-play-purchase] RPC destaque error:', rpcError);
-        return json({ error: rpcError.message || 'Falha ao ativar o destaque.' }, 400);
+        console.error('[verify-play-purchase] RPC compra única error:', rpcError);
+        return json({ error: rpcError.message || 'Falha ao liberar a compra.' }, 400);
       }
 
       // Consome a compra no Google (confirma a entrega e permite comprar de novo).
@@ -208,7 +219,7 @@ Deno.serve(async (req: Request) => {
         }
       }
 
-      return json({ success: true, data: rpcData, featuredDays });
+      return json({ success: true, data: rpcData, featuredDays, leadCredits });
     }
     const googleRes = await fetch(
       `https://androidpublisher.googleapis.com/androidpublisher/v3/applications/${encodeURIComponent(

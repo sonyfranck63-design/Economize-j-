@@ -163,3 +163,18 @@ No app Android, o destaque é vendido como **produto de compra única consumíve
 - Ative cada produto depois de criar.
 - Backend: aplique `supabase/migrations/00042_play_billing_featured_listing.sql` e republique a Edge Function `verify-play-purchase`. Ela valida a compra no Google, ativa o destaque e consome a compra.
 - Se a empresa já tiver destaque ativo, o novo período começa no dia seguinte ao fim do atual.
+
+---
+
+## 9. Pacotes de Leads Avulsos (compras únicas no Google Play)
+
+Também são **produtos de compra única consumíveis**. Crie em **Produtos no app**:
+
+| ID do produto | Nome | Descrição | Preço sugerido |
+|---|---|---|---|
+| `economizaja_leads_1` | 1 Lead | 1 crédito para responder um pedido de orçamento. | R$ 15,00 |
+| `economizaja_leads_5` | Pacote 5 Leads | 5 créditos para responder pedidos de orçamento. | R$ 59,90 |
+| `economizaja_leads_20` | Pacote 20 Leads | 20 créditos para responder pedidos de orçamento. | R$ 199,90 |
+
+- Backend: migração `00043_play_billing_lead_credits.sql` (aplicada em 12/10/2026). Ela também impede que o dono da empresa aumente o próprio saldo; créditos manuais agora são exclusivos do admin.
+- Os créditos entram no saldo logo após a Edge Function confirmar a compra no Google.

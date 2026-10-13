@@ -176,13 +176,13 @@ export const BusinessPortalView: React.FC = () => {
     }
   }, [isNativeAndroid]);
 
-  // Reenvia ao servidor compras de destaque pagas que não chegaram a ser ativadas
+  // Reenvia ao servidor compras únicas (destaque ou leads) pagas que não chegaram a ser liberadas
   // (ex.: app fechado ou sem internet logo após o pagamento)
   React.useEffect(() => {
     if (!isNativeAndroid || !currentBiz?.id) return;
     let cancelled = false;
     (async () => {
-      const pending = await billingService.getUnconsumedFeaturedPurchases();
+      const pending = await billingService.getUnconsumedOneTimePurchases();
       let activated = false;
       for (const purchase of pending) {
         if (cancelled) return;
@@ -627,7 +627,6 @@ export const BusinessPortalView: React.FC = () => {
                 </select>
               </div>
             )}
-            {!isNativeAndroid && (
             <button
               type="button"
               onClick={() => setIsLeadCreditsModalOpen(true)}
@@ -637,7 +636,6 @@ export const BusinessPortalView: React.FC = () => {
               <Zap className="w-3.5 h-3.5 fill-amber-300 text-amber-300 shrink-0" />
               <span>Comprar Leads</span>
             </button>
-            )}
             <button
               type="button"
               onClick={handleStartRegistration}
@@ -749,7 +747,6 @@ export const BusinessPortalView: React.FC = () => {
               </div>
 
               <div className="flex flex-wrap items-center gap-2 self-start sm:self-auto">
-                {!isNativeAndroid && (
                 <button
                   type="button"
                   onClick={() => setIsLeadCreditsModalOpen(true)}
@@ -759,7 +756,6 @@ export const BusinessPortalView: React.FC = () => {
                   <Zap className="w-3.5 h-3.5 text-amber-600 fill-amber-500 shrink-0" />
                   <span>Comprar Saldo de Leads</span>
                 </button>
-                )}
 
                 <button
                   type="button"
@@ -894,8 +890,6 @@ export const BusinessPortalView: React.FC = () => {
                       }`
                     : (currentBiz.leadCredits || 0) > 0
                     ? `Limite gratuito de 3 cotações atingido. Cada proposta enviada consumirá 1 crédito de lead (Saldo: ${currentBiz.leadCredits}).`
-                    : isNativeAndroid
-                    ? 'Limite de 3 propostas gratuitas do mês atingido. Assine o Plano Pró para continuar respondendo.'
                     : 'Limite de 3 propostas gratuitas do mês atingido. Adquira saldo de leads avulso ou assine o Plano Pró para continuar respondendo.'}
                 </p>
               </div>
@@ -903,11 +897,11 @@ export const BusinessPortalView: React.FC = () => {
               <div className="flex flex-wrap items-center gap-2 shrink-0">
                 <button
                   type="button"
-                  onClick={() => (isNativeAndroid ? setActiveTab('planos') : setIsLeadCreditsModalOpen(true))}
+                  onClick={() => setIsLeadCreditsModalOpen(true)}
                   className="px-3.5 py-2 rounded-xl bg-emerald-600 hover:bg-emerald-700 text-white font-bold text-xs transition shadow-xs flex items-center gap-1.5 active:scale-95 cursor-pointer min-h-[40px]"
                 >
                   <Zap className="w-3.5 h-3.5 fill-amber-300 text-amber-300 shrink-0" />
-                  <span>{isNativeAndroid ? 'Ver Planos' : 'Comprar Saldo de Leads'}</span>
+                  <span>Comprar Saldo de Leads</span>
                 </button>
               </div>
             </div>
@@ -1598,8 +1592,7 @@ export const BusinessPortalView: React.FC = () => {
             </p>
           )}
 
-          {/* CARD DE COMPRA AVULSA DE LEADS NA ABA DE PLANOS (APENAS WEB) */}
-          {!isNativeAndroid && (
+          {/* CARD DE COMPRA AVULSA DE LEADS NA ABA DE PLANOS (Android: Google Play; Web: PIX) */}
           <div className="bg-slate-50 border border-slate-200 rounded-3xl p-5 sm:p-6 flex flex-col sm:flex-row sm:items-center justify-between gap-4">
             <div className="space-y-1">
               <span className="text-[10px] font-extrabold uppercase bg-emerald-100 text-emerald-800 px-2 py-0.5 rounded-md">
@@ -1610,7 +1603,7 @@ export const BusinessPortalView: React.FC = () => {
                 <span>Prefere comprar pacotes de leads sob demanda?</span>
               </h4>
               <p className="text-xs text-slate-500 max-w-xl leading-relaxed">
-                Adquira créditos avulsos (1 Lead, Pacote de 5 Leads ou Pacote de 20 Leads) para responder orçamentos específicos quando quiser, pagando via PIX sem compromisso mensal.
+                Adquira créditos avulsos (1 Lead, Pacote de 5 Leads ou Pacote de 20 Leads) para responder orçamentos específicos quando quiser, {isNativeAndroid ? 'com pagamento único pelo Google Play' : 'pagando via PIX'}, sem compromisso mensal.
               </p>
             </div>
             <button
@@ -1622,7 +1615,6 @@ export const BusinessPortalView: React.FC = () => {
               <span>Ver Pacotes de Leads</span>
             </button>
           </div>
-          )}
 
           {/* SEÇÃO INDEPENDENTE: DESTAQUE PATROCINADO (PLANO ≠ DESTAQUE).
               No Android é vendido como compra única do Google Play; na Web, via PIX. */}
@@ -1996,6 +1988,17 @@ export const BusinessPortalView: React.FC = () => {
                 >
                   <CreditCard className="w-4 h-4" />
                   <span>Assinar Plano Pró via Google Play</span>
+                </button>
+                <button
+                  type="button"
+                  onClick={() => {
+                    setShowProposalLimitModal(false);
+                    setIsLeadCreditsModalOpen(true);
+                  }}
+                  className="w-full py-2.5 rounded-xl bg-slate-100 hover:bg-slate-200 text-slate-800 text-xs font-bold transition flex items-center justify-center gap-1.5 min-h-[44px]"
+                >
+                  <Zap className="w-3.5 h-3.5 fill-amber-500 text-amber-500" />
+                  <span>Comprar Saldo de Leads Avulso</span>
                 </button>
                 <button
                   type="button"
